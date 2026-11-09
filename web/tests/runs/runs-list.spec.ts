@@ -6,6 +6,7 @@ import RunsView from '../../src/views/runs/RunsView.vue'
 import { MockShipitApi } from '../../src/api/mock'
 import { setApi } from '../../src/api'
 import type { Run } from '../../src/api/types'
+import { useRunsStore } from '../../src/stores/runs'
 
 describe('RunsView (Danh sách lượt chạy)', () => {
   let mockApi: MockShipitApi
@@ -249,5 +250,21 @@ describe('RunsView (Danh sách lượt chạy)', () => {
     await waitMounted(wrapper)
 
     expect(getRunsSpy).toHaveBeenCalledWith({ pipelineId: 1 })
+  })
+
+  it('useRunsStore cancelRun action updates run in store and pipeline lastRun', async () => {
+    const store = useRunsStore()
+    await store.fetchPipelines()
+    await store.fetchRuns()
+
+    // Run 4 is queued
+    const run4 = store.runs.find((r) => r.id === 4)
+    expect(run4?.status).toBe('queued')
+
+    const updated = await store.cancelRun(4)
+    expect(updated.status).toBe('cancelled')
+
+    const inStore = store.runs.find((r) => r.id === 4)
+    expect(inStore?.status).toBe('cancelled')
   })
 })

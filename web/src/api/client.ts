@@ -78,6 +78,7 @@ export interface ShipitApi {
 
   // Runs
   triggerRun(pipelineId: number): Promise<Run>
+  cancelRun(id: number): Promise<Run>
   getRuns(params?: { pipelineId?: number; limit?: number }): Promise<Run[]>
   getRun(id: number): Promise<RunDetail>
   getRunLogs(id: number, after?: number): Promise<LogLine[]>
@@ -258,6 +259,12 @@ export class HttpShipitApi implements ShipitApi {
 
   async triggerRun(pipelineId: number): Promise<Run> {
     return this.request<Run>(`/api/pipelines/${pipelineId}/runs`, {
+      method: 'POST'
+    })
+  }
+
+  async cancelRun(id: number): Promise<Run> {
+    return this.request<Run>(`/api/runs/${id}/cancel`, {
       method: 'POST'
     })
   }

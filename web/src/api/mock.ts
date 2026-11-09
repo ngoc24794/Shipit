@@ -626,6 +626,70 @@ export class MockShipitApi implements ShipitApi {
     return newRun
   }
 
+  async cancelRun(id: number): Promise<Run> {
+    await delay()
+    this.checkAuth()
+    const run = this.runs.find((r) => r.id === id)
+    if (!run) {
+      throw new ApiError(404, 'Không tìm thấy lượt chạy')
+    }
+
+    if (run.status === 'success' || run.status === 'failed') {
+      throw new ApiError(409, 'Run đã kết thúc')
+    }
+
+    if (run.status === 'cancelled') {
+      return { ...run }
+    }
+
+    const now = new Date().toISOString()
+
+    if (run.status === 'queued') {
+      run.status = 'cancelled'
+      run.failureReason = 'cancelled by user'
+      run.finishedAt = now
+      for (const step of run.steps) {
+        if (step.status === 'running') {
+          step.status = 'cancelled'
+          step.finishedAt = now
+        } else if (step.status === 'pending') {
+          step.status = 'skipped'
+        }
+      }
+      const pipeline = this.pipelines.find((p) => p.id === run.pipelineId)
+      if (pipeline && pipeline.lastRun?.id === run.id) {
+        pipeline.lastRun = { ...pipeline.lastRun, ...run }
+      }
+      return { ...run }
+    }
+
+    if (run.status === 'running') {
+      setTimeout(() => {
+        if (run.status === 'running') {
+          const stopTime = new Date().toISOString()
+          run.status = 'cancelled'
+          run.failureReason = 'cancelled by user'
+          run.finishedAt = stopTime
+          for (const step of run.steps) {
+            if (step.status === 'running') {
+              step.status = 'cancelled'
+              step.finishedAt = stopTime
+            } else if (step.status === 'pending') {
+              step.status = 'skipped'
+            }
+          }
+          const pipeline = this.pipelines.find((p) => p.id === run.pipelineId)
+          if (pipeline && pipeline.lastRun?.id === run.id) {
+            pipeline.lastRun = { ...pipeline.lastRun, ...run }
+          }
+        }
+      }, 50)
+      return { ...run }
+    }
+
+    return { ...run }
+  }
+
   async getRuns(params?: { pipelineId?: number; limit?: number }): Promise<Run[]> {
     await delay()
     this.checkAuth()
@@ -674,12 +738,18 @@ export class MockShipitApi implements ShipitApi {
         return
       }
 
+      const run = this.runs.find((r) => r.id === runId)
+      if (run && (run.status === 'cancelled' || run.status === 'failed')) {
+        clearInterval(intervalId)
+        onEnd(run.status)
+        return
+      }
+
       if (currentIndex < pendingLines.length) {
         onLine(pendingLines[currentIndex])
         currentIndex++
       } else {
         clearInterval(intervalId)
-        const run = this.runs.find((r) => r.id === runId)
         onEnd(run?.status || 'success')
       }
     }, 40)

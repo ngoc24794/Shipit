@@ -1,3 +1,5 @@
+import type { RunStatus, StepStatus } from '../../api/types'
+
 export function formatDateTime(isoString?: string | null): string {
   if (!isoString) return '-'
   try {
@@ -41,5 +43,44 @@ export function formatFailureReason(reason?: string | null): string {
   if (trimmed.toLowerCase() === 'interrupted') {
     return 'Lượt chạy bị gián đoạn đột ngột (tiến trình dừng hoặc hệ thống khởi động lại)'
   }
+  if (trimmed.toLowerCase() === 'cancelled by user') {
+    return 'Đã dừng bởi người dùng'
+  }
   return trimmed
+}
+
+export function formatRunStatus(status: RunStatus): string {
+  switch (status) {
+    case 'queued':
+      return 'Đang chờ'
+    case 'running':
+      return 'Đang chạy'
+    case 'success':
+      return 'Thành công'
+    case 'failed':
+      return 'Thất bại'
+    case 'cancelled':
+      return 'Đã dừng'
+    default:
+      return status
+  }
+}
+
+export function formatStepStatus(status: StepStatus): string {
+  switch (status) {
+    case 'pending':
+      return 'Chưa chạy'
+    case 'running':
+      return 'Đang chạy'
+    case 'success':
+      return 'Thành công'
+    case 'failed':
+      return 'Thất bại'
+    case 'skipped':
+      return 'Bỏ qua'
+    case 'cancelled':
+      return 'Đã dừng'
+    default:
+      return status
+  }
 }

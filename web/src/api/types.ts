@@ -65,9 +65,9 @@ export interface CredentialUpdate {
   value?: string
 }
 
-export type RunStatus = 'queued' | 'running' | 'success' | 'failed'
+export type RunStatus = 'queued' | 'running' | 'success' | 'failed' | 'cancelled'
 export type StepName = 'checkout' | 'build' | 'push' | 'deploy'
-export type StepStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped'
+export type StepStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'
 
 export interface Run {
   id: number

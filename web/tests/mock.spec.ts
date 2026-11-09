@@ -337,4 +337,75 @@ describe('MockShipitApi', () => {
     await expect(api.createPipeline({ ...baseInput, deployRegistryHost: 'a b' })).rejects.toThrow()
     await expect(api.createPipeline({ ...baseInput, deployRegistryHost: 'x;y' })).rejects.toThrow()
   })
+
+  describe('cancelRun', () => {
+    it('cancels a queued run immediately with status cancelled, failureReason and skipped steps', async () => {
+      const api = new MockShipitApi()
+      // Run 4 is queued
+      const cancelledRun = await api.cancelRun(4)
+      expect(cancelledRun.id).toBe(4)
+      expect(cancelledRun.status).toBe('cancelled')
+      expect(cancelledRun.failureReason).toBe('cancelled by user')
+      expect(cancelledRun.finishedAt).toBeTruthy()
+
+      const detail = await api.getRun(4)
+      expect(detail.status).toBe('cancelled')
+      expect(detail.failureReason).toBe('cancelled by user')
+      for (const step of detail.steps) {
+        expect(step.status).toBe('skipped')
+      }
+
+      // Check idempotent repeated call
+      const repeated = await api.cancelRun(4)
+      expect(repeated.status).toBe('cancelled')
+    })
+
+    it('cancels a running run asynchronously: running step becomes cancelled, subsequent skipped', async () => {
+      const api = new MockShipitApi()
+      // Run 3 is running with checkout: success, build: running, push: pending, deploy: pending
+      const initial = await api.cancelRun(3)
+      expect(initial.id).toBe(3)
+
+      // Wait for simulated async engine stop
+      await new Promise((resolve) => setTimeout(resolve, 80))
+
+      const detail = await api.getRun(3)
+      expect(detail.status).toBe('cancelled')
+      expect(detail.failureReason).toBe('cancelled by user')
+      expect(detail.finishedAt).toBeTruthy()
+
+      const checkoutStep = detail.steps.find((s) => s.name === 'checkout')
+      const buildStep = detail.steps.find((s) => s.name === 'build')
+      const pushStep = detail.steps.find((s) => s.name === 'push')
+      const deployStep = detail.steps.find((s) => s.name === 'deploy')
+
+      expect(checkoutStep?.status).toBe('success')
+      expect(buildStep?.status).toBe('cancelled')
+      expect(buildStep?.finishedAt).toBeTruthy()
+      expect(pushStep?.status).toBe('skipped')
+      expect(deployStep?.status).toBe('skipped')
+    })
+
+    it('returns 409 conflict when trying to cancel a finished run (success or failed)', async () => {
+      const api = new MockShipitApi()
+      // Run 1 is success
+      await expect(api.cancelRun(1)).rejects.toMatchObject({
+        status: 409,
+        message: expect.stringContaining('Run đã kết thúc')
+      })
+
+      // Run 2 is failed
+      await expect(api.cancelRun(2)).rejects.toMatchObject({
+        status: 409,
+        message: expect.stringContaining('Run đã kết thúc')
+      })
+    })
+
+    it('returns 404 when run does not exist', async () => {
+      const api = new MockShipitApi()
+      await expect(api.cancelRun(99999)).rejects.toMatchObject({
+        status: 404
+      })
+    })
+  })
 })

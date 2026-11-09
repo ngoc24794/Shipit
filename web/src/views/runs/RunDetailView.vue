@@ -9,10 +9,12 @@ import {
   GitCommit,
   Layers,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  CircleStop
 } from 'lucide-vue-next'
 import AppLayout from '../../layouts/AppLayout.vue'
 import AppButton from '../../components/AppButton.vue'
+import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
 import StepTimeline from '../../components/StepTimeline.vue'
 import LogViewer from '../../components/LogViewer.vue'
@@ -36,6 +38,8 @@ const loading = ref(true)
 const notFound = ref(false)
 const errorMessage = ref<string | null>(null)
 const isTriggering = ref(false)
+const showCancelDialog = ref(false)
+const isCancelling = ref(false)
 const logTruncated = ref(false)
 const currentTime = ref(Date.now())
 
@@ -58,6 +62,7 @@ const isRunActive = computed(() => {
 const statusAnnouncement = computed(() => {
   if (run.value?.status === 'success') return 'Run đã kết thúc: thành công'
   if (run.value?.status === 'failed') return 'Run đã kết thúc: thất bại'
+  if (run.value?.status === 'cancelled') return 'Run đã kết thúc: đã dừng'
   if (run.value?.status === 'running') return 'Lượt chạy đang chạy'
   if (run.value?.status === 'queued') return 'Lượt chạy đang chờ thực thi'
   return ''
@@ -222,6 +227,70 @@ async function handleRerun() {
   }
 }
 
+async function handleConfirmCancel() {
+  if (!run.value) return
+  showCancelDialog.value = false
+  isCancelling.value = true
+
+  try {
+    const updated = await api.cancelRun(run.value.id)
+    if (updated.status === 'cancelled') {
+      run.value.status = 'cancelled'
+      if (updated.failureReason) run.value.failureReason = updated.failureReason
+      if (updated.finishedAt) run.value.finishedAt = updated.finishedAt
+      isCancelling.value = false
+
+      try {
+        const fresh = await api.getRun(run.value.id)
+        run.value = fresh
+      } catch {
+        // ignore
+      }
+      toast.success('Đã dừng lượt chạy thành công')
+    } else {
+      // Run was running; poll frequently until cancelled or finished
+      const cancelPoll = setInterval(async () => {
+        if (!isCancelling.value || !run.value) {
+          clearInterval(cancelPoll)
+          return
+        }
+        try {
+          const fresh = await api.getRun(run.value.id)
+          run.value = fresh
+          if (fresh.status !== 'queued' && fresh.status !== 'running') {
+            isCancelling.value = false
+            clearInterval(cancelPoll)
+          }
+        } catch {
+          // ignore
+        }
+      }, 500)
+    }
+  } catch (err: any) {
+    isCancelling.value = false
+    if (err instanceof ApiError && err.status === 409) {
+      toast.error('Run đã kết thúc')
+      try {
+        const fresh = await api.getRun(run.value.id)
+        run.value = fresh
+      } catch {
+        // ignore
+      }
+    } else {
+      toast.error(err.message || 'Không thể dừng lượt chạy')
+    }
+  }
+}
+
+watch(
+  () => run.value?.status,
+  (newStatus) => {
+    if (newStatus && newStatus !== 'queued' && newStatus !== 'running') {
+      isCancelling.value = false
+    }
+  }
+)
+
 watch(
   () => route.params.id,
   (newId) => {
@@ -326,6 +395,18 @@ onBeforeUnmount(() => {
 
           <div class="flex items-center gap-2">
             <AppButton
+              v-if="isRunActive || isCancelling"
+              variant="secondary"
+              :loading="isCancelling"
+              :disabled="isCancelling"
+              :aria-label="isCancelling ? 'Đang dừng lượt chạy' : 'Dừng lượt chạy'"
+              @click="showCancelDialog = true"
+            >
+              <CircleStop class="w-4 h-4 text-warn" aria-hidden="true" />
+              <span>{{ isCancelling ? 'Đang dừng…' : 'Dừng' }}</span>
+            </AppButton>
+
+            <AppButton
               variant="secondary"
               :loading="isTriggering"
               aria-label="Chạy lại pipeline này"
@@ -346,6 +427,21 @@ onBeforeUnmount(() => {
           <AlertTriangle class="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
           <div class="space-y-1">
             <h4 class="font-semibold">Lý do thất bại</h4>
+            <p class="text-fg/90 leading-relaxed">
+              {{ formatFailureReason(run.failureReason) }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Cancelled Reason Alert -->
+        <div
+          v-if="run.status === 'cancelled' && run.failureReason"
+          role="note"
+          class="flex items-start gap-3 p-4 rounded-[8px] border border-warn/30 bg-warn/10 text-fg text-sm"
+        >
+          <CircleStop class="w-5 h-5 shrink-0 mt-0.5 text-warn" aria-hidden="true" />
+          <div class="space-y-1">
+            <h4 class="font-semibold text-warn">Lý do dừng</h4>
             <p class="text-fg/90 leading-relaxed">
               {{ formatFailureReason(run.failureReason) }}
             </p>
@@ -440,5 +536,18 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
+    <!-- Confirm Cancel Dialog -->
+    <ConfirmDialog
+      v-model="showCancelDialog"
+      :title="`Dừng lần chạy #${run?.id}?`"
+      message="Các bước đang chạy sẽ bị ngắt và Shipit sẽ dọn dẹp máy build. Deployment đã được cập nhật trước đó sẽ không bị hoàn tác."
+      confirm-text="Dừng"
+      cancel-text="Huỷ"
+      :loading="isCancelling"
+      :danger="true"
+      @confirm="handleConfirmCancel"
+      @cancel="showCancelDialog = false"
+    />
   </AppLayout>
 </template>
