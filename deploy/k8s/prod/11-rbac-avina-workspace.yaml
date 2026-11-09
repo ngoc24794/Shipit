@@ -1,0 +1,39 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shipit-deployer
+  namespace: avina-workspace
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames:
+      - avina-catalog
+      - avina-content-preview
+      - avina-gateway
+      - avina-learning
+      - avina-sysadmin
+      - avina-users
+    verbs: ["patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shipit-deployer
+  namespace: avina-workspace
+subjects:
+  - kind: ServiceAccount
+    name: shipit
+    namespace: cicd
+roleRef:
+  kind: Role
+  name: shipit-deployer
+  apiGroup: rbac.authorization.k8s.io
