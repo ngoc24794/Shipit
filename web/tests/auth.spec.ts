@@ -28,7 +28,7 @@ describe('Auth Store', () => {
     await mockApi.logout()
     auth.user = null
 
-    await auth.login({ username: 'admin', password: 'admin123' })
+    await auth.login({ username: 'admin', password: 'admin123', rememberMe: true })
     expect(auth.isAuthenticated).toBe(true)
     expect((auth.user as any)?.username).toBe('admin')
     expect(auth.error).toBeNull()

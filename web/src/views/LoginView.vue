@@ -16,6 +16,7 @@ const { theme, toggleTheme } = useTheme()
 
 const username = ref('')
 const password = ref('')
+const rememberMe = ref(false)
 const usernameError = ref<string | null>(null)
 const passwordError = ref<string | null>(null)
 
@@ -41,7 +42,8 @@ async function onSubmit() {
   try {
     await authStore.login({
       username: username.value.trim(),
-      password: password.value
+      password: password.value,
+      rememberMe: rememberMe.value
     })
     router.push('/')
   } catch {
@@ -125,6 +127,22 @@ async function onSubmit() {
             />
           </template>
         </AppField>
+
+        <div class="flex items-center gap-2">
+          <input
+            id="login-remember-me"
+            v-model="rememberMe"
+            type="checkbox"
+            name="rememberMe"
+            class="w-4 h-4 rounded border-border text-primary focus:ring-ring focus-visible:outline-2 focus-visible:outline-ring cursor-pointer"
+          />
+          <label
+            for="login-remember-me"
+            class="text-xs text-muted-fg hover:text-fg cursor-pointer select-none"
+          >
+            Ghi nhớ đăng nhập (30 ngày)
+          </label>
+        </div>
 
         <div class="pt-2">
           <AppButton
