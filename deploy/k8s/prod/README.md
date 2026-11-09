@@ -4,7 +4,7 @@ Tài liệu hướng dẫn triển khai hệ thống CI/CD Shipit lên môi trư
 
 ## Lưu ý quan trọng
 - **Namespace `cicd`:** Đã tồn tại sẵn trên cụm, manifest không tạo Namespace. Tuyệt đối **không** xoá namespace `cicd`.
-- **Registry:** Cụm production kéo image từ `registry.local:5000`. Registry nội bộ này mở, không yêu cầu xác thực hay cấu hình secret kéo ảnh. Image Shipit phải được build và push lên `registry.local:5000/shipit:<tag>` trước khi triển khai.
+- **Registry:** Cụm production kéo image từ `registry.local:5000`. Registry nội bộ này mở, không yêu cầu xác thực hay cấu hình secret kéo ảnh. Image Shipit phải được build và push lên `registry.local:5000/cicd-shipit:<tag>` trước khi triển khai.
 - **Biến môi trường DB:** Cần thiết lập biến môi trường `AVINA_PROD_SHIPIT_DB_URL` trước khi chạy script tạo secret.
 
 ---
@@ -46,7 +46,7 @@ Thay thế chuỗi giữ chỗ `REPLACE_TAG` bằng tag image thực tế (ví d
 - **Cách 2 (apply trước, cập nhật image sau):**
   ```bash
   kubectl apply -f deploy/k8s/prod/20-deployment.yaml
-  kubectl -n cicd set image deployment/shipit app=registry.local:5000/shipit:v1.0.0
+  kubectl -n cicd set image deployment/shipit app=registry.local:5000/cicd-shipit:v1.0.0
   ```
 
 ### Bước 5: Áp dụng Service

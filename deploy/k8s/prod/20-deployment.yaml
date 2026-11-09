@@ -24,7 +24,7 @@ spec:
         runAsGroup: 1654
       containers:
         - name: app
-          image: registry.local:5000/shipit:REPLACE_TAG
+          image: registry.local:5000/cicd-shipit:REPLACE_TAG
           ports:
             - containerPort: 8080
               name: http
