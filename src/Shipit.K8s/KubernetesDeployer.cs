@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using k8s;
 using k8s.Autorest;
@@ -108,7 +109,7 @@ public sealed partial class KubernetesDeployer : IK8sDeployer
         else
         {
             // 5. Strategic merge patch
-            var patchJson = $"{{\"spec\":{{\"template\":{{\"spec\":{{\"containers\":[{{\"name\":\"{request.Container}\",\"image\":\"{request.Image}\"}}]}}}}}}}}";
+            var patchJson = BuildImagePatchJson(request.Container, request.Image);
             var patch = new V1Patch(patchJson, V1Patch.PatchType.StrategicMergePatch);
             try
             {
@@ -216,6 +217,12 @@ public sealed partial class KubernetesDeployer : IK8sDeployer
         return await RollbackAsync(request, previousImage, failureReason!, log, cancellationToken);
     }
 
+    private static string BuildImagePatchJson(string container, string image) =>
+        JsonSerializer.Serialize(new
+        {
+            spec = new { template = new { spec = new { containers = new[] { new { name = container, image } } } } },
+        });
+
     private async Task<DeployResult> RollbackAsync(
         DeployRequest request,
         string previousImage,
@@ -232,7 +239,7 @@ public sealed partial class KubernetesDeployer : IK8sDeployer
 
         await log.WriteAsync($"Rollout failed, reverting to {previousImage}", LogStream.System, cancellationToken);
 
-        var rollbackPatchJson = $"{{\"spec\":{{\"template\":{{\"spec\":{{\"containers\":[{{\"name\":\"{request.Container}\",\"image\":\"{previousImage}\"}}]}}}}}}}}";
+        var rollbackPatchJson = BuildImagePatchJson(request.Container, previousImage);
         var rollbackPatch = new V1Patch(rollbackPatchJson, V1Patch.PatchType.StrategicMergePatch);
 
         V1Deployment rollbackDeployment;

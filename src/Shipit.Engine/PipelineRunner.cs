@@ -224,7 +224,7 @@ public sealed partial class PipelineRunner(
         var deployHost = string.IsNullOrWhiteSpace(p.DeployRegistryHost) ? p.RegistryHost : p.DeployRegistryHost;
         var deployImage = RemoteCommandBuilder.BuildImageRef(deployHost, p.ImageName, c.Tag!);
         await c.Writer.WriteAsync($"Deploying image {deployImage} to {p.DeployNamespace}/{p.DeployDeployment}", LogStream.System, ct).ConfigureAwait(false);
-        var request = new DeployRequest(p.DeployNamespace, p.DeployDeployment, p.DeployContainer, deployImage, options.RolloutTimeout);
+        var request = new DeployRequest(p.DeployNamespace, p.DeployDeployment, p.DeployContainer, deployImage, options.RolloutTimeout, options.RollbackTimeout);
         var result = await deployer.SetImageAsync(request, c.Writer, ct).ConfigureAwait(false);
         if (!result.Success)
         {

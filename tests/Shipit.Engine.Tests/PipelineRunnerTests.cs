@@ -38,7 +38,7 @@ public class PipelineRunnerTests
         Assert.Equal(["clone", "sha", "login", "build", "push", "logout", "cleanup"], Order(ssh));
 
         var request = Assert.Single(k8s.Requests);
-        Assert.Equal(new DeployRequest("devops", "shipit-demo", "app", "registry.example.com/shipit-demo:abc1234", env.Options.RolloutTimeout), request);
+        Assert.Equal(new DeployRequest("devops", "shipit-demo", "app", "registry.example.com/shipit-demo:abc1234", env.Options.RolloutTimeout, env.Options.RollbackTimeout), request);
 
         var logs = await env.GetLogsAsync(runId);
         Assert.Contains(logs, l => l.Step == StepName.Checkout && l.Text == "Cloning into repository...");
@@ -75,7 +75,7 @@ public class PipelineRunnerTests
         Assert.DoesNotContain(ssh.ExecutedCommands, c => c.CommandText.Contains("docker login") || c.CommandText.Contains("docker logout"));
 
         var request = Assert.Single(k8s.Requests);
-        Assert.Equal(new DeployRequest("devops", "shipit-demo", "app", "registry.example.com/shipit-demo:abc1234", env.Options.RolloutTimeout), request);
+        Assert.Equal(new DeployRequest("devops", "shipit-demo", "app", "registry.example.com/shipit-demo:abc1234", env.Options.RolloutTimeout, env.Options.RollbackTimeout), request);
 
         var logs = await env.GetLogsAsync(runId);
         Assert.Contains(logs, l => l.Step == StepName.Build && l.Stream == LogStream.System && l.Text == "Registry login skipped (no credential)");
