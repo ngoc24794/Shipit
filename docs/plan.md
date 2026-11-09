@@ -1,6 +1,6 @@
 # Shipit – Kế hoạch triển khai
 
-Trạng thái: **DRAFT v4 – chờ duyệt lại** (đã đổi backend từ Python sang **.NET**, giữ nguyên quyết định triển khai thật lên staging; chưa khởi động worker, chưa viết code, chưa `git init`).
+Trạng thái: **ĐÃ DUYỆT, đang thi hành** (2026-11-09). T0–T8 xong và đã ghép vào nhánh cục bộ `integration`; T9a, T9b xong trên staging (ns `devops`). **Đang dừng trước U/T9c**: cần quyết định về mạng pod→slave (`192.168.1.49:22`) và dọn dữ liệu thử trong DB staging; sau đó bạn nhập credential.
 
 ## Quyết định đã chốt
 

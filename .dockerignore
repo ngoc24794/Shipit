@@ -1,0 +1,15 @@
+.git
+.secrets
+**/bin
+**/obj
+**/node_modules
+docs
+tests
+.env*
+deploy
+examples
+*.md
+.dev
+*.db
+*.db-wal
+*.db-shm
