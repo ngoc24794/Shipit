@@ -49,6 +49,7 @@ const form = ref<{
   gitCredentialId: string | number
   slaveId: string | number
   dockerfilePath: string
+  buildContext: string
   imageName: string
   registryHost: string
   registryCredentialId: string | number | null
@@ -62,6 +63,7 @@ const form = ref<{
   gitCredentialId: '',
   slaveId: '',
   dockerfilePath: 'Dockerfile',
+  buildContext: '',
   imageName: '',
   registryHost: '',
   registryCredentialId: '',
@@ -125,6 +127,7 @@ function resetForm() {
     gitCredentialId: gitCredentials.value[0]?.id ?? '',
     slaveId: slaveStore.slaves[0]?.id ?? '',
     dockerfilePath: 'Dockerfile',
+    buildContext: '',
     imageName: '',
     registryHost: '',
     registryCredentialId: registryCredentials.value[0]?.id ?? '',
@@ -151,6 +154,7 @@ function openEditDialog(pipeline: Pipeline) {
     gitCredentialId: pipeline.gitCredentialId,
     slaveId: pipeline.slaveId,
     dockerfilePath: pipeline.dockerfilePath || 'Dockerfile',
+    buildContext: pipeline.buildContext ?? '',
     imageName: pipeline.imageName,
     registryHost: pipeline.registryHost,
     registryCredentialId: pipeline.registryCredentialId ?? '',
@@ -194,6 +198,19 @@ function validateForm(): boolean {
   // Build group
   if (!form.value.slaveId) {
     errors.slaveId = 'Vui lòng chọn máy build'
+  }
+
+  const ctx = form.value.buildContext.trim()
+  if (ctx) {
+    if (ctx.length > 200) {
+      errors.buildContext = 'Thư mục context build tối đa 200 ký tự'
+    } else if (ctx.startsWith('/') || ctx.startsWith('-')) {
+      errors.buildContext = 'Thư mục context build không được bắt đầu bằng / hoặc -'
+    } else if (ctx.includes('..')) {
+      errors.buildContext = 'Thư mục context build không được chứa ..'
+    } else if (!/^[A-Za-z0-9._/-]+$/.test(ctx)) {
+      errors.buildContext = 'Thư mục context build chỉ chứa chữ cái, số và ký tự . _ / -'
+    }
   }
 
   if (!form.value.imageName.trim()) {
@@ -241,6 +258,9 @@ async function handleSave() {
         ? null
         : Number(form.value.registryCredentialId)
 
+    const trimmedContext = form.value.buildContext.trim()
+    const buildContext = trimmedContext !== '' ? trimmedContext : null
+
     const payload: PipelineInput = {
       name: form.value.name.trim(),
       gitUrl: form.value.gitUrl.trim(),
@@ -248,6 +268,7 @@ async function handleSave() {
       gitCredentialId: Number(form.value.gitCredentialId),
       slaveId: Number(form.value.slaveId),
       dockerfilePath: form.value.dockerfilePath.trim() || 'Dockerfile',
+      buildContext,
       imageName: form.value.imageName.trim(),
       registryHost: form.value.registryHost.trim(),
       registryCredentialId: regCredId,
@@ -276,6 +297,7 @@ async function handleSave() {
           else if (lowerKey === 'gitcredentialid') formErrors.value.gitCredentialId = firstMsg
           else if (lowerKey === 'slaveid') formErrors.value.slaveId = firstMsg
           else if (lowerKey === 'dockerfilepath') formErrors.value.dockerfilePath = firstMsg
+          else if (lowerKey === 'buildcontext') formErrors.value.buildContext = firstMsg
           else if (lowerKey === 'imagename') formErrors.value.imageName = firstMsg
           else if (lowerKey === 'registryhost') formErrors.value.registryHost = firstMsg
           else if (lowerKey === 'registrycredentialid') formErrors.value.registryCredentialId = firstMsg
@@ -567,25 +589,25 @@ onMounted(() => {
             <span>Build (Docker)</span>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <AppField
-              label="Máy build (Slave)"
-              required
-              :error="formErrors.slaveId"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppSelect
-                  :id="id"
-                  v-model="form.slaveId"
-                  :options="slaveOptions"
-                  placeholder="-- Chọn máy build --"
-                  :disabled="slaveStore.slaves.length === 0"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
+          <AppField
+            label="Máy build (Slave)"
+            required
+            :error="formErrors.slaveId"
+          >
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppSelect
+                :id="id"
+                v-model="form.slaveId"
+                :options="slaveOptions"
+                placeholder="-- Chọn máy build --"
+                :disabled="slaveStore.slaves.length === 0"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
 
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <AppField
               label="Đường dẫn Dockerfile"
               required
@@ -596,6 +618,22 @@ onMounted(() => {
                   :id="id"
                   v-model="form.dockerfilePath"
                   placeholder="Dockerfile"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+
+            <AppField
+              label="Thư mục context build"
+              description="Tuỳ chọn. Đường dẫn trong repo dùng làm context khi build. Nhập `.` để dùng gốc repo. Để trống để dùng thư mục chứa Dockerfile."
+              :error="formErrors.buildContext"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.buildContext"
+                  placeholder=". (gốc repo)"
                   :error="error"
                   :aria-describedby="ariaDescribedby"
                 />

@@ -115,4 +115,115 @@ describe('MockShipitApi', () => {
       })
     ).rejects.toThrow()
   })
+
+  it('saves and returns buildContext correctly, normalizes whitespace to null', async () => {
+    const api = new MockShipitApi()
+
+    // 1. Valid non-empty buildContext
+    const p1 = await api.createPipeline({
+      name: 'pipeline-with-context',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      buildContext: 'services/app',
+      imageName: 'my-service',
+      registryHost: '192.168.1.241',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'my-service',
+      deployContainer: 'app'
+    })
+    expect(p1.buildContext).toBe('services/app')
+    const fetched1 = await api.getPipeline(p1.id)
+    expect(fetched1.buildContext).toBe('services/app')
+
+    // 2. Dot as root repo
+    const pDot = await api.createPipeline({
+      name: 'pipeline-dot-context',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      buildContext: '.',
+      imageName: 'dot-service',
+      registryHost: '192.168.1.241',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'dot-service',
+      deployContainer: 'app'
+    })
+    expect(pDot.buildContext).toBe('.')
+
+    // 3. Whitespace string converts to null
+    const p2 = await api.createPipeline({
+      name: 'pipeline-whitespace-context',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      buildContext: '   ',
+      imageName: 'ws-service',
+      registryHost: '192.168.1.241',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'ws-service',
+      deployContainer: 'app'
+    })
+    expect(p2.buildContext).toBeNull()
+
+    // 4. Update pipeline with valid context, then update to whitespace (null)
+    const updated1 = await api.updatePipeline(p2.id, {
+      name: 'pipeline-whitespace-context',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      buildContext: 'docker',
+      imageName: 'ws-service',
+      registryHost: '192.168.1.241',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'ws-service',
+      deployContainer: 'app'
+    })
+    expect(updated1.buildContext).toBe('docker')
+
+    const updated2 = await api.updatePipeline(p2.id, {
+      name: 'pipeline-whitespace-context',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      buildContext: '   ',
+      imageName: 'ws-service',
+      registryHost: '192.168.1.241',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'ws-service',
+      deployContainer: 'app'
+    })
+    expect(updated2.buildContext).toBeNull()
+  })
+
+  it('validates buildContext and returns 400 ApiError with Problem.errors', async () => {
+    const api = new MockShipitApi()
+    const baseInput = {
+      name: 'invalid-context-pipeline',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      imageName: 'app',
+      registryHost: '192.168.1.241',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'app',
+      deployContainer: 'app'
+    }
+
+    await expect(api.createPipeline({ ...baseInput, buildContext: '../x' })).rejects.toThrow()
+    await expect(api.createPipeline({ ...baseInput, buildContext: '/abs' })).rejects.toThrow()
+    await expect(api.createPipeline({ ...baseInput, buildContext: 'a b' })).rejects.toThrow()
+  })
 })
