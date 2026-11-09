@@ -1,0 +1,8 @@
+.git
+.secrets
+**/bin
+**/obj
+**/node_modules
+docs
+tests
+.env*

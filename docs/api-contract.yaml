@@ -1,0 +1,562 @@
+openapi: 3.0.3
+info:
+  title: Shipit API
+  version: 0.1.0
+  description: |
+    Contract for the Shipit monolith. All routes except /healthz, /readyz and /api/auth/login
+    require the admin session cookie (401 otherwise). Credential values are write-only:
+    no response ever contains a secret value.
+servers:
+  - url: /
+tags:
+  - name: health
+  - name: auth
+  - name: slaves
+  - name: credentials
+  - name: pipelines
+  - name: runs
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Liveness probe
+      security: []
+      responses:
+        '200':
+          description: Process is up
+          content:
+            text/plain:
+              schema: { type: string, example: ok }
+  /readyz:
+    get:
+      tags: [health]
+      summary: Readiness probe (database reachable, no pending migrations)
+      security: []
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+        '503':
+          description: Not ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Log in as the admin user (sets session cookie)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '204': { description: Logged in }
+        '401': { description: Wrong user or password }
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Clear the session cookie
+      responses:
+        '204': { description: Logged out }
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: Current user
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/slaves:
+    get:
+      tags: [slaves]
+      summary: List slaves
+      responses:
+        '200':
+          description: Slaves
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Slave' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [slaves]
+      summary: Create a slave
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlaveInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Slave' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/slaves/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [slaves]
+      summary: Get a slave
+      responses:
+        '200':
+          description: Slave
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Slave' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [slaves]
+      summary: Update a slave
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlaveInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Slave' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [slaves]
+      summary: Delete a slave (409 if a pipeline uses it)
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/slaves/{id}/test:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [slaves]
+      summary: Test the SSH connection to a slave
+      responses:
+        '200':
+          description: Result of the connection test
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConnectionTestResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/credentials:
+    get:
+      tags: [credentials]
+      summary: List credentials (metadata only, never values)
+      responses:
+        '200':
+          description: Credentials
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Credential' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [credentials]
+      summary: Create a credential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CredentialInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Credential' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/credentials/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    put:
+      tags: [credentials]
+      summary: Update name and/or replace the secret value (value is optional; omit to keep it)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CredentialUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Credential' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [credentials]
+      summary: Delete a credential (409 if in use)
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/pipelines:
+    get:
+      tags: [pipelines]
+      summary: List pipelines
+      responses:
+        '200':
+          description: Pipelines
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Pipeline' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [pipelines]
+      summary: Create a pipeline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PipelineInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pipeline' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/pipelines/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [pipelines]
+      summary: Get a pipeline
+      responses:
+        '200':
+          description: Pipeline
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pipeline' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [pipelines]
+      summary: Update a pipeline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PipelineInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pipeline' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [pipelines]
+      summary: Delete a pipeline (409 while a run is active)
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/pipelines/{id}/runs:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [runs]
+      summary: Trigger a run (409 if this pipeline already has an active run)
+      responses:
+        '202':
+          description: Run accepted and queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/runs:
+    get:
+      tags: [runs]
+      summary: List runs, newest first
+      parameters:
+        - name: pipelineId
+          in: query
+          required: false
+          schema: { type: integer, format: int64 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Run' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/runs/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [runs]
+      summary: Get a run with its steps
+      responses:
+        '200':
+          description: Run
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/runs/{id}/logs:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [runs]
+      summary: |
+        Run log. With `Accept: text/event-stream` it streams Server-Sent Events: one `log` event per line
+        (data is a LogLine JSON), plus a final `end` event carrying the run status. Otherwise returns the
+        lines stored so far as JSON. `after` resumes after a given line sequence number.
+      parameters:
+        - name: after
+          in: query
+          required: false
+          schema: { type: integer, format: int64, default: 0 }
+      responses:
+        '200':
+          description: Log lines
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LogLine' }
+            text/event-stream:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: shipit_session
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+  responses:
+    Unauthorized:
+      description: Not logged in
+    BadRequest:
+      description: Validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Resource not found
+    Conflict:
+      description: Conflicts with current state
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        detail: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+    Readiness:
+      type: object
+      required: [ready, database, pendingMigrations]
+      properties:
+        ready: { type: boolean }
+        database: { type: string, enum: [ok, unreachable] }
+        pendingMigrations: { type: integer }
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+    Me:
+      type: object
+      required: [username]
+      properties:
+        username: { type: string }
+    Slave:
+      type: object
+      required: [id, name, host, port, user, sshCredentialId]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        host: { type: string }
+        port: { type: integer, default: 22 }
+        user: { type: string }
+        sshCredentialId: { type: integer, format: int64 }
+    SlaveInput:
+      type: object
+      required: [name, host, user, sshCredentialId]
+      properties:
+        name: { type: string }
+        host: { type: string }
+        port: { type: integer, default: 22 }
+        user: { type: string }
+        sshCredentialId: { type: integer, format: int64, description: Must reference a credential of kind ssh_key }
+    ConnectionTestResult:
+      type: object
+      required: [ok, message]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+    CredentialKind:
+      type: string
+      enum: [ssh_key, git_token, registry]
+    Credential:
+      type: object
+      description: Metadata only. The secret value is never returned.
+      required: [id, name, kind, hasValue]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        kind: { $ref: '#/components/schemas/CredentialKind' }
+        username:
+          type: string
+          nullable: true
+          description: Only for kind registry (the registry user name; not secret)
+        hasValue: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+    CredentialInput:
+      type: object
+      required: [name, kind, value]
+      properties:
+        name: { type: string }
+        kind: { $ref: '#/components/schemas/CredentialKind' }
+        username: { type: string, nullable: true, description: Required when kind is registry }
+        value:
+          type: string
+          format: password
+          description: Private key PEM, Git token or registry password. Write-only.
+    CredentialUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        username: { type: string, nullable: true }
+        value: { type: string, format: password, description: Omit to keep the stored value }
+    Pipeline:
+      type: object
+      required: [id, name, gitUrl, gitBranch, gitCredentialId, slaveId, dockerfilePath, imageName, registryHost, registryCredentialId, deployNamespace, deployDeployment, deployContainer]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        gitUrl: { type: string }
+        gitBranch: { type: string, default: main }
+        gitCredentialId: { type: integer, format: int64 }
+        slaveId: { type: integer, format: int64 }
+        dockerfilePath: { type: string, default: Dockerfile }
+        imageName: { type: string, description: 'Repository name without registry host, e.g. shipit-demo' }
+        registryHost: { type: string, example: 192.168.1.241 }
+        registryCredentialId: { type: integer, format: int64 }
+        deployNamespace: { type: string }
+        deployDeployment: { type: string }
+        deployContainer: { type: string }
+        lastRun:
+          allOf:
+            - $ref: '#/components/schemas/Run'
+          nullable: true
+    PipelineInput:
+      type: object
+      required: [name, gitUrl, gitCredentialId, slaveId, imageName, registryHost, registryCredentialId, deployNamespace, deployDeployment, deployContainer]
+      properties:
+        name: { type: string }
+        gitUrl: { type: string }
+        gitBranch: { type: string, default: main }
+        gitCredentialId: { type: integer, format: int64 }
+        slaveId: { type: integer, format: int64 }
+        dockerfilePath: { type: string, default: Dockerfile }
+        imageName: { type: string }
+        registryHost: { type: string }
+        registryCredentialId: { type: integer, format: int64 }
+        deployNamespace: { type: string }
+        deployDeployment: { type: string }
+        deployContainer: { type: string }
+    RunStatus:
+      type: string
+      enum: [queued, running, success, failed]
+    StepName:
+      type: string
+      enum: [checkout, build, push, deploy]
+    StepStatus:
+      type: string
+      enum: [pending, running, success, failed, skipped]
+    Run:
+      type: object
+      required: [id, pipelineId, status, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        pipelineId: { type: integer, format: int64 }
+        status: { $ref: '#/components/schemas/RunStatus' }
+        tag: { type: string, nullable: true, description: Short git sha, known after checkout }
+        image: { type: string, nullable: true }
+        failureReason: { type: string, nullable: true, description: 'e.g. step failed, or "interrupted"' }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+    RunStep:
+      type: object
+      required: [name, status]
+      properties:
+        name: { $ref: '#/components/schemas/StepName' }
+        status: { $ref: '#/components/schemas/StepStatus' }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+    RunDetail:
+      allOf:
+        - $ref: '#/components/schemas/Run'
+        - type: object
+          required: [steps]
+          properties:
+            steps:
+              type: array
+              items: { $ref: '#/components/schemas/RunStep' }
+    LogLine:
+      type: object
+      required: [seq, step, stream, text, at]
+      properties:
+        seq: { type: integer, format: int64 }
+        step: { $ref: '#/components/schemas/StepName' }
+        stream: { type: string, enum: [stdout, stderr, system] }
+        text: { type: string, description: Already masked; secrets are replaced by *** }
+        at: { type: string, format: date-time }
+security:
+  - sessionCookie: []

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Shipit.Core\Shipit.Core.csproj" />
+    <ProjectReference Include="..\Shipit.Data\Shipit.Data.csproj" />
+    <ProjectReference Include="..\Shipit.Security\Shipit.Security.csproj" />
+    <ProjectReference Include="..\Shipit.Ssh\Shipit.Ssh.csproj" />
+    <ProjectReference Include="..\Shipit.K8s\Shipit.K8s.csproj" />
+    <ProjectReference Include="..\Shipit.Engine\Shipit.Engine.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
