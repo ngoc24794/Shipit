@@ -216,6 +216,25 @@ public class PipelineRunnerTests
     }
 
     [Fact]
+    public async Task A_run_only_becomes_final_after_every_log_line_is_stored()
+    {
+        using var env = new EngineTestEnv();
+        var ssh = EngineTestEnv.Slave();
+        var runId = await env.QueueRunAsync();
+
+        var execution = env.Runner(ssh, new FakeK8sDeployer(EngineTestEnv.AllowDemo())).ExecuteAsync(runId, CancellationToken.None);
+
+        // A client following the log stops as soon as it sees a final status. At that instant the closing
+        // line and the cleanup output (docker logout runs in the finally block) must already be stored.
+        await PipelineRunnerTests.WaitForAsync(async () => (await env.GetRunAsync(runId)).Status is RunStatus.Success or RunStatus.Failed);
+        var logs = await env.GetLogsAsync(runId);
+        await execution;
+
+        Assert.Contains(logs, l => l.Text == "Run completed successfully.");
+        Assert.Contains(logs, l => l.Text == "Removing login credentials");
+    }
+
+    [Fact]
     public async Task A_run_that_is_not_queued_is_ignored()
     {
         using var env = new EngineTestEnv();

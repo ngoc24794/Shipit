@@ -76,16 +76,15 @@ public sealed partial class PipelineRunner(
             }
 
             await writer.WriteAsync("Run completed successfully.", LogStream.System, CancellationToken.None).ConfigureAwait(false);
-            await UpdateRunAsync(runId, r =>
-            {
-                r.Status = RunStatus.Success;
-                r.FinishedAt = Now();
-            }).ConfigureAwait(false);
+            ctx.FinalStatus = RunStatus.Success;
+            ctx.FinalReason = null;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             await writer.WriteAsync("Run interrupted (shutdown requested).", LogStream.System, CancellationToken.None).ConfigureAwait(false);
             await InterruptAsync(runId).ConfigureAwait(false);
+            ctx.FinalStatus = RunStatus.Failed;
+            ctx.FinalReason = InterruptedReason;
         }
         catch (Exception ex)
         {
@@ -104,6 +103,15 @@ public sealed partial class PipelineRunner(
             {
                 logger.LogError(ex, "Flushing logs for run {RunId} failed.", runId);
             }
+
+            // The run only becomes final once every log line is stored, so a client that sees the final
+            // status can safely stop following the log.
+            await UpdateRunAsync(runId, r =>
+            {
+                r.Status = ctx.FinalStatus;
+                r.FailureReason = ctx.FinalReason;
+                r.FinishedAt = Now();
+            }).ConfigureAwait(false);
         }
     }
 
@@ -362,9 +370,9 @@ public sealed partial class PipelineRunner(
             }
         }
 
-        run.Status = RunStatus.Failed;
-        run.FailureReason = $"{failedStep.ToString().ToLowerInvariant()} failed: {masked}";
-        run.FinishedAt = now;
+        // Steps are visible immediately; the run itself turns final last (see ExecuteAsync).
+        c.FinalStatus = RunStatus.Failed;
+        c.FinalReason = $"{failedStep.ToString().ToLowerInvariant()} failed: {masked}";
         await db.SaveChangesAsync().ConfigureAwait(false);
     }
 
@@ -372,13 +380,13 @@ public sealed partial class PipelineRunner(
     {
         await using var db = await dbFactory.CreateDbContextAsync().ConfigureAwait(false);
         var run = await db.Runs.Include(r => r.Steps).FirstAsync(r => r.Id == runId).ConfigureAwait(false);
-        MarkInterrupted(run, Now());
+        MarkStepsInterrupted(run.Steps, Now());
         await db.SaveChangesAsync().ConfigureAwait(false);
     }
 
-    internal static void MarkInterrupted(Run run, DateTime now)
+    private static void MarkStepsInterrupted(IEnumerable<RunStep> steps, DateTime now)
     {
-        foreach (var s in run.Steps)
+        foreach (var s in steps)
         {
             if (s.Status == StepStatus.Running)
             {
@@ -390,7 +398,12 @@ public sealed partial class PipelineRunner(
                 s.Status = StepStatus.Skipped;
             }
         }
+    }
 
+    /// <summary>Marks a leftover run (and its steps) as interrupted. Used when recovering after a restart.</summary>
+    internal static void MarkInterrupted(Run run, DateTime now)
+    {
+        MarkStepsInterrupted(run.Steps, now);
         run.Status = RunStatus.Failed;
         run.FailureReason = InterruptedReason;
         run.FinishedAt = now;
@@ -437,6 +450,11 @@ public sealed partial class PipelineRunner(
         public string? Image { get; set; }
 
         public bool LoginAttempted { get; set; }
+
+        /// <summary>Applied to the run row last, after cleanup and the final log flush. Defaults to a safe failure.</summary>
+        public RunStatus FinalStatus { get; set; } = RunStatus.Failed;
+
+        public string? FinalReason { get; set; } = "internal error";
 
         public StepName? CurrentStep { get; set; }
 
