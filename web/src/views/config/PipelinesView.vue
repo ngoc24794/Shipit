@@ -51,7 +51,7 @@ const form = ref<{
   dockerfilePath: string
   imageName: string
   registryHost: string
-  registryCredentialId: string | number
+  registryCredentialId: string | number | null
   deployNamespace: string
   deployDeployment: string
   deployContainer: string
@@ -90,10 +90,13 @@ const registryCredentials = computed(() => {
 })
 
 const registryCredentialOptions = computed(() => {
-  return registryCredentials.value.map((c) => ({
-    label: c.username ? `${c.name} (${c.username})` : c.name,
-    value: c.id
-  }))
+  return [
+    { label: 'Không cần đăng nhập', value: '' },
+    ...registryCredentials.value.map((c) => ({
+      label: c.username ? `${c.name} (${c.username})` : c.name,
+      value: c.id
+    }))
+  ]
 })
 
 const slaveOptions = computed(() => {
@@ -106,6 +109,12 @@ const slaveOptions = computed(() => {
 function getSlaveName(slaveId: number): string {
   const slave = slaveStore.slaves.find((s) => s.id === slaveId)
   return slave ? slave.name : `#${slaveId}`
+}
+
+function getRegistryCredentialName(id: number | null | undefined): string {
+  if (id === null || id === undefined) return 'Không cần đăng nhập'
+  const cred = credStore.credentials.find((c) => c.id === id)
+  return cred ? (cred.username ? `${cred.name} (${cred.username})` : cred.name) : `#${id}`
 }
 
 function resetForm() {
@@ -144,7 +153,7 @@ function openEditDialog(pipeline: Pipeline) {
     dockerfilePath: pipeline.dockerfilePath || 'Dockerfile',
     imageName: pipeline.imageName,
     registryHost: pipeline.registryHost,
-    registryCredentialId: pipeline.registryCredentialId,
+    registryCredentialId: pipeline.registryCredentialId ?? '',
     deployNamespace: pipeline.deployNamespace,
     deployDeployment: pipeline.deployDeployment,
     deployContainer: pipeline.deployContainer
@@ -197,10 +206,6 @@ function validateForm(): boolean {
     errors.registryHost = 'Vui lòng nhập địa chỉ máy chủ Registry'
   }
 
-  if (!form.value.registryCredentialId) {
-    errors.registryCredentialId = 'Vui lòng chọn thông tin xác thực Registry'
-  }
-
   // Deploy group
   const ns = form.value.deployNamespace.trim()
   if (!ns) {
@@ -229,6 +234,13 @@ async function handleSave() {
 
   actionLoading.value = true
   try {
+    const regCredId =
+      form.value.registryCredentialId === '' ||
+      form.value.registryCredentialId === null ||
+      form.value.registryCredentialId === undefined
+        ? null
+        : Number(form.value.registryCredentialId)
+
     const payload: PipelineInput = {
       name: form.value.name.trim(),
       gitUrl: form.value.gitUrl.trim(),
@@ -238,7 +250,7 @@ async function handleSave() {
       dockerfilePath: form.value.dockerfilePath.trim() || 'Dockerfile',
       imageName: form.value.imageName.trim(),
       registryHost: form.value.registryHost.trim(),
-      registryCredentialId: Number(form.value.registryCredentialId),
+      registryCredentialId: regCredId,
       deployNamespace: form.value.deployNamespace.trim(),
       deployDeployment: form.value.deployDeployment.trim(),
       deployContainer: form.value.deployContainer.trim()
@@ -629,8 +641,7 @@ onMounted(() => {
 
           <AppField
             label="Thông tin xác thực Registry"
-            required
-            description="Tài khoản đăng nhập vào máy chủ Registry để đẩy image."
+            description="Chỉ chọn khi registry yêu cầu đăng nhập. Để trống nếu registry không cần xác thực."
             :error="formErrors.registryCredentialId"
           >
             <template #default="{ id, error, ariaDescribedby }">
@@ -638,8 +649,6 @@ onMounted(() => {
                 :id="id"
                 v-model="form.registryCredentialId"
                 :options="registryCredentialOptions"
-                placeholder="-- Chọn thông tin Registry --"
-                :disabled="registryCredentials.length === 0"
                 :error="error"
                 :aria-describedby="ariaDescribedby"
               />

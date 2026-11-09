@@ -389,6 +389,20 @@ export class MockShipitApi implements ShipitApi {
   async createPipeline(input: PipelineInput): Promise<Pipeline> {
     await delay()
     this.checkAuth()
+
+    const registryCredentialId = input.registryCredentialId ?? null
+    if (registryCredentialId !== null) {
+      const cred = this.credentials.find((c) => c.id === registryCredentialId)
+      if (!cred) {
+        throw new ApiError(400, 'Thông tin xác thực Registry không tồn tại', {
+          title: 'Validation failed',
+          errors: {
+            registryCredentialId: ['Thông tin xác thực Registry không tồn tại']
+          }
+        })
+      }
+    }
+
     const newPipeline: Pipeline = {
       id: Date.now(),
       name: input.name,
@@ -399,7 +413,7 @@ export class MockShipitApi implements ShipitApi {
       dockerfilePath: input.dockerfilePath || 'Dockerfile',
       imageName: input.imageName,
       registryHost: input.registryHost,
-      registryCredentialId: input.registryCredentialId,
+      registryCredentialId,
       deployNamespace: input.deployNamespace,
       deployDeployment: input.deployDeployment,
       deployContainer: input.deployContainer,
@@ -422,6 +436,20 @@ export class MockShipitApi implements ShipitApi {
     this.checkAuth()
     const idx = this.pipelines.findIndex((p) => p.id === id)
     if (idx === -1) throw new ApiError(404, 'Không tìm thấy pipeline')
+
+    const registryCredentialId = input.registryCredentialId ?? null
+    if (registryCredentialId !== null) {
+      const cred = this.credentials.find((c) => c.id === registryCredentialId)
+      if (!cred) {
+        throw new ApiError(400, 'Thông tin xác thực Registry không tồn tại', {
+          title: 'Validation failed',
+          errors: {
+            registryCredentialId: ['Thông tin xác thực Registry không tồn tại']
+          }
+        })
+      }
+    }
+
     const current = this.pipelines[idx]
     const updated: Pipeline = {
       ...current,
@@ -433,7 +461,7 @@ export class MockShipitApi implements ShipitApi {
       dockerfilePath: input.dockerfilePath || 'Dockerfile',
       imageName: input.imageName,
       registryHost: input.registryHost,
-      registryCredentialId: input.registryCredentialId,
+      registryCredentialId,
       deployNamespace: input.deployNamespace,
       deployDeployment: input.deployDeployment,
       deployContainer: input.deployContainer

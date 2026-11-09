@@ -75,4 +75,44 @@ describe('MockShipitApi', () => {
 
     vi.useRealTimers()
   })
+
+  it('creates pipeline with null registryCredentialId and returns null', async () => {
+    const api = new MockShipitApi()
+    const pipeline = await api.createPipeline({
+      name: 'pipeline-no-reg-cred',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      imageName: 'no-auth-app',
+      registryHost: '192.168.1.241',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'no-auth-app',
+      deployContainer: 'app'
+    })
+
+    expect(pipeline.registryCredentialId).toBeNull()
+    const fetched = await api.getPipeline(pipeline.id)
+    expect(fetched.registryCredentialId).toBeNull()
+  })
+
+  it('fails to create pipeline when registryCredentialId does not exist', async () => {
+    const api = new MockShipitApi()
+    await expect(
+      api.createPipeline({
+        name: 'pipeline-invalid-reg-cred',
+        gitUrl: 'https://git.example.com/org/repo.git',
+        gitBranch: 'main',
+        gitCredentialId: 2,
+        slaveId: 1,
+        imageName: 'test-app',
+        registryHost: '192.168.1.241',
+        registryCredentialId: 99999,
+        deployNamespace: 'default',
+        deployDeployment: 'test-app',
+        deployContainer: 'app'
+      })
+    ).rejects.toThrow()
+  })
 })
