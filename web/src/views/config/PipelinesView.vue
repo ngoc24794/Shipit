@@ -52,6 +52,7 @@ const form = ref<{
   buildContext: string
   imageName: string
   registryHost: string
+  deployRegistryHost: string
   registryCredentialId: string | number | null
   deployNamespace: string
   deployDeployment: string
@@ -66,6 +67,7 @@ const form = ref<{
   buildContext: '',
   imageName: '',
   registryHost: '',
+  deployRegistryHost: '',
   registryCredentialId: '',
   deployNamespace: '',
   deployDeployment: '',
@@ -130,6 +132,7 @@ function resetForm() {
     buildContext: '',
     imageName: '',
     registryHost: '',
+    deployRegistryHost: '',
     registryCredentialId: registryCredentials.value[0]?.id ?? '',
     deployNamespace: '',
     deployDeployment: '',
@@ -157,6 +160,7 @@ function openEditDialog(pipeline: Pipeline) {
     buildContext: pipeline.buildContext ?? '',
     imageName: pipeline.imageName,
     registryHost: pipeline.registryHost,
+    deployRegistryHost: pipeline.deployRegistryHost ?? '',
     registryCredentialId: pipeline.registryCredentialId ?? '',
     deployNamespace: pipeline.deployNamespace,
     deployDeployment: pipeline.deployDeployment,
@@ -174,8 +178,24 @@ function closeDialog() {
 // - Git URL must start with http:// or https://
 // - Image name must be lowercase alphanumeric and ._-/
 // - Kubernetes namespace and deployment must follow DNS-1123 label format
+// - Host format: alphanumeric, ., -, and optional :port; no http://, whitespace, or special chars
 const DNS_1123_REGEX = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/
 const IMAGE_NAME_REGEX = /^[a-z0-9._/-]+$/
+
+function validateHost(val: string): string | null {
+  const trimmed = val.trim()
+  if (!trimmed) return null
+  if (/^https?:\/\//i.test(trimmed)) {
+    return 'Địa chỉ host không được chứa http:// hoặc https://'
+  }
+  if (/\s/.test(trimmed)) {
+    return 'Địa chỉ host không được chứa khoảng trắng'
+  }
+  if (!/^[a-zA-Z0-9.-]+(?::\d+)?$/.test(trimmed)) {
+    return 'Địa chỉ host chỉ được chứa chữ cái, số, dấu chấm, gạch ngang và cổng tuỳ chọn (ví dụ: registry.local:5000)'
+  }
+  return null
+}
 
 function validateForm(): boolean {
   const errors: Record<string, string> = {}
@@ -221,9 +241,22 @@ function validateForm(): boolean {
 
   if (!form.value.registryHost.trim()) {
     errors.registryHost = 'Vui lòng nhập địa chỉ máy chủ Registry'
+  } else {
+    const hostErr = validateHost(form.value.registryHost)
+    if (hostErr) {
+      errors.registryHost = hostErr
+    }
   }
 
   // Deploy group
+  const deployHost = form.value.deployRegistryHost.trim()
+  if (deployHost) {
+    const hostErr = validateHost(deployHost)
+    if (hostErr) {
+      errors.deployRegistryHost = hostErr
+    }
+  }
+
   const ns = form.value.deployNamespace.trim()
   if (!ns) {
     errors.deployNamespace = 'Vui lòng nhập Namespace'
@@ -261,6 +294,9 @@ async function handleSave() {
     const trimmedContext = form.value.buildContext.trim()
     const buildContext = trimmedContext !== '' ? trimmedContext : null
 
+    const trimmedDeployHost = form.value.deployRegistryHost.trim()
+    const deployRegistryHost = trimmedDeployHost !== '' ? trimmedDeployHost : null
+
     const payload: PipelineInput = {
       name: form.value.name.trim(),
       gitUrl: form.value.gitUrl.trim(),
@@ -271,6 +307,7 @@ async function handleSave() {
       buildContext,
       imageName: form.value.imageName.trim(),
       registryHost: form.value.registryHost.trim(),
+      deployRegistryHost,
       registryCredentialId: regCredId,
       deployNamespace: form.value.deployNamespace.trim(),
       deployDeployment: form.value.deployDeployment.trim(),
@@ -300,6 +337,7 @@ async function handleSave() {
           else if (lowerKey === 'buildcontext') formErrors.value.buildContext = firstMsg
           else if (lowerKey === 'imagename') formErrors.value.imageName = firstMsg
           else if (lowerKey === 'registryhost') formErrors.value.registryHost = firstMsg
+          else if (lowerKey === 'deployregistryhost') formErrors.value.deployRegistryHost = firstMsg
           else if (lowerKey === 'registrycredentialid') formErrors.value.registryCredentialId = firstMsg
           else if (lowerKey === 'deploynamespace') formErrors.value.deployNamespace = firstMsg
           else if (lowerKey === 'deploydeployment') formErrors.value.deployDeployment = firstMsg
@@ -756,6 +794,22 @@ onMounted(() => {
               </AppField>
             </div>
           </div>
+
+          <AppField
+            label="Host registry khi deploy"
+            description="Tuỳ chọn. Dùng khi cụm k8s gọi registry bằng tên khác với máy build (ví dụ máy build dùng avina.ai:5000, cụm dùng registry.local:5000). Để trống để dùng chung Máy chủ Registry."
+            :error="formErrors.deployRegistryHost"
+          >
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="form.deployRegistryHost"
+                placeholder="giống Máy chủ Registry"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
         </div>
       </form>
 

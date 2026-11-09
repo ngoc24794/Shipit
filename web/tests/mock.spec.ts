@@ -226,4 +226,115 @@ describe('MockShipitApi', () => {
     await expect(api.createPipeline({ ...baseInput, buildContext: '/abs' })).rejects.toThrow()
     await expect(api.createPipeline({ ...baseInput, buildContext: 'a b' })).rejects.toThrow()
   })
+
+  it('saves and returns deployRegistryHost correctly, normalizes whitespace to null', async () => {
+    const api = new MockShipitApi()
+
+    // 1. Valid deployRegistryHost
+    const p1 = await api.createPipeline({
+      name: 'pipeline-with-deploy-host',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      imageName: 'my-service',
+      registryHost: '192.168.1.241',
+      deployRegistryHost: 'registry.local:5000',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'my-service',
+      deployContainer: 'app'
+    })
+    expect(p1.deployRegistryHost).toBe('registry.local:5000')
+    const fetched1 = await api.getPipeline(p1.id)
+    expect(fetched1.deployRegistryHost).toBe('registry.local:5000')
+
+    // 2. Whitespace string converts to null
+    const p2 = await api.createPipeline({
+      name: 'pipeline-whitespace-deploy-host',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      imageName: 'ws-service',
+      registryHost: '192.168.1.241',
+      deployRegistryHost: '   ',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'ws-service',
+      deployContainer: 'app'
+    })
+    expect(p2.deployRegistryHost).toBeNull()
+
+    // 3. Null converts to null
+    const p3 = await api.createPipeline({
+      name: 'pipeline-null-deploy-host',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      imageName: 'null-service',
+      registryHost: '192.168.1.241',
+      deployRegistryHost: null,
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'null-service',
+      deployContainer: 'app'
+    })
+    expect(p3.deployRegistryHost).toBeNull()
+
+    // 4. Update pipeline with valid deployRegistryHost, then update to whitespace (null)
+    const updated1 = await api.updatePipeline(p2.id, {
+      name: 'pipeline-whitespace-deploy-host',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      imageName: 'ws-service',
+      registryHost: '192.168.1.241',
+      deployRegistryHost: 'k8s-reg.internal:5000',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'ws-service',
+      deployContainer: 'app'
+    })
+    expect(updated1.deployRegistryHost).toBe('k8s-reg.internal:5000')
+
+    const updated2 = await api.updatePipeline(p2.id, {
+      name: 'pipeline-whitespace-deploy-host',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      imageName: 'ws-service',
+      registryHost: '192.168.1.241',
+      deployRegistryHost: '   ',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'ws-service',
+      deployContainer: 'app'
+    })
+    expect(updated2.deployRegistryHost).toBeNull()
+  })
+
+  it('validates deployRegistryHost and returns 400 ApiError with Problem.errors', async () => {
+    const api = new MockShipitApi()
+    const baseInput = {
+      name: 'invalid-deploy-host-pipeline',
+      gitUrl: 'https://git.example.com/org/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      imageName: 'app',
+      registryHost: '192.168.1.241',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'app',
+      deployContainer: 'app'
+    }
+
+    await expect(api.createPipeline({ ...baseInput, deployRegistryHost: 'http://x' })).rejects.toThrow()
+    await expect(api.createPipeline({ ...baseInput, deployRegistryHost: 'a b' })).rejects.toThrow()
+    await expect(api.createPipeline({ ...baseInput, deployRegistryHost: 'x;y' })).rejects.toThrow()
+  })
 })

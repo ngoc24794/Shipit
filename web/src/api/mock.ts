@@ -44,6 +44,25 @@ function validateBuildContext(val: string): string | null {
   return null
 }
 
+function normalizeDeployRegistryHost(value?: string | null): string | null {
+  if (value === undefined || value === null) return null
+  const trimmed = value.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+function validateDeployRegistryHost(val: string): string | null {
+  if (/^https?:\/\//i.test(val)) {
+    return 'Host registry khi deploy không được chứa http:// hoặc https://'
+  }
+  if (/\s/.test(val)) {
+    return 'Host registry khi deploy không được chứa khoảng trắng'
+  }
+  if (!/^[a-zA-Z0-9.-]+(?::\d+)?$/.test(val)) {
+    return 'Host registry khi deploy chỉ chứa chữ cái, số, dấu chấm, dấu gạch ngang và cổng tuỳ chọn'
+  }
+  return null
+}
+
 export class MockShipitApi implements ShipitApi {
   private loggedInUser: Me | null = { username: 'admin' }
 
@@ -175,6 +194,7 @@ export class MockShipitApi implements ShipitApi {
       buildContext: null,
       imageName: 'shipit-demo',
       registryHost: '192.168.1.241',
+      deployRegistryHost: null,
       registryCredentialId: 3,
       deployNamespace: 'devops',
       deployDeployment: 'shipit-demo',
@@ -202,6 +222,7 @@ export class MockShipitApi implements ShipitApi {
       buildContext: null,
       imageName: 'avina-catalog',
       registryHost: '192.168.1.241',
+      deployRegistryHost: null,
       registryCredentialId: 3,
       deployNamespace: 'avina-workspace',
       deployDeployment: 'avina-catalog',
@@ -440,6 +461,19 @@ export class MockShipitApi implements ShipitApi {
       }
     }
 
+    const deployRegistryHost = normalizeDeployRegistryHost(input.deployRegistryHost)
+    if (deployRegistryHost !== null) {
+      const err = validateDeployRegistryHost(deployRegistryHost)
+      if (err) {
+        throw new ApiError(400, err, {
+          title: 'Validation failed',
+          errors: {
+            deployRegistryHost: [err]
+          }
+        })
+      }
+    }
+
     const newPipeline: Pipeline = {
       id: Date.now(),
       name: input.name,
@@ -451,6 +485,7 @@ export class MockShipitApi implements ShipitApi {
       buildContext,
       imageName: input.imageName,
       registryHost: input.registryHost,
+      deployRegistryHost,
       registryCredentialId,
       deployNamespace: input.deployNamespace,
       deployDeployment: input.deployDeployment,
@@ -506,6 +541,23 @@ export class MockShipitApi implements ShipitApi {
       }
     }
 
+    const deployRegistryHost =
+      input.deployRegistryHost !== undefined
+        ? normalizeDeployRegistryHost(input.deployRegistryHost)
+        : current.deployRegistryHost
+
+    if (deployRegistryHost !== null) {
+      const err = validateDeployRegistryHost(deployRegistryHost)
+      if (err) {
+        throw new ApiError(400, err, {
+          title: 'Validation failed',
+          errors: {
+            deployRegistryHost: [err]
+          }
+        })
+      }
+    }
+
     const updated: Pipeline = {
       ...current,
       name: input.name,
@@ -517,6 +569,7 @@ export class MockShipitApi implements ShipitApi {
       buildContext,
       imageName: input.imageName,
       registryHost: input.registryHost,
+      deployRegistryHost,
       registryCredentialId,
       deployNamespace: input.deployNamespace,
       deployDeployment: input.deployDeployment,
