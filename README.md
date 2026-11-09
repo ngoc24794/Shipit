@@ -221,6 +221,7 @@ Trong thư mục `examples/hello-shipit` có sẵn một ứng dụng ASP.NET Co
    - **Slave:** Chọn slave đã tạo (`192.168.1.49`).
    - **Dockerfile:** `Dockerfile` (hoặc đường dẫn dùng dấu `/`, ví dụ `examples/hello-shipit/Dockerfile`).
    - **Thư mục context build (tuỳ chọn):** đường dẫn trong repo dùng làm context khi build; nhập `.` để dùng gốc repo (cần khi Dockerfile nằm ở thư mục con nhưng `COPY` các thư mục ở gốc repo). Để trống thì dùng thư mục chứa Dockerfile.
+   - **Host registry khi deploy (tuỳ chọn):** dùng khi cụm k8s gọi registry bằng tên khác với máy build (ví dụ máy build dùng `avina.ai:5000`, cụm dùng `registry.local:5000`). Shipit push tới "Máy chủ Registry", còn image đặt vào Deployment dùng host này. Để trống thì dùng chung.
    - **Image Name:** `shipit-demo`, Registry Host `192.168.1.241`.
    - **Thông tin xác thực Registry:** chọn credential nếu registry yêu cầu đăng nhập; chọn "Không cần đăng nhập" nếu registry mở (khi đó Shipit bỏ qua `docker login`/`logout`).
    - **Deploy:** Namespace `devops`, Deployment `shipit-demo`, Container `app`.
