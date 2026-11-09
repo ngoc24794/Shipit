@@ -341,6 +341,70 @@ public class PipelineRunnerTests
         Assert.Equal($"docker build -f '{expectedWorkDir}/docker/Dockerfile.demo' -t 'registry.example.com/shipit-demo:abc1234' '{expectedWorkDir}/docker'", buildCmd.CommandText);
     }
 
+    [Fact]
+    public async Task Deploy_Uses_DeployRegistryHost_When_Configured_While_Build_And_Push_Use_RegistryHost()
+    {
+        using var env = new EngineTestEnv();
+        const string hostA = "registry.example.com";
+        const string hostB = "k8s-mirror.local:5000";
+        await env.SetDeployRegistryHostAsync(hostB);
+
+        var ssh = EngineTestEnv.Slave();
+        var k8s = new FakeK8sDeployer(EngineTestEnv.AllowDemo());
+        var runId = await env.QueueRunAsync();
+
+        await env.Runner(ssh, k8s).ExecuteAsync(runId, CancellationToken.None);
+
+        var run = await env.GetRunAsync(runId);
+        Assert.Equal(RunStatus.Success, run.Status);
+        Assert.Equal("abc1234", run.Tag);
+        // Run.Image retains build/push image (using host A)
+        Assert.Equal($"{hostA}/shipit-demo:abc1234", run.Image);
+
+        // docker build and docker push use host A
+        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker build"));
+        Assert.Contains($"-t '{hostA}/shipit-demo:abc1234'", buildCmd.CommandText);
+
+        var pushCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker push"));
+        Assert.Equal($"docker push '{hostA}/shipit-demo:abc1234'", pushCmd.CommandText);
+
+        // deploy request to FakeK8sDeployer uses host B
+        var request = Assert.Single(k8s.Requests);
+        Assert.Equal($"{hostB}/shipit-demo:abc1234", request.Image);
+
+        // system log in deploy step mentions image with host B
+        var logs = await env.GetLogsAsync(runId);
+        var deployLogs = logs.Where(l => l.Step == StepName.Deploy).ToList();
+        Assert.NotEmpty(deployLogs);
+        Assert.Contains(deployLogs, l => l.Text.Contains($"{hostB}/shipit-demo:abc1234"));
+    }
+
+    [Fact]
+    public async Task Deploy_Uses_RegistryHost_When_DeployRegistryHost_Is_Null()
+    {
+        using var env = new EngineTestEnv();
+        const string hostA = "registry.example.com";
+        await env.SetDeployRegistryHostAsync(null);
+
+        var ssh = EngineTestEnv.Slave();
+        var k8s = new FakeK8sDeployer(EngineTestEnv.AllowDemo());
+        var runId = await env.QueueRunAsync();
+
+        await env.Runner(ssh, k8s).ExecuteAsync(runId, CancellationToken.None);
+
+        var run = await env.GetRunAsync(runId);
+        Assert.Equal(RunStatus.Success, run.Status);
+        Assert.Equal($"{hostA}/shipit-demo:abc1234", run.Image);
+
+        var request = Assert.Single(k8s.Requests);
+        Assert.Equal($"{hostA}/shipit-demo:abc1234", request.Image);
+
+        var logs = await env.GetLogsAsync(runId);
+        var deployLogs = logs.Where(l => l.Step == StepName.Deploy).ToList();
+        Assert.NotEmpty(deployLogs);
+        Assert.Contains(deployLogs, l => l.Text.Contains($"{hostA}/shipit-demo:abc1234"));
+    }
+
     internal static async Task WaitForAsync(Func<Task<bool>> condition, int timeoutMs = 15_000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);

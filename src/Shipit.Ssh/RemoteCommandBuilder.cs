@@ -281,7 +281,10 @@ public static class RemoteCommandBuilder
         }
     }
 
-    private static void ValidateRegistryHost(string registryHost)
+    /// <summary>
+    /// Validates a registry host string (hostname with optional port).
+    /// </summary>
+    public static void ValidateRegistryHost(string registryHost)
     {
         if (string.IsNullOrWhiteSpace(registryHost) ||
             !RegistryHostRegex.IsMatch(registryHost) ||

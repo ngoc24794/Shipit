@@ -632,4 +632,85 @@ public class EndToEndFlowTests
         var unknownResponse = await client.GetAsync("/api/unknown");
         Assert.Equal(HttpStatusCode.NotFound, unknownResponse.StatusCode);
     }
+
+    [Fact]
+    public async Task HappyPath_WithCustomDeployRegistryHost_BuildsPushesWithRegistryHost_AndDeploysWithDeployRegistryHost()
+    {
+        var customSsh = new FakeSshExecutor();
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("git clone"), exitCode: 0, outputLines: [("Cloning repo...", LogStream.Stdout)]);
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("rev-parse --short=7 HEAD"), exitCode: 0, outputLines: [("abc1234", LogStream.Stdout)]);
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("docker login"), exitCode: 0, outputLines: [("Login Succeeded", LogStream.Stdout)]);
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("docker build"), exitCode: 0, outputLines: [("Successfully built abc1234", LogStream.Stdout)]);
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("docker push"), exitCode: 0, outputLines: [("abc1234: digest: sha256:1234 size: 528", LogStream.Stdout)]);
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("docker logout"), exitCode: 0, outputLines: [("Removing login credentials", LogStream.Stdout)]);
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("rm -rf"), exitCode: 0);
+
+        var customK8s = new FakeK8sDeployer(new DeployAllowList([new DeployAllowListEntry("devops", ["shipit-demo"])]));
+
+        using var factory = new E2EFactory();
+        using var customApp = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddSingleton<ISshExecutor>(customSsh);
+                services.AddSingleton<IK8sDeployer>(customK8s);
+            });
+        });
+
+        var client = await customApp.LoggedInClientAsync();
+        var seeded = await client.SeedResourcesAsync();
+
+        const string buildRegistry = "192.168.1.241";
+        const string deployRegistry = "k8s-mirror.local:5000";
+
+        var pipelineId = await client.CreateAsync("/api/pipelines", new
+        {
+            name = "custom-deploy-host-pipe",
+            gitUrl = "https://git.example.com/team/demo.git",
+            gitBranch = "main",
+            gitCredentialId = seeded.GitId,
+            slaveId = seeded.SlaveId,
+            dockerfilePath = "Dockerfile",
+            imageName = "shipit-demo",
+            registryHost = buildRegistry,
+            deployRegistryHost = deployRegistry,
+            registryCredentialId = seeded.RegId,
+            deployNamespace = "devops",
+            deployDeployment = "shipit-demo",
+            deployContainer = "app"
+        });
+
+        var runId = await client.TriggerRunAsync(pipelineId);
+        var run = await client.WaitForRunAsync(runId, "success", "failed");
+
+        Assert.Equal("success", run.GetProperty("status").GetString());
+        Assert.Equal("abc1234", run.GetProperty("tag").GetString());
+        // Run.Image is build/push image
+        Assert.Equal($"{buildRegistry}/shipit-demo:abc1234", run.GetProperty("image").GetString());
+
+        // Verify SSH executed commands: build and push used buildRegistry
+        var buildCmd = customSsh.ExecutedCommands.Single(c => c.CommandText.Contains("docker build"));
+        Assert.Contains($"-t '{buildRegistry}/shipit-demo:abc1234'", buildCmd.CommandText);
+
+        var pushCmd = customSsh.ExecutedCommands.Single(c => c.CommandText.Contains("docker push"));
+        Assert.Equal($"docker push '{buildRegistry}/shipit-demo:abc1234'", pushCmd.CommandText);
+
+        // Verify deploy request to FakeK8sDeployer used deployRegistry
+        var deployReq = Assert.Single(customK8s.Requests);
+        Assert.Equal("devops", deployReq.Namespace);
+        Assert.Equal("shipit-demo", deployReq.Deployment);
+        Assert.Equal("app", deployReq.Container);
+        Assert.Equal($"{deployRegistry}/shipit-demo:abc1234", deployReq.Image);
+
+        // Verify logs include the deployed image with deployRegistry
+        var logsResponse = await client.GetAsync($"/api/runs/{runId}/logs");
+        Assert.Equal(HttpStatusCode.OK, logsResponse.StatusCode);
+        var logsJson = await logsResponse.ReadJsonAsync();
+        var deployLogLines = logsJson.EnumerateArray()
+            .Where(l => l.GetProperty("step").GetString() == "deploy")
+            .Select(l => l.GetProperty("text").GetString())
+            .ToList();
+
+        Assert.Contains(deployLogLines, text => text != null && text.Contains($"{deployRegistry}/shipit-demo:abc1234"));
+    }
 }

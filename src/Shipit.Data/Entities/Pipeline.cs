@@ -14,6 +14,7 @@ public class Pipeline
     public string? BuildContext { get; set; }
     public string ImageName { get; set; } = string.Empty;
     public string RegistryHost { get; set; } = string.Empty;
+    public string? DeployRegistryHost { get; set; }
     public long? RegistryCredentialId { get; set; }
     public Credential? RegistryCredential { get; set; }
     public string DeployNamespace { get; set; } = string.Empty;

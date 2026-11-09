@@ -221,7 +221,10 @@ public sealed partial class PipelineRunner(
     private async Task<(bool, string?)> DeployAsync(RunContext c, CancellationToken ct)
     {
         var p = c.Plan;
-        var request = new DeployRequest(p.DeployNamespace, p.DeployDeployment, p.DeployContainer, c.Image!, options.RolloutTimeout);
+        var deployHost = string.IsNullOrWhiteSpace(p.DeployRegistryHost) ? p.RegistryHost : p.DeployRegistryHost;
+        var deployImage = RemoteCommandBuilder.BuildImageRef(deployHost, p.ImageName, c.Tag!);
+        await c.Writer.WriteAsync($"Deploying image {deployImage} to {p.DeployNamespace}/{p.DeployDeployment}", LogStream.System, ct).ConfigureAwait(false);
+        var request = new DeployRequest(p.DeployNamespace, p.DeployDeployment, p.DeployContainer, deployImage, options.RolloutTimeout);
         var result = await deployer.SetImageAsync(request, c.Writer, ct).ConfigureAwait(false);
         if (!result.Success)
         {
@@ -328,6 +331,7 @@ public sealed partial class PipelineRunner(
         return new RunPlan(
             runId,
             p.GitUrl, p.GitBranch, p.DockerfilePath, p.BuildContext, p.ImageName, p.RegistryHost,
+            p.DeployRegistryHost,
             p.DeployNamespace, p.DeployDeployment, p.DeployContainer,
             p.Slave.Host, p.Slave.Port, p.Slave.User,
             p.Slave.SshCredential.ProtectedValue,
@@ -434,6 +438,7 @@ public sealed partial class PipelineRunner(
         string? BuildContext,
         string ImageName,
         string RegistryHost,
+        string? DeployRegistryHost,
         string DeployNamespace,
         string DeployDeployment,
         string DeployContainer,

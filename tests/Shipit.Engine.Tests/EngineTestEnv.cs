@@ -114,6 +114,15 @@ public sealed class EngineTestEnv : IDisposable
         await db.SaveChangesAsync();
     }
 
+    public async Task SetDeployRegistryHostAsync(string? deployRegistryHost, long? pipelineId = null)
+    {
+        await using var db = await Factory.CreateDbContextAsync();
+        var id = pipelineId ?? PipelineId;
+        var p = await db.Pipelines.FirstAsync(p => p.Id == id);
+        p.DeployRegistryHost = deployRegistryHost;
+        await db.SaveChangesAsync();
+    }
+
     public async Task<Run> GetRunAsync(long id)
     {
         await using var db = await Factory.CreateDbContextAsync();
