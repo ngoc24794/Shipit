@@ -142,8 +142,11 @@ public static class RemoteCommandBuilder
         ValidateDockerfilePath(dockerfilePath);
         ValidateImage(image);
 
+        // The build context is the directory that holds the Dockerfile (the repository root for a root Dockerfile).
         var fullDockerfilePath = $"{workDir}/{dockerfilePath}";
-        return new RemoteCommand($"docker build -f {Quote(fullDockerfilePath)} -t {Quote(image)} {Quote(workDir)}");
+        var lastSlash = dockerfilePath.LastIndexOf('/');
+        var contextDir = lastSlash > 0 ? $"{workDir}/{dockerfilePath[..lastSlash]}" : workDir;
+        return new RemoteCommand($"docker build -f {Quote(fullDockerfilePath)} -t {Quote(image)} {Quote(contextDir)}");
     }
 
     /// <summary>

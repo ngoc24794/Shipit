@@ -209,7 +209,7 @@ public class RemoteCommandBuilderTests
             "192.168.1.241/shipit-demo:abc1234");
 
         Assert.Equal(
-            "docker build -f '/tmp/shipit/run-1/src/Dockerfile' -t '192.168.1.241/shipit-demo:abc1234' '/tmp/shipit/run-1'",
+            "docker build -f '/tmp/shipit/run-1/src/Dockerfile' -t '192.168.1.241/shipit-demo:abc1234' '/tmp/shipit/run-1/src'",
             cmd.CommandText);
         Assert.Null(cmd.StdinSecret);
 
@@ -221,7 +221,17 @@ public class RemoteCommandBuilderTests
         Assert.Equal("/tmp/shipit/run-1/src/Dockerfile", tokens[3]);
         Assert.Equal("-t", tokens[4]);
         Assert.Equal("192.168.1.241/shipit-demo:abc1234", tokens[5]);
-        Assert.Equal("/tmp/shipit/run-1", tokens[6]);
+        Assert.Equal("/tmp/shipit/run-1/src", tokens[6]);
+    }
+
+    [Fact]
+    public void DockerBuild_RootDockerfile_UsesTheRepositoryRootAsContext()
+    {
+        var cmd = RemoteCommandBuilder.DockerBuild("/tmp/shipit/run-1", "Dockerfile", "192.168.1.241/app:abc1234");
+
+        Assert.Equal(
+            "docker build -f '/tmp/shipit/run-1/Dockerfile' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1'",
+            cmd.CommandText);
     }
 
     [Theory]
