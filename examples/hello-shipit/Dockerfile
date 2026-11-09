@@ -11,7 +11,7 @@ RUN dotnet publish HelloShipit.csproj -c Release -o /app --no-restore
 FROM ${DOTNET_RUNTIME_IMAGE} AS final
 WORKDIR /app
 COPY --from=build /app ./
-USER app
+USER $APP_UID
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "HelloShipit.dll"]
