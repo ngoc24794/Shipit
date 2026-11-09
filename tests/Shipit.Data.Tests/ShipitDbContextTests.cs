@@ -414,12 +414,93 @@ public class ShipitDbContextTests : IDisposable
         Assert.Contains("20261109035520_InitialCreate", migrations);
         Assert.Contains(migrations, m => m.EndsWith("OptionalRegistryCredential"));
         Assert.Contains(migrations, m => m.EndsWith("AddBuildContext"));
+        Assert.Contains(migrations, m => m.EndsWith("AddDeployRegistryHost"));
 
         var factory = new ShipitDbContextFactory();
         using var npgsqlCtx = factory.CreateDbContext([]);
         var script = npgsqlCtx.Database.GenerateCreateScript();
         Assert.NotEmpty(script);
         Assert.Contains("BuildContext", script);
+        Assert.Contains("DeployRegistryHost", script);
+    }
+
+    [Fact]
+    public void AddDeployRegistryHost_Migration_IsRegistered_And_GeneratesScript()
+    {
+        using var ctx = CreateContext();
+        var migrations = ctx.Database.GetMigrations().ToList();
+        Assert.Contains(migrations, m => m.EndsWith("AddDeployRegistryHost"));
+
+        var factory = new ShipitDbContextFactory();
+        using var npgsqlCtx = factory.CreateDbContext([]);
+        var script = npgsqlCtx.Database.GenerateCreateScript();
+        Assert.NotEmpty(script);
+        Assert.Contains("DeployRegistryHost", script);
+    }
+
+    [Fact]
+    public async Task Pipeline_DeployRegistryHost_AllowsNullAndExplicitValues_OldDataReadsAsNull()
+    {
+        using var ctx = CreateContext();
+
+        var gitCred = new Credential { Name = "git-cred-drh", Kind = CredentialKind.GitToken, ProtectedValue = "v1:git" };
+        var sshCred = new Credential { Name = "ssh-cred-drh", Kind = CredentialKind.SshKey, ProtectedValue = "v1:ssh" };
+        ctx.Credentials.AddRange(gitCred, sshCred);
+        await ctx.SaveChangesAsync();
+
+        var slave = new Slave { Name = "worker-drh", Host = "worker.local", User = "devops", SshCredentialId = sshCred.Id };
+        ctx.Slaves.Add(slave);
+        await ctx.SaveChangesAsync();
+
+        // 1. Pipeline with null DeployRegistryHost
+        var pipeNull = new Pipeline
+        {
+            Name = "pipe-drh-null",
+            GitUrl = "https://git.example.com/repo.git",
+            GitCredentialId = gitCred.Id,
+            SlaveId = slave.Id,
+            ImageName = "drh-null",
+            RegistryHost = "registry.local",
+            DeployRegistryHost = null,
+            DeployNamespace = "devops",
+            DeployDeployment = "app-drh-null",
+            DeployContainer = "app"
+        };
+
+        // 2. Pipeline with explicit DeployRegistryHost
+        var pipeExplicit = new Pipeline
+        {
+            Name = "pipe-drh-explicit",
+            GitUrl = "https://git.example.com/repo.git",
+            GitCredentialId = gitCred.Id,
+            SlaveId = slave.Id,
+            ImageName = "drh-explicit",
+            RegistryHost = "registry.local",
+            DeployRegistryHost = "10.0.0.1:5000",
+            DeployNamespace = "devops",
+            DeployDeployment = "app-drh-explicit",
+            DeployContainer = "app"
+        };
+
+        ctx.Pipelines.AddRange(pipeNull, pipeExplicit);
+        await ctx.SaveChangesAsync();
+
+        // 3. Raw insert omitting DeployRegistryHost column (simulating legacy data)
+        await ctx.Database.ExecuteSqlRawAsync(
+            "INSERT INTO \"Pipelines\" (\"Name\", \"GitUrl\", \"GitBranch\", \"GitCredentialId\", \"SlaveId\", \"DockerfilePath\", \"ImageName\", \"RegistryHost\", \"DeployNamespace\", \"DeployDeployment\", \"DeployContainer\", \"CreatedAt\", \"UpdatedAt\") " +
+            "VALUES ('pipe-drh-legacy', 'https://git.example.com/repo.git', 'main', {0}, {1}, 'Dockerfile', 'drh-legacy', 'registry.local', 'devops', 'app-drh-legacy', 'app', '2026-01-01', '2026-01-01')",
+            gitCred.Id, slave.Id);
+
+        // Verify values read back
+        using var ctxRead = CreateContext();
+        var loadedNull = await ctxRead.Pipelines.AsNoTracking().FirstAsync(p => p.Id == pipeNull.Id);
+        Assert.Null(loadedNull.DeployRegistryHost);
+
+        var loadedExplicit = await ctxRead.Pipelines.AsNoTracking().FirstAsync(p => p.Id == pipeExplicit.Id);
+        Assert.Equal("10.0.0.1:5000", loadedExplicit.DeployRegistryHost);
+
+        var loadedLegacy = await ctxRead.Pipelines.AsNoTracking().FirstAsync(p => p.Name == "pipe-drh-legacy");
+        Assert.Null(loadedLegacy.DeployRegistryHost);
     }
 
     [Fact]

@@ -85,6 +85,9 @@ namespace Shipit.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("DeployRegistryHost")
+                        .HasColumnType("text");
+
                     b.Property<string>("DockerfilePath")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
