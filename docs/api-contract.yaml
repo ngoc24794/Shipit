@@ -357,6 +357,21 @@ paths:
               schema: { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /api/runs/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [runs]
+      summary: Cancel a queued or running run
+      responses:
+        '202':
+          description: Cancellation accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 components:
   securitySchemes:
     sessionCookie:
@@ -529,13 +544,13 @@ components:
         deployContainer: { type: string }
     RunStatus:
       type: string
-      enum: [queued, running, success, failed]
+      enum: [queued, running, success, failed, cancelled]
     StepName:
       type: string
       enum: [checkout, build, push, deploy]
     StepStatus:
       type: string
-      enum: [pending, running, success, failed, skipped]
+      enum: [pending, running, success, failed, skipped, cancelled]
     Run:
       type: object
       required: [id, pipelineId, status, createdAt]
