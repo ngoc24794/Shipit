@@ -34,9 +34,9 @@ public interface ISshExecutor
 }
 
 /// <summary>Sets the image of one container of one Deployment and waits for rollout.</summary>
-public sealed record DeployRequest(string Namespace, string Deployment, string Container, string Image, TimeSpan RolloutTimeout);
+public sealed record DeployRequest(string Namespace, string Deployment, string Container, string Image, TimeSpan RolloutTimeout, TimeSpan? RollbackTimeout = null);
 
-public sealed record DeployResult(bool Success, string Message);
+public sealed record DeployResult(bool Success, string Message, bool RolledBack = false);
 
 public interface IK8sDeployer
 {

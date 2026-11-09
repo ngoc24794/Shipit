@@ -14,6 +14,8 @@ public sealed class EngineOptions
 
     public TimeSpan RolloutTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
+    public TimeSpan RollbackTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
     /// <summary>Upper bound for the cleanup commands (docker logout, rm -rf) that always run after a run.</summary>
     public TimeSpan CleanupTimeout { get; set; } = TimeSpan.FromMinutes(1);
 

@@ -160,6 +160,32 @@ public class PipelineRunnerTests
     }
 
     [Fact]
+    public async Task Deploy_rollout_failure_triggers_rollback_and_records_in_failure_reason()
+    {
+        using var env = new EngineTestEnv();
+        var ssh = EngineTestEnv.Slave();
+        var k8s = new FakeK8sDeployer(EngineTestEnv.AllowDemo())
+        {
+            SimulateRolloutFailureWithRollback = true,
+            PreviousImage = "registry.example.com/shipit-demo:v1"
+        };
+        var runId = await env.QueueRunAsync();
+
+        await env.Runner(ssh, k8s).ExecuteAsync(runId, CancellationToken.None);
+
+        var run = await env.GetRunAsync(runId);
+        Assert.Equal(RunStatus.Failed, run.Status);
+        Assert.NotNull(run.FailureReason);
+        Assert.StartsWith("deploy failed:", run.FailureReason);
+        Assert.Contains("đã hoàn tác về registry.example.com/shipit-demo:v1", run.FailureReason);
+        Assert.Equal(StepStatus.Success, EngineTestEnv.StepStatusOf(run, StepName.Push));
+        Assert.Equal(StepStatus.Failed, EngineTestEnv.StepStatusOf(run, StepName.Deploy));
+
+        var logs = await env.GetLogsAsync(runId);
+        Assert.Contains(logs, l => l.Step == StepName.Deploy && l.Stream == LogStream.System && l.Text.Contains("Rollout failed, reverting to registry.example.com/shipit-demo:v1"));
+    }
+
+    [Fact]
     public async Task Secrets_never_reach_commands_logs_or_failure_reason()
     {
         using var env = new EngineTestEnv();

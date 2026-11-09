@@ -117,4 +117,29 @@ public class FakeK8sDeployerTests
         Assert.True(result.Success);
         Assert.True(sw.ElapsedMilliseconds >= 30, $"Elapsed was {sw.ElapsedMilliseconds}ms");
     }
+
+    [Fact]
+    public async Task FakeDeployer_SimulateRolloutFailureWithRollback_RollsBackAndReturnsFailure()
+    {
+        var deployer = new FakeK8sDeployer(CreateDefaultAllowList())
+        {
+            SimulateRolloutFailureWithRollback = true,
+            PreviousImage = "registry.example.com/demo:old"
+        };
+        var log = new TestLogSink();
+        var request = new DeployRequest("devops", "shipit-demo", "app", "registry.example.com/demo:new", TimeSpan.FromSeconds(10));
+
+        var result = await deployer.SetImageAsync(request, log);
+
+        Assert.False(result.Success);
+        Assert.True(result.RolledBack);
+        Assert.Contains("registry.example.com/demo:old", result.Message);
+        Assert.Contains("đã hoàn tác về registry.example.com/demo:old", result.Message);
+
+        Assert.Equal(2, deployer.Requests.Count);
+        Assert.Equal("registry.example.com/demo:new", deployer.Requests[0].Image);
+        Assert.Equal("registry.example.com/demo:old", deployer.Requests[1].Image);
+
+        Assert.Contains(log.Messages, m => m.Stream == LogStream.System && m.Line.Contains("Rollout failed, reverting to registry.example.com/demo:old"));
+    }
 }

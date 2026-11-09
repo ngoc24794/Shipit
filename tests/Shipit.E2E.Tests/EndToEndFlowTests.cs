@@ -424,6 +424,52 @@ public class EndToEndFlowTests
     }
 
     [Fact]
+    public async Task DeployRolloutFailure_RollsBack_RecordsRollbackInFailureReason()
+    {
+        var rollbackDeployer = new FakeK8sDeployer(new DeployAllowList([new DeployAllowListEntry("devops", ["shipit-demo"])]))
+        {
+            SimulateRolloutFailureWithRollback = true,
+            PreviousImage = "192.168.1.241/shipit-demo:previous"
+        };
+
+        using var factory = new E2EFactory();
+        using var customApp = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddSingleton<IK8sDeployer>(rollbackDeployer);
+            });
+        });
+
+        var client = await customApp.LoggedInClientAsync();
+        var seeded = await client.SeedResourcesAsync();
+
+        var runId = await client.TriggerRunAsync(seeded.PipelineId);
+        var run = await client.WaitForRunAsync(runId, "failed", "success");
+
+        Assert.Equal("failed", run.GetProperty("status").GetString());
+        var failureReason = run.GetProperty("failureReason").GetString();
+        Assert.NotNull(failureReason);
+        Assert.StartsWith("deploy failed:", failureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("đã hoàn tác về 192.168.1.241/shipit-demo:previous", failureReason);
+
+        var steps = run.GetProperty("steps").EnumerateArray().ToDictionary(
+            s => s.GetProperty("name").GetString()!,
+            s => s.GetProperty("status").GetString()!);
+
+        Assert.Equal("success", steps["checkout"]);
+        Assert.Equal("success", steps["build"]);
+        Assert.Equal("success", steps["push"]);
+        Assert.Equal("failed", steps["deploy"]);
+
+        // Verify log contains rollback message
+        var logsResponse = await client.GetAsync($"/api/runs/{runId}/logs");
+        var logsJson = await logsResponse.ReadJsonAsync();
+        var logLines = logsJson.EnumerateArray().Select(l => l.GetProperty("text").GetString()!).ToList();
+        Assert.Contains(logLines, l => l.Contains("Rollout failed, reverting to 192.168.1.241/shipit-demo:previous"));
+    }
+
+    [Fact]
     public async Task NoSecretLeak_InApiResponses_Logs_AndSshCommands()
     {
         var customSsh = FakeSshExecutor.HappyPath();
