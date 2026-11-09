@@ -13,6 +13,7 @@ public enum RunStatus
     Running,
     Success,
     Failed,
+    Cancelled,
 }
 
 public enum StepName
@@ -30,4 +31,5 @@ public enum StepStatus
     Success,
     Failed,
     Skipped,
+    Cancelled,
 }

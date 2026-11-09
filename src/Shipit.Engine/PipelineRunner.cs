@@ -32,7 +32,7 @@ public sealed partial class PipelineRunner(
     private static partial Regex ShaRegex();
 
     /// <summary>Runs a previously queued run to completion. Never throws for run failures; they are recorded.</summary>
-    public async Task ExecuteAsync(long runId, CancellationToken cancellationToken)
+    public async Task ExecuteAsync(long runId, CancellationToken cancellationToken, CancellationToken userCancellationToken = default)
     {
         var plan = await LoadPlanAsync(runId).ConfigureAwait(false);
         if (plan is null)
@@ -40,6 +40,9 @@ public sealed partial class PipelineRunner(
             logger.LogWarning("Run {RunId} was not found or is not queued; skipping.", runId);
             return;
         }
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, userCancellationToken);
+        var combinedToken = linkedCts.Token;
 
         var masker = new LogMasker();
         var writer = new RunLogWriter(dbFactory, runId, masker, options, time);
@@ -53,6 +56,8 @@ public sealed partial class PipelineRunner(
                 r.StartedAt = Now();
             }).ConfigureAwait(false);
 
+            combinedToken.ThrowIfCancellationRequested();
+
             if (!TryDecryptSecrets(ctx, out var secretError))
             {
                 await FailAsync(ctx, secretError, StepName.Checkout, stepRan: false).ConfigureAwait(false);
@@ -61,11 +66,12 @@ public sealed partial class PipelineRunner(
 
             foreach (var step in Steps)
             {
+                combinedToken.ThrowIfCancellationRequested();
                 writer.CurrentStep = step;
                 await SetStepAsync(runId, step, StepStatus.Running).ConfigureAwait(false);
                 await writer.WriteAsync($"== {step} ==", LogStream.System, CancellationToken.None).ConfigureAwait(false);
 
-                var (ok, failure) = await RunStepSafelyAsync(ctx, step, cancellationToken).ConfigureAwait(false);
+                var (ok, failure) = await RunStepSafelyAsync(ctx, step, combinedToken).ConfigureAwait(false);
                 if (!ok)
                 {
                     await FailAsync(ctx, failure!, step, stepRan: true).ConfigureAwait(false);
@@ -78,6 +84,18 @@ public sealed partial class PipelineRunner(
             await writer.WriteAsync("Run completed successfully.", LogStream.System, CancellationToken.None).ConfigureAwait(false);
             ctx.FinalStatus = RunStatus.Success;
             ctx.FinalReason = null;
+        }
+        catch (OperationCanceledException) when (userCancellationToken.IsCancellationRequested)
+        {
+            if (ctx.DeployRolloutStarted)
+            {
+                await writer.WriteAsync("Deploy was cancelled while the rollout was in progress; the Deployment may still be rolling out the new image.", LogStream.System, CancellationToken.None).ConfigureAwait(false);
+            }
+
+            await writer.WriteAsync("Run cancelled by user.", LogStream.System, CancellationToken.None).ConfigureAwait(false);
+            await CancelStepsAsync(runId).ConfigureAwait(false);
+            ctx.FinalStatus = RunStatus.Cancelled;
+            ctx.FinalReason = "cancelled by user";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -225,7 +243,8 @@ public sealed partial class PipelineRunner(
         var deployImage = RemoteCommandBuilder.BuildImageRef(deployHost, p.ImageName, c.Tag!);
         await c.Writer.WriteAsync($"Deploying image {deployImage} to {p.DeployNamespace}/{p.DeployDeployment}", LogStream.System, ct).ConfigureAwait(false);
         var request = new DeployRequest(p.DeployNamespace, p.DeployDeployment, p.DeployContainer, deployImage, options.RolloutTimeout, options.RollbackTimeout);
-        var result = await deployer.SetImageAsync(request, c.Writer, ct).ConfigureAwait(false);
+        var trackingSink = new DeployTrackingSink(c.Writer, () => c.DeployRolloutStarted = true);
+        var result = await deployer.SetImageAsync(request, trackingSink, ct).ConfigureAwait(false);
         if (!result.Success)
         {
             return (false, c.Masker.Mask(result.Message));
@@ -395,6 +414,30 @@ public sealed partial class PipelineRunner(
         await db.SaveChangesAsync().ConfigureAwait(false);
     }
 
+    private async Task CancelStepsAsync(long runId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var run = await db.Runs.Include(r => r.Steps).FirstAsync(r => r.Id == runId).ConfigureAwait(false);
+        MarkStepsCancelled(run.Steps, Now());
+        await db.SaveChangesAsync().ConfigureAwait(false);
+    }
+
+    private static void MarkStepsCancelled(IEnumerable<RunStep> steps, DateTime now)
+    {
+        foreach (var s in steps)
+        {
+            if (s.Status == StepStatus.Running)
+            {
+                s.Status = StepStatus.Cancelled;
+                s.FinishedAt = now;
+            }
+            else if (s.Status == StepStatus.Pending)
+            {
+                s.Status = StepStatus.Skipped;
+            }
+        }
+    }
+
     private async Task InterruptAsync(long runId)
     {
         await using var db = await dbFactory.CreateDbContextAsync().ConfigureAwait(false);
@@ -472,6 +515,8 @@ public sealed partial class PipelineRunner(
 
         public bool LoginAttempted { get; set; }
 
+        public bool DeployRolloutStarted { get; set; }
+
         /// <summary>Applied to the run row last, after cleanup and the final log flush. Defaults to a safe failure.</summary>
         public RunStatus FinalStatus { get; set; } = RunStatus.Failed;
 
@@ -508,6 +553,15 @@ public sealed partial class PipelineRunner(
                 }
             }
 
+            return inner.WriteAsync(line, stream, cancellationToken);
+        }
+    }
+
+    private sealed class DeployTrackingSink(ILogSink inner, Action onLogWritten) : ILogSink
+    {
+        public ValueTask WriteAsync(string line, LogStream stream, CancellationToken cancellationToken = default)
+        {
+            onLogWritten();
             return inner.WriteAsync(line, stream, cancellationToken);
         }
     }

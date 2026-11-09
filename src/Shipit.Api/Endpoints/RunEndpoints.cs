@@ -76,6 +76,18 @@ internal static class RunEndpoints
             await StreamAsync(http, dbFactory, id, cursor);
             return Results.Empty;
         });
+
+        app.MapPost("/api/runs/{id:long}/cancel", async (long id, IRunCoordinator coordinator, CancellationToken ct) =>
+        {
+            var (status, run) = await coordinator.CancelAsync(id, ct);
+            return status switch
+            {
+                CancelResult.Accepted => Results.Json(run!.ToDto(), statusCode: StatusCodes.Status202Accepted),
+                CancelResult.NotFound => Results.NotFound(),
+                CancelResult.AlreadyFinished => Problems.Conflict("Run has already finished", "Only queued or running runs can be cancelled."),
+                _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+            };
+        });
     }
 
     private static long? LastEventId(HttpContext http) =>
@@ -127,7 +139,7 @@ internal static class RunEndpoints
                     }
                 }
 
-                if (lines.Count == 0 && status is RunStatus.Success or RunStatus.Failed)
+                if (lines.Count == 0 && status is RunStatus.Success or RunStatus.Failed or RunStatus.Cancelled)
                 {
                     await WriteEventAsync(http, "end", JsonSerializer.Serialize(new { status = Wire.Of(status) }, Json), null, ct);
                     return;
