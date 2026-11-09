@@ -187,21 +187,28 @@ public sealed partial class PipelineRunner(
     private async Task<(bool, string?)> BuildAsync(RunContext c, CancellationToken ct)
     {
         var p = c.Plan;
-        if (string.IsNullOrWhiteSpace(p.RegistryUsername))
+        if (p.RegistryPasswordProtected is null)
         {
-            return (false, "the registry credential has no username");
+            await c.Writer.WriteAsync("Registry login skipped (no credential)", LogStream.System, ct).ConfigureAwait(false);
         }
-
-        c.LoginAttempted = true;
-        var login = RemoteCommandBuilder.DockerLogin(p.RegistryHost, p.RegistryUsername, c.RegistryPassword!);
-        var code = await RunRemoteAsync(c, login, options.CloneTimeout, c.Writer, ct).ConfigureAwait(false);
-        if (code != 0)
+        else
         {
-            return (false, ExitFailure("docker login", code));
+            if (string.IsNullOrWhiteSpace(p.RegistryUsername))
+            {
+                return (false, "the registry credential has no username");
+            }
+
+            c.LoginAttempted = true;
+            var login = RemoteCommandBuilder.DockerLogin(p.RegistryHost, p.RegistryUsername, c.RegistryPassword!);
+            var loginCode = await RunRemoteAsync(c, login, options.CloneTimeout, c.Writer, ct).ConfigureAwait(false);
+            if (loginCode != 0)
+            {
+                return (false, ExitFailure("docker login", loginCode));
+            }
         }
 
         var build = RemoteCommandBuilder.DockerBuild(c.WorkDir!, p.DockerfilePath, c.Image!);
-        code = await RunRemoteAsync(c, build, options.BuildTimeout, c.Writer, ct).ConfigureAwait(false);
+        var code = await RunRemoteAsync(c, build, options.BuildTimeout, c.Writer, ct).ConfigureAwait(false);
         return code == 0 ? (true, null) : (false, ExitFailure("docker build", code));
     }
 
@@ -239,11 +246,14 @@ public sealed partial class PipelineRunner(
         {
             var p = c.Plan;
             c.GitToken = protector.Unprotect(p.GitTokenProtected);
-            c.RegistryPassword = protector.Unprotect(p.RegistryPasswordProtected);
+            if (p.RegistryPasswordProtected is not null)
+            {
+                c.RegistryPassword = protector.Unprotect(p.RegistryPasswordProtected);
+                c.Masker.Add(c.RegistryPassword);
+            }
             var sshKey = protector.Unprotect(p.SshKeyProtected);
             c.SshTarget = new SshTarget(p.SlaveHost, p.SlavePort, p.SlaveUser, sshKey);
             c.Masker.Add(c.GitToken);
-            c.Masker.Add(c.RegistryPassword);
             c.Masker.Add(sshKey);
             error = string.Empty;
             return true;
@@ -305,7 +315,12 @@ public sealed partial class PipelineRunner(
             .FirstOrDefaultAsync(r => r.Id == runId && r.Status == RunStatus.Queued)
             .ConfigureAwait(false);
         var p = run?.Pipeline;
-        if (run is null || p?.Slave?.SshCredential is null || p.GitCredential is null || p.RegistryCredential is null)
+        if (run is null || p?.Slave?.SshCredential is null || p.GitCredential is null)
+        {
+            return null;
+        }
+
+        if (p.RegistryCredentialId is not null && p.RegistryCredential is null)
         {
             return null;
         }
@@ -317,8 +332,8 @@ public sealed partial class PipelineRunner(
             p.Slave.Host, p.Slave.Port, p.Slave.User,
             p.Slave.SshCredential.ProtectedValue,
             p.GitCredential.ProtectedValue,
-            p.RegistryCredential.ProtectedValue,
-            p.RegistryCredential.Username);
+            p.RegistryCredential?.ProtectedValue,
+            p.RegistryCredential?.Username);
     }
 
     private async Task UpdateRunAsync(long runId, Action<Run> change)
@@ -426,7 +441,7 @@ public sealed partial class PipelineRunner(
         string SlaveUser,
         string SshKeyProtected,
         string GitTokenProtected,
-        string RegistryPasswordProtected,
+        string? RegistryPasswordProtected,
         string? RegistryUsername);
 
     private sealed class RunContext(RunPlan plan, RunLogWriter writer, LogMasker masker)

@@ -13,7 +13,7 @@ public class Pipeline
     public string DockerfilePath { get; set; } = "Dockerfile";
     public string ImageName { get; set; } = string.Empty;
     public string RegistryHost { get; set; } = string.Empty;
-    public long RegistryCredentialId { get; set; }
+    public long? RegistryCredentialId { get; set; }
     public Credential? RegistryCredential { get; set; }
     public string DeployNamespace { get; set; } = string.Empty;
     public string DeployDeployment { get; set; } = string.Empty;

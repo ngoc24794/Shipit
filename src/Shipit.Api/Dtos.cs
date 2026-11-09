@@ -32,7 +32,7 @@ public sealed record PipelineDto(
     string DockerfilePath,
     string ImageName,
     string RegistryHost,
-    long RegistryCredentialId,
+    long? RegistryCredentialId,
     string DeployNamespace,
     string DeployDeployment,
     string DeployContainer,

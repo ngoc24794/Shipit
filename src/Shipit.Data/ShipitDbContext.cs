@@ -60,6 +60,7 @@ public class ShipitDbContext : DbContext
             b.HasOne(p => p.RegistryCredential)
                 .WithMany(c => c.RegistryPipelines)
                 .HasForeignKey(p => p.RegistryCredentialId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
 
             b.HasOne(p => p.Slave)

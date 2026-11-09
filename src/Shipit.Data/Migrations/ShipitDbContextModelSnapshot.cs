@@ -17,7 +17,7 @@ namespace Shipit.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.14")
+                .HasAnnotation("ProductVersion", "10.0.4")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -109,7 +109,7 @@ namespace Shipit.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<long>("RegistryCredentialId")
+                    b.Property<long?>("RegistryCredentialId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("RegistryHost")
@@ -299,8 +299,7 @@ namespace Shipit.Data.Migrations
                     b.HasOne("Shipit.Data.Entities.Credential", "RegistryCredential")
                         .WithMany("RegistryPipelines")
                         .HasForeignKey("RegistryCredentialId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Shipit.Data.Entities.Slave", "Slave")
                         .WithMany("Pipelines")
