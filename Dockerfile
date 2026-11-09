@@ -33,7 +33,7 @@ COPY --from=web /repo/src/Shipit.Api/wwwroot/. /app/wwwroot/
 FROM ${DOTNET_RUNTIME_IMAGE} AS final
 WORKDIR /app
 COPY --from=build /app ./
-USER app
+USER $APP_UID
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Shipit.Api.dll"]
