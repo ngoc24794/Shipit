@@ -320,6 +320,7 @@ describe('Pipelines View & Store', () => {
       buildContext: null,
       imageName: 'test-app',
       registryHost: 'registry.example.com',
+      deployRegistryHost: null,
       registryCredentialId: null,
       deployNamespace: 'default',
       deployDeployment: 'test-deploy',
@@ -594,6 +595,7 @@ describe('Pipelines View & Store', () => {
       buildContext: '.',
       imageName: 'test-app',
       registryHost: 'registry.example.com',
+      deployRegistryHost: null,
       registryCredentialId: null,
       deployNamespace: 'default',
       deployDeployment: 'test-deploy',
@@ -650,5 +652,223 @@ describe('Pipelines View & Store', () => {
 
     expect(document.body.textContent).toContain('Thư mục context build')
     expect(document.body.textContent).toContain('Tuỳ chọn. Đường dẫn trong repo dùng làm context khi build.')
+  })
+
+  it('creates pipeline leaving deployRegistryHost empty sends payload with deployRegistryHost: null (1. Để trống ô -> null)', async () => {
+    const credStore = useConfigCredentialsStore()
+    const slaveStore = useConfigSlavesStore()
+    await credStore.fetchCredentials()
+    await slaveStore.fetchSlaves()
+
+    const createSpy = vi.spyOn(mockApi, 'createPipeline')
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm pipeline'))
+    await addBtn!.trigger('click')
+
+    const vm = wrapper.vm as any
+    vm.form.name = 'pipeline-empty-deploy-host'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.imageName = 'my-image'
+    vm.form.registryHost = '192.168.1.241'
+    vm.form.deployRegistryHost = ''
+    vm.form.registryCredentialId = null
+    vm.form.deployNamespace = 'default'
+    vm.form.deployDeployment = 'my-deploy'
+    vm.form.deployContainer = 'app'
+
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'pipeline-empty-deploy-host',
+        deployRegistryHost: null
+      })
+    )
+  })
+
+  it('creates pipeline entering "registry.local:5000" sends payload with deployRegistryHost value (2. Nhập registry.local:5000)', async () => {
+    const credStore = useConfigCredentialsStore()
+    const slaveStore = useConfigSlavesStore()
+    await credStore.fetchCredentials()
+    await slaveStore.fetchSlaves()
+
+    const createSpy = vi.spyOn(mockApi, 'createPipeline')
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm pipeline'))
+    await addBtn!.trigger('click')
+
+    const vm = wrapper.vm as any
+    vm.form.name = 'pipeline-custom-deploy-host'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.imageName = 'my-image'
+    vm.form.registryHost = '192.168.1.241'
+    vm.form.deployRegistryHost = 'registry.local:5000'
+    vm.form.registryCredentialId = null
+    vm.form.deployNamespace = 'default'
+    vm.form.deployDeployment = 'my-deploy'
+    vm.form.deployContainer = 'app'
+
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'pipeline-custom-deploy-host',
+        deployRegistryHost: 'registry.local:5000'
+      })
+    )
+  })
+
+  it('displays error and does not call API when deployRegistryHost is invalid (3. Nhập giá trị sai: http://x, a b, x;y)', async () => {
+    const credStore = useConfigCredentialsStore()
+    const slaveStore = useConfigSlavesStore()
+    await credStore.fetchCredentials()
+    await slaveStore.fetchSlaves()
+
+    const createSpy = vi.spyOn(mockApi, 'createPipeline')
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm pipeline'))
+    await addBtn!.trigger('click')
+
+    const vm = wrapper.vm as any
+    vm.form.name = 'pipeline-invalid-deploy-host'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.imageName = 'test-app'
+    vm.form.registryHost = '192.168.1.241'
+    vm.form.registryCredentialId = null
+    vm.form.deployNamespace = 'default'
+    vm.form.deployDeployment = 'test-deploy'
+    vm.form.deployContainer = 'app'
+
+    const invalidCases = ['http://x', 'a b', 'x;y']
+    for (const invalidVal of invalidCases) {
+      createSpy.mockClear()
+      vm.form.deployRegistryHost = invalidVal
+
+      await vm.handleSave()
+      await wrapper.vm.$nextTick()
+
+      // API was NOT called
+      expect(createSpy).not.toHaveBeenCalled()
+      // Error message exists on formErrors.deployRegistryHost and in DOM
+      expect(vm.formErrors.deployRegistryHost).toBeDefined()
+      expect(vm.formErrors.deployRegistryHost.length).toBeGreaterThan(0)
+      expect(document.body.textContent).toContain(vm.formErrors.deployRegistryHost)
+    }
+  })
+
+  it('edits pipeline with deployRegistryHost "registry.local:5000", displays correctly, and clearing saves as null (4. Sửa -> xoá trống -> null)', async () => {
+    const credStore = useConfigCredentialsStore()
+    const slaveStore = useConfigSlavesStore()
+    await credStore.fetchCredentials()
+    await slaveStore.fetchSlaves()
+
+    const updateSpy = vi.spyOn(mockApi, 'updatePipeline')
+
+    const existingPipeline: Pipeline = {
+      id: 77,
+      name: 'edit-deploy-host-pipeline',
+      gitUrl: 'https://git.example.com/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      dockerfilePath: 'Dockerfile',
+      buildContext: null,
+      imageName: 'test-app',
+      registryHost: '192.168.1.241',
+      deployRegistryHost: 'registry.local:5000',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'test-deploy',
+      deployContainer: 'app',
+      lastRun: null
+    }
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const vm = wrapper.vm as any
+    vm.openEditDialog(existingPipeline)
+    await wrapper.vm.$nextTick()
+
+    // Form state has "registry.local:5000"
+    expect(vm.form.deployRegistryHost).toBe('registry.local:5000')
+
+    // DOM input with placeholder "giống Máy chủ Registry" has value "registry.local:5000"
+    const hostInput = document.body.querySelector('input[placeholder="giống Máy chủ Registry"]') as HTMLInputElement
+    expect(hostInput).toBeDefined()
+    expect(hostInput.value).toBe('registry.local:5000')
+
+    // Clear input and save
+    vm.form.deployRegistryHost = ''
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      77,
+      expect.objectContaining({
+        deployRegistryHost: null
+      })
+    )
+  })
+
+  it('renders "Host registry khi deploy" field with description and placeholder', async () => {
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    const vm = wrapper.vm as any
+    vm.openAddDialog()
+    await wrapper.vm.$nextTick()
+
+    const input = document.body.querySelector('input[placeholder="giống Máy chủ Registry"]')
+    expect(input).toBeDefined()
+
+    expect(document.body.textContent).toContain('Host registry khi deploy')
+    expect(document.body.textContent).toContain('Tuỳ chọn. Dùng khi cụm k8s gọi registry bằng tên khác với máy build')
   })
 })

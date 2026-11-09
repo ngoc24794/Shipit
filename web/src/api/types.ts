@@ -111,6 +111,7 @@ export interface Pipeline {
   buildContext: string | null
   imageName: string
   registryHost: string
+  deployRegistryHost: string | null
   registryCredentialId: number | null
   deployNamespace: string
   deployDeployment: string
@@ -128,6 +129,7 @@ export interface PipelineInput {
   buildContext?: string | null
   imageName: string
   registryHost: string
+  deployRegistryHost?: string | null
   registryCredentialId?: number | null
   deployNamespace: string
   deployDeployment: string
