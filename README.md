@@ -191,6 +191,14 @@ npm run test
    ```
    Sau đó mở `http://localhost:8080` trên trình duyệt.
 
+### Triển khai production (namespace cicd)
+
+Bộ manifest và script triển khai môi trường production được đặt tại thư mục `deploy/k8s/prod/`:
+- **Namespace:** Triển khai vào namespace `cicd` (đã có sẵn, manifest không tạo Namespace).
+- **RBAC tối thiểu:** ServiceAccount `shipit` ở namespace `cicd` chỉ được phép patch đúng 6 Deployment trong namespace `avina-workspace` (`avina-catalog`, `avina-content-preview`, `avina-gateway`, `avina-learning`, `avina-sysadmin`, `avina-users`).
+- **Secret:** Tạo tự động qua script `pwsh scripts/create-secrets-prod.ps1` (kiểm tra trước) và thêm cờ `-Apply` để tạo trên cụm (đọc từ biến môi trường `AVINA_PROD_SHIPIT_DB_URL`).
+- **Thứ tự triển khai & kiểm tra:** Xem hướng dẫn chi tiết tại [deploy/k8s/prod/README.md](deploy/k8s/prod/README.md).
+
 ---
 
 ## Pipeline đầu tiên với `examples/hello-shipit`
