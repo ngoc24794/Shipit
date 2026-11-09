@@ -116,6 +116,7 @@ internal static partial class PipelineEndpoints
         p.GitCredentialId = i.GitCredentialId!.Value;
         p.SlaveId = i.SlaveId!.Value;
         p.DockerfilePath = string.IsNullOrWhiteSpace(i.DockerfilePath) ? "Dockerfile" : i.DockerfilePath.Trim();
+        p.BuildContext = string.IsNullOrWhiteSpace(i.BuildContext) ? null : i.BuildContext.Trim();
         p.ImageName = i.ImageName!.Trim();
         p.RegistryHost = i.RegistryHost!.Trim();
         p.RegistryCredentialId = i.RegistryCredentialId;
@@ -145,6 +146,7 @@ internal static partial class PipelineEndpoints
         Check(errors, "gitBranch", branch, v => RemoteCommandBuilder.Clone("https://example.com/r.git", v, "/tmp/shipit/run-1", "x"));
         var dockerfile = string.IsNullOrWhiteSpace(i.DockerfilePath) ? "Dockerfile" : i.DockerfilePath.Trim();
         Check(errors, "dockerfilePath", dockerfile, v => RemoteCommandBuilder.DockerBuild("/tmp/shipit/run-1", v, "example.com/x:t"));
+        Check(errors, "buildContext", i.BuildContext, v => RemoteCommandBuilder.ValidateBuildContext(v));
         Check(errors, "registryHost", i.RegistryHost, v => RemoteCommandBuilder.DockerLogout(v), required: true);
         Check(errors, "imageName", i.ImageName, v => RemoteCommandBuilder.BuildImageRef("example.com", v, "t"), required: true);
 

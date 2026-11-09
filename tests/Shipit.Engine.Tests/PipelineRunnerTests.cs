@@ -281,6 +281,66 @@ public class PipelineRunnerTests
         Assert.Empty(ssh.ExecutedCommands);
     }
 
+    [Fact]
+    public async Task Build_Command_With_BuildContext_Dot_Uses_WorkDir()
+    {
+        using var env = new EngineTestEnv();
+        await env.SetBuildContextAsync(".", dockerfilePath: "docker/Dockerfile.demo");
+
+        var ssh = EngineTestEnv.Slave();
+        var k8s = new FakeK8sDeployer(EngineTestEnv.AllowDemo());
+        var runId = await env.QueueRunAsync();
+
+        await env.Runner(ssh, k8s).ExecuteAsync(runId, CancellationToken.None);
+
+        var run = await env.GetRunAsync(runId);
+        Assert.Equal(RunStatus.Success, run.Status);
+
+        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker build"));
+        var expectedWorkDir = RemoteCommandBuilder.WorkDirFor(runId);
+        Assert.Equal($"docker build -f '{expectedWorkDir}/docker/Dockerfile.demo' -t 'registry.example.com/shipit-demo:abc1234' '{expectedWorkDir}'", buildCmd.CommandText);
+    }
+
+    [Fact]
+    public async Task Build_Command_With_BuildContext_Subpath_Uses_WorkDirSubpath()
+    {
+        using var env = new EngineTestEnv();
+        await env.SetBuildContextAsync("src/app", dockerfilePath: "docker/Dockerfile.demo");
+
+        var ssh = EngineTestEnv.Slave();
+        var k8s = new FakeK8sDeployer(EngineTestEnv.AllowDemo());
+        var runId = await env.QueueRunAsync();
+
+        await env.Runner(ssh, k8s).ExecuteAsync(runId, CancellationToken.None);
+
+        var run = await env.GetRunAsync(runId);
+        Assert.Equal(RunStatus.Success, run.Status);
+
+        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker build"));
+        var expectedWorkDir = RemoteCommandBuilder.WorkDirFor(runId);
+        Assert.Equal($"docker build -f '{expectedWorkDir}/docker/Dockerfile.demo' -t 'registry.example.com/shipit-demo:abc1234' '{expectedWorkDir}/src/app'", buildCmd.CommandText);
+    }
+
+    [Fact]
+    public async Task Build_Command_With_Null_BuildContext_Keeps_Existing_Dockerfile_Directory_Behavior()
+    {
+        using var env = new EngineTestEnv();
+        await env.SetBuildContextAsync(null, dockerfilePath: "docker/Dockerfile.demo");
+
+        var ssh = EngineTestEnv.Slave();
+        var k8s = new FakeK8sDeployer(EngineTestEnv.AllowDemo());
+        var runId = await env.QueueRunAsync();
+
+        await env.Runner(ssh, k8s).ExecuteAsync(runId, CancellationToken.None);
+
+        var run = await env.GetRunAsync(runId);
+        Assert.Equal(RunStatus.Success, run.Status);
+
+        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker build"));
+        var expectedWorkDir = RemoteCommandBuilder.WorkDirFor(runId);
+        Assert.Equal($"docker build -f '{expectedWorkDir}/docker/Dockerfile.demo' -t 'registry.example.com/shipit-demo:abc1234' '{expectedWorkDir}/docker'", buildCmd.CommandText);
+    }
+
     internal static async Task WaitForAsync(Func<Task<bool>> condition, int timeoutMs = 15_000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);

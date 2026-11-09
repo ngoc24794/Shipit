@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -237,6 +238,100 @@ public class EndToEndFlowTests
                 Assert.DoesNotContain(secret, text);
             }
         }
+    }
+
+    [Fact]
+    public async Task HappyPath_WithBuildContextDot_BuildsWithRootContextAndSucceeds()
+    {
+        var customSsh = FakeSshExecutor.HappyPath();
+        using var factory = new E2EFactory();
+        using var app = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddSingleton<ISshExecutor>(customSsh);
+            });
+        });
+
+        var client = await app.LoggedInClientAsync();
+
+        // 1. Create credentials and slave
+        var sshId = await client.CreateAsync("/api/credentials", new
+        {
+            name = "e2e-ssh-bc-dot",
+            kind = "ssh_key",
+            value = E2EFactory.SshKey
+        });
+
+        var gitId = await client.CreateAsync("/api/credentials", new
+        {
+            name = "e2e-git-bc-dot",
+            kind = "git_token",
+            value = E2EFactory.GitToken
+        });
+
+        var regId = await client.CreateAsync("/api/credentials", new
+        {
+            name = "e2e-reg-bc-dot",
+            kind = "registry",
+            username = "ci-bot",
+            value = E2EFactory.RegistryPassword
+        });
+
+        var slaveId = await client.CreateAsync("/api/slaves", new
+        {
+            name = "e2e-slave-bc-dot",
+            host = "192.168.1.55",
+            port = 22,
+            user = "devops",
+            sshCredentialId = sshId
+        });
+
+        // 2. Create pipeline with buildContext = "." and dockerfilePath = "docker/Dockerfile.sub"
+        var createPipeResp = await client.PostAsJsonAsync("/api/pipelines", new
+        {
+            name = "e2e-pipeline-bc-dot",
+            gitUrl = "https://git.example.com/team/demo.git",
+            gitBranch = "main",
+            gitCredentialId = gitId,
+            slaveId = slaveId,
+            dockerfilePath = "docker/Dockerfile.sub",
+            buildContext = ".",
+            imageName = "shipit-demo",
+            registryHost = "192.168.1.241",
+            registryCredentialId = regId,
+            deployNamespace = "devops",
+            deployDeployment = "shipit-demo",
+            deployContainer = "app"
+        });
+        Assert.Equal(HttpStatusCode.Created, createPipeResp.StatusCode);
+        var createdPipeJson = await createPipeResp.ReadJsonAsync();
+        Assert.Equal(".", createdPipeJson.GetProperty("buildContext").GetString());
+        var pipelineId = createdPipeJson.GetProperty("id").GetInt64();
+
+        // GET confirms buildContext is "."
+        var getPipe = await client.GetAsync($"/api/pipelines/{pipelineId}");
+        Assert.Equal(HttpStatusCode.OK, getPipe.StatusCode);
+        var getPipeJson = await getPipe.ReadJsonAsync();
+        Assert.Equal(".", getPipeJson.GetProperty("buildContext").GetString());
+
+        // 3. Trigger run
+        var runId = await client.TriggerRunAsync(pipelineId);
+
+        // 4. Wait for success
+        var run = await client.WaitForRunAsync(runId, "success", "failed");
+        Assert.Equal("success", run.GetProperty("status").GetString());
+        Assert.Equal("abc1234", run.GetProperty("tag").GetString());
+
+        // 5. Verify 4 steps are all success
+        var steps = run.GetProperty("steps").EnumerateArray().ToList();
+        Assert.Equal(["checkout", "build", "push", "deploy"], steps.Select(s => s.GetProperty("name").GetString()));
+        Assert.All(steps, s => Assert.Equal("success", s.GetProperty("status").GetString()));
+
+        // 6. Verify docker build command used root workDir as context, NOT the dockerfile subdirectory
+        var buildCmd = customSsh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker build"));
+        var expectedWorkDir = RemoteCommandBuilder.WorkDirFor(runId);
+        Assert.Equal($"docker build -f '{expectedWorkDir}/docker/Dockerfile.sub' -t '192.168.1.241/shipit-demo:abc1234' '{expectedWorkDir}'", buildCmd.CommandText);
     }
 
     [Fact]

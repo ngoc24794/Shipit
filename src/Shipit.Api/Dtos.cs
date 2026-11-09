@@ -30,6 +30,7 @@ public sealed record PipelineDto(
     long GitCredentialId,
     long SlaveId,
     string DockerfilePath,
+    string? BuildContext,
     string ImageName,
     string RegistryHost,
     long? RegistryCredentialId,
@@ -45,6 +46,7 @@ public sealed record PipelineInput(
     long? GitCredentialId,
     long? SlaveId,
     string? DockerfilePath,
+    string? BuildContext,
     string? ImageName,
     string? RegistryHost,
     long? RegistryCredentialId,
@@ -146,7 +148,7 @@ internal static class Mapping
             .ToList());
 
     public static PipelineDto ToDto(this Pipeline p, Run? lastRun) => new(
-        p.Id, p.Name, p.GitUrl, p.GitBranch, p.GitCredentialId, p.SlaveId, p.DockerfilePath, p.ImageName,
+        p.Id, p.Name, p.GitUrl, p.GitBranch, p.GitCredentialId, p.SlaveId, p.DockerfilePath, p.BuildContext, p.ImageName,
         p.RegistryHost, p.RegistryCredentialId, p.DeployNamespace, p.DeployDeployment, p.DeployContainer,
         lastRun?.ToDto());
 

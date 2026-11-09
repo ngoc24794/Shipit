@@ -11,6 +11,7 @@ public class Pipeline
     public long SlaveId { get; set; }
     public Slave? Slave { get; set; }
     public string DockerfilePath { get; set; } = "Dockerfile";
+    public string? BuildContext { get; set; }
     public string ImageName { get; set; } = string.Empty;
     public string RegistryHost { get; set; } = string.Empty;
     public long? RegistryCredentialId { get; set; }
