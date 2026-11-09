@@ -49,6 +49,41 @@ public class PipelineRunnerTests
     }
 
     [Fact]
+    public async Task Pipeline_without_registry_credential_skips_login_and_logout_and_succeeds()
+    {
+        using var env = new EngineTestEnv();
+        await env.ClearRegistryCredentialAsync();
+
+        var ssh = EngineTestEnv.Slave();
+        var k8s = new FakeK8sDeployer(EngineTestEnv.AllowDemo());
+        var runId = await env.QueueRunAsync();
+
+        await env.Runner(ssh, k8s).ExecuteAsync(runId, CancellationToken.None);
+
+        var run = await env.GetRunAsync(runId);
+        Assert.Equal(RunStatus.Success, run.Status);
+        Assert.Equal("abc1234", run.Tag);
+        Assert.Equal("registry.example.com/shipit-demo:abc1234", run.Image);
+        Assert.NotNull(run.StartedAt);
+        Assert.NotNull(run.FinishedAt);
+        Assert.All(Enum.GetValues<StepName>(), n => Assert.Equal(StepStatus.Success, EngineTestEnv.StepStatusOf(run, n)));
+
+        var commands = Order(ssh);
+        Assert.Equal(["clone", "sha", "build", "push", "cleanup"], commands);
+        Assert.DoesNotContain("login", commands);
+        Assert.DoesNotContain("logout", commands);
+        Assert.DoesNotContain(ssh.ExecutedCommands, c => c.CommandText.Contains("docker login") || c.CommandText.Contains("docker logout"));
+
+        var request = Assert.Single(k8s.Requests);
+        Assert.Equal(new DeployRequest("devops", "shipit-demo", "app", "registry.example.com/shipit-demo:abc1234", env.Options.RolloutTimeout), request);
+
+        var logs = await env.GetLogsAsync(runId);
+        Assert.Contains(logs, l => l.Step == StepName.Build && l.Stream == LogStream.System && l.Text == "Registry login skipped (no credential)");
+        Assert.Contains(logs, l => l.Step == StepName.Build && l.Text.StartsWith("Step 1/3"));
+        Assert.Contains(logs, l => l.Step == StepName.Deploy && l.Text.Contains("[fake-k8s]"));
+    }
+
+    [Fact]
     public async Task Build_failure_skips_push_and_deploy_but_still_logs_out_and_cleans_up()
     {
         using var env = new EngineTestEnv();
