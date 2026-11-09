@@ -424,6 +424,7 @@ components:
       properties:
         username: { type: string }
         password: { type: string, format: password }
+        rememberMe: { type: boolean, default: false }
     Me:
       type: object
       required: [username]

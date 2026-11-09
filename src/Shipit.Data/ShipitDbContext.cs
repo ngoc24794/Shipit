@@ -18,6 +18,7 @@ public class ShipitDbContext : DbContext
     public DbSet<Run> Runs => Set<Run>();
     public DbSet<RunStep> RunSteps => Set<RunStep>();
     public DbSet<RunLog> RunLogs => Set<RunLog>();
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
