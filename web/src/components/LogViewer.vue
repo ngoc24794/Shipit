@@ -3,6 +3,7 @@ import { ref, watch, nextTick, onMounted, computed } from 'vue'
 import { Copy, Download, Radio, Check } from 'lucide-vue-next'
 import type { LogLine, RunStatus } from '../api/types'
 import { useToast } from '../composables/useToast'
+import { classifyLogLine, type LogSeverity } from '../utils/logSeverity'
 
 const props = withDefaults(
   defineProps<{
@@ -24,6 +25,38 @@ const scrollContainer = ref<HTMLElement | null>(null)
 const autoScroll = ref(true)
 const copied = ref(false)
 const toast = useToast()
+
+function getSeverity(line: LogLine): LogSeverity {
+  return classifyLogLine(line)
+}
+
+function getLineClass(severity: LogSeverity): string {
+  switch (severity) {
+    case 'error':
+      return 'text-rose-400 font-medium'
+    case 'warning':
+      return 'text-amber-400 font-medium'
+    case 'system-error':
+      return 'text-rose-400 font-bold'
+    case 'system':
+      return 'text-sky-400 italic'
+    case 'muted':
+      return 'text-slate-400'
+    case 'normal':
+    default:
+      return 'text-slate-200'
+  }
+}
+
+function getBadge(severity: LogSeverity): { text: string; class: string } | null {
+  if (severity === 'error') {
+    return { text: 'ERR', class: 'text-rose-400 font-bold' }
+  }
+  if (severity === 'warning') {
+    return { text: 'WARN', class: 'text-amber-400 font-semibold' }
+  }
+  return null
+}
 
 function isAtBottom(): boolean {
   if (!scrollContainer.value) return true
@@ -199,6 +232,7 @@ const statusMessage = computed(() => {
       <div
         v-for="line in lines"
         :key="line.seq"
+        :title="line.stream"
         class="flex items-start hover:bg-slate-800/40 rounded px-1 -mx-1"
       >
         <!-- Sequence number -->
@@ -206,22 +240,20 @@ const statusMessage = computed(() => {
           {{ line.seq }}
         </span>
 
-        <!-- Stream indicator tag (optional short badge for stderr/system) -->
-        <span
-          v-if="line.stream === 'stderr'"
-          class="text-xs uppercase font-semibold text-rose-400 mr-2 select-none"
-        >
-          [err]
+        <!-- Fixed-width badge column (preserves column alignment across all lines) -->
+        <span class="inline-block w-10 flex-shrink-0 select-none text-xs text-center mr-2">
+          <span
+            v-if="getBadge(getSeverity(line))"
+            :class="getBadge(getSeverity(line))!.class"
+          >
+            {{ getBadge(getSeverity(line))!.text }}
+          </span>
         </span>
 
         <!-- Line content -->
         <span
           class="flex-1 whitespace-pre-wrap break-all"
-          :class="[
-            line.stream === 'stdout' ? 'text-slate-200' : '',
-            line.stream === 'stderr' ? 'text-rose-400 font-medium' : '',
-            line.stream === 'system' ? 'text-sky-400 italic' : ''
-          ]"
+          :class="getLineClass(getSeverity(line))"
         >
           {{ line.text }}
         </span>
