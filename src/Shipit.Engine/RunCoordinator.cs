@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -22,6 +23,7 @@ public sealed class RunCoordinator(
     private static readonly StepName[] StepOrder = [StepName.Checkout, StepName.Build, StepName.Push, StepName.Deploy];
 
     private readonly Channel<long> _queue = Channel.CreateUnbounded<long>();
+    private readonly ConcurrentDictionary<long, CancellationTokenSource> _inFlight = new();
 
     public async Task<Run> TriggerAsync(long pipelineId, CancellationToken cancellationToken = default)
     {
@@ -136,9 +138,11 @@ public sealed class RunCoordinator(
 
     private async Task RunOneAsync(long runId, SemaphoreSlim gate, CancellationToken stoppingToken)
     {
+        using var userCts = new CancellationTokenSource();
+        _inFlight[runId] = userCts;
         try
         {
-            await runner.ExecuteAsync(runId, stoppingToken).ConfigureAwait(false);
+            await runner.ExecuteAsync(runId, stoppingToken, userCts.Token).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -146,8 +150,83 @@ public sealed class RunCoordinator(
         }
         finally
         {
+            _inFlight.TryRemove(runId, out _);
             gate.Release();
         }
+    }
+
+    public async Task<(CancelResult Status, Run? Run)> CancelAsync(long runId, CancellationToken cancellationToken = default)
+    {
+        // 1. If currently executing, signal user cancellation
+        if (_inFlight.TryGetValue(runId, out var userCts))
+        {
+            userCts.Cancel();
+            await using var db = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            var running = await db.Runs.Include(r => r.Steps).FirstOrDefaultAsync(r => r.Id == runId, cancellationToken).ConfigureAwait(false);
+            if (running is null)
+            {
+                return (CancelResult.NotFound, null);
+            }
+
+            if (running.Status is RunStatus.Success or RunStatus.Failed or RunStatus.Cancelled)
+            {
+                return (CancelResult.AlreadyFinished, running);
+            }
+
+            return (CancelResult.Accepted, running);
+        }
+
+        // 2. Not in flight: check database
+        await using var dbAccess = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var run = await dbAccess.Runs.Include(r => r.Steps).FirstOrDefaultAsync(r => r.Id == runId, cancellationToken).ConfigureAwait(false);
+        if (run is null)
+        {
+            return (CancelResult.NotFound, null);
+        }
+
+        if (run.Status is RunStatus.Success or RunStatus.Failed or RunStatus.Cancelled)
+        {
+            return (CancelResult.AlreadyFinished, run);
+        }
+
+        if (run.Status == RunStatus.Queued)
+        {
+            var now = time.GetUtcNow().UtcDateTime;
+            run.Status = RunStatus.Cancelled;
+            run.FailureReason = "cancelled by user";
+            run.FinishedAt = now;
+            foreach (var s in run.Steps)
+            {
+                if (s.Status == StepStatus.Pending)
+                {
+                    s.Status = StepStatus.Skipped;
+                }
+            }
+
+            dbAccess.RunLogs.Add(new RunLog
+            {
+                RunId = run.Id,
+                Step = StepName.Checkout,
+                Stream = Shipit.Core.LogStream.System,
+                Text = "Run cancelled by user.",
+                At = now,
+            });
+
+            await dbAccess.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return (CancelResult.Accepted, run);
+        }
+
+        if (run.Status == RunStatus.Running)
+        {
+            if (_inFlight.TryGetValue(runId, out var cts))
+            {
+                cts.Cancel();
+            }
+
+            return (CancelResult.Accepted, run);
+        }
+
+        return (CancelResult.Accepted, run);
     }
 
     private static Task<bool> HasActiveRunAsync(ShipitDbContext db, long pipelineId, CancellationToken ct) =>

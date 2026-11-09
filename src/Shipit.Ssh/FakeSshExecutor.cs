@@ -17,6 +17,7 @@ public sealed class FakeSshRule
     public int ExitCode { get; init; }
     public IReadOnlyList<(string Line, LogStream Stream)> OutputLines { get; init; } = [];
     public TimeSpan? Delay { get; init; }
+    public Func<RemoteCommand, CancellationToken, Task>? OnExecuteAsync { get; init; }
 }
 
 /// <summary>
@@ -38,6 +39,11 @@ public class FakeSshExecutor : ISshExecutor
     /// Custom handler for <see cref="TestConnectionAsync"/>. Defaults to returning Ok=true.
     /// </summary>
     public Func<SshTarget, CancellationToken, Task<(bool Ok, string Message)>>? TestConnectionHandler { get; set; }
+
+    /// <summary>
+    /// Optional event raised when a command is about to be executed.
+    /// </summary>
+    public event Action<RemoteCommand>? CommandExecuting;
 
     /// <summary>
     /// Commands executed by this executor in chronological order.
@@ -121,6 +127,8 @@ public class FakeSshExecutor : ISshExecutor
                 command.StdinSecret?.Length ?? 0));
         }
 
+        CommandExecuting?.Invoke(command);
+
         FakeSshRule? matchedRule;
         lock (_lock)
         {
@@ -139,6 +147,11 @@ public class FakeSshExecutor : ISshExecutor
         if (matchedRule.Delay.HasValue && matchedRule.Delay.Value > TimeSpan.Zero)
         {
             await Task.Delay(matchedRule.Delay.Value, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (matchedRule.OnExecuteAsync != null)
+        {
+            await matchedRule.OnExecuteAsync(command, cancellationToken).ConfigureAwait(false);
         }
 
         foreach (var (line, stream) in matchedRule.OutputLines)

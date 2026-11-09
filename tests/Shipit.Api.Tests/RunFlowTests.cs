@@ -138,5 +138,99 @@ public class RunFlowTests
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/runs/9999/logs")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/pipelines/9999")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/slaves/9999")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/api/runs/9999/cancel", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Cancel_requires_authentication()
+    {
+        using var factory = new ApiFactory();
+        var client = factory.CreateClient();
+        var response = await client.PostAsync("/api/runs/1/cancel", null);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Cancel_queued_run_returns_202_and_subsequent_cancel_returns_409()
+    {
+        using var factory = new ApiFactory();
+        var client = await factory.LoggedInClientAsync();
+        var seeded = await client.SeedAsync();
+
+        long runId;
+        await using (var db = await factory.Services.GetRequiredService<IDbContextFactory<ShipitDbContext>>().CreateDbContextAsync())
+        {
+            var r = new Run
+            {
+                PipelineId = seeded.Pipeline,
+                Status = RunStatus.Queued,
+                CreatedAt = DateTime.UtcNow,
+                Steps = Enum.GetValues<StepName>().Select(n => new RunStep { Name = n, Status = StepStatus.Pending }).ToList(),
+            };
+            db.Runs.Add(r);
+            await db.SaveChangesAsync();
+            runId = r.Id;
+        }
+
+        var cancelResponse = await client.PostAsync($"/api/runs/{runId}/cancel", null);
+        Assert.Equal(HttpStatusCode.Accepted, cancelResponse.StatusCode);
+        var body = await cancelResponse.ReadJsonAsync();
+        Assert.Equal("cancelled", body.GetProperty("status").GetString());
+        Assert.Equal("cancelled by user", body.GetProperty("failureReason").GetString());
+        Assert.NotNull(body.GetProperty("finishedAt").GetString());
+
+        var conflictResponse = await client.PostAsync($"/api/runs/{runId}/cancel", null);
+        Assert.Equal(HttpStatusCode.Conflict, conflictResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Cancel_running_run_returns_202_is_idempotent_while_stopping_and_returns_409_when_done()
+    {
+        using var factory = new ApiFactory();
+        var ssh = (Shipit.Ssh.FakeSshExecutor)factory.Services.GetRequiredService<Shipit.Core.ISshExecutor>();
+        var buildStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ssh.AddRule(cmd => cmd.CommandText.Contains("docker build"), exitCode: 0, delay: TimeSpan.FromSeconds(30));
+        ssh.CommandExecuting += cmd =>
+        {
+            if (cmd.CommandText.Contains("docker build"))
+            {
+                buildStarted.TrySetResult();
+            }
+        };
+
+        var client = await factory.LoggedInClientAsync();
+        var seeded = await client.SeedAsync();
+        var runId = await client.TriggerAsync(seeded.Pipeline);
+
+        await buildStarted.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+        var firstCancel = await client.PostAsync($"/api/runs/{runId}/cancel", null);
+        Assert.Equal(HttpStatusCode.Accepted, firstCancel.StatusCode);
+
+        var secondCancel = await client.PostAsync($"/api/runs/{runId}/cancel", null);
+        Assert.Equal(HttpStatusCode.Accepted, secondCancel.StatusCode);
+
+        var run = await client.WaitForRunAsync(runId, "cancelled");
+        Assert.Equal("cancelled", run.GetProperty("status").GetString());
+        Assert.Equal("cancelled by user", run.GetProperty("failureReason").GetString());
+
+        var thirdCancel = await client.PostAsync($"/api/runs/{runId}/cancel", null);
+        Assert.Equal(HttpStatusCode.Conflict, thirdCancel.StatusCode);
+
+        var nextRunId = await client.TriggerAsync(seeded.Pipeline);
+        Assert.NotEqual(runId, nextRunId);
+    }
+
+    [Fact]
+    public async Task Cancel_finished_run_returns_409()
+    {
+        using var factory = new ApiFactory();
+        var client = await factory.LoggedInClientAsync();
+        var seeded = await client.SeedAsync();
+        var runId = await client.TriggerAsync(seeded.Pipeline);
+        await client.WaitForRunAsync(runId, "success");
+
+        var response = await client.PostAsync($"/api/runs/{runId}/cancel", null);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 }
