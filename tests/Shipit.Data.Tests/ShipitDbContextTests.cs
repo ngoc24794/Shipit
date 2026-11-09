@@ -308,6 +308,105 @@ public class ShipitDbContextTests : IDisposable
     }
 
     [Fact]
+    public async Task OptionalRegistryCredential_AllowsNull_And_PreservesCredentialWhenSet()
+    {
+        using var ctx = CreateContext();
+
+        var gitCred = new Credential { Name = "git-cred", Kind = CredentialKind.GitToken, ProtectedValue = "v1:git" };
+        var regCred = new Credential { Name = "reg-cred", Kind = CredentialKind.Registry, Username = "ci", ProtectedValue = "v1:reg" };
+        var sshCred = new Credential { Name = "ssh-cred", Kind = CredentialKind.SshKey, ProtectedValue = "v1:ssh" };
+        ctx.Credentials.AddRange(gitCred, regCred, sshCred);
+        await ctx.SaveChangesAsync();
+
+        var slave = new Slave { Name = "worker-1", Host = "worker.local", User = "devops", SshCredentialId = sshCred.Id };
+        ctx.Slaves.Add(slave);
+        await ctx.SaveChangesAsync();
+
+        // Pipeline without registry credential
+        var pipeNoCred = new Pipeline
+        {
+            Name = "pipe-no-cred",
+            GitUrl = "https://git.example.com/repo.git",
+            GitCredentialId = gitCred.Id,
+            SlaveId = slave.Id,
+            ImageName = "no-cred",
+            RegistryHost = "registry.local",
+            RegistryCredentialId = null,
+            DeployNamespace = "devops",
+            DeployDeployment = "app-no-cred",
+            DeployContainer = "app"
+        };
+        ctx.Pipelines.Add(pipeNoCred);
+
+        // Pipeline with registry credential (existing style)
+        var pipeWithCred = new Pipeline
+        {
+            Name = "pipe-with-cred",
+            GitUrl = "https://git.example.com/repo.git",
+            GitCredentialId = gitCred.Id,
+            SlaveId = slave.Id,
+            ImageName = "with-cred",
+            RegistryHost = "registry.local",
+            RegistryCredentialId = regCred.Id,
+            DeployNamespace = "devops",
+            DeployDeployment = "app-with-cred",
+            DeployContainer = "app"
+        };
+        ctx.Pipelines.Add(pipeWithCred);
+        await ctx.SaveChangesAsync();
+
+        // Verify reading both
+        var loadedNoCred = await ctx.Pipelines.AsNoTracking().Include(p => p.RegistryCredential).FirstAsync(p => p.Id == pipeNoCred.Id);
+        Assert.Null(loadedNoCred.RegistryCredentialId);
+        Assert.Null(loadedNoCred.RegistryCredential);
+
+        var loadedWithCred = await ctx.Pipelines.AsNoTracking().Include(p => p.RegistryCredential).FirstAsync(p => p.Id == pipeWithCred.Id);
+        Assert.Equal(regCred.Id, loadedWithCred.RegistryCredentialId);
+        Assert.NotNull(loadedWithCred.RegistryCredential);
+        Assert.Equal("reg-cred", loadedWithCred.RegistryCredential.Name);
+
+        // Deleting regCred from a fresh context is blocked by pipeWithCred (DB Restrict constraint)
+        using (var ctxDelete = CreateContext())
+        {
+            var toDelete = await ctxDelete.Credentials.FirstAsync(c => c.Id == regCred.Id);
+            ctxDelete.Credentials.Remove(toDelete);
+            await Assert.ThrowsAsync<DbUpdateException>(() => ctxDelete.SaveChangesAsync());
+        }
+
+        // Release regCred by setting RegistryCredentialId to null on pipeWithCred
+        using (var ctxUpdate = CreateContext())
+        {
+            var p = await ctxUpdate.Pipelines.FirstAsync(p => p.Id == pipeWithCred.Id);
+            p.RegistryCredentialId = null;
+            await ctxUpdate.SaveChangesAsync();
+        }
+
+        // Now regCred can be deleted even though pipeNoCred and pipeWithCred still exist
+        using (var ctxDeleteSuccess = CreateContext())
+        {
+            var toDelete = await ctxDeleteSuccess.Credentials.FirstAsync(c => c.Id == regCred.Id);
+            ctxDeleteSuccess.Credentials.Remove(toDelete);
+            await ctxDeleteSuccess.SaveChangesAsync();
+            Assert.Null(await ctxDeleteSuccess.Credentials.FirstOrDefaultAsync(c => c.Id == regCred.Id));
+        }
+    }
+
+    [Fact]
+    public void OptionalRegistryCredential_Migration_IsRegistered_And_GeneratesScript()
+    {
+        using var ctx = CreateContext();
+        var migrations = ctx.Database.GetMigrations().ToList();
+        Assert.Contains("20261109035520_InitialCreate", migrations);
+        Assert.Contains(migrations, m => m.EndsWith("OptionalRegistryCredential"));
+
+        var factory = new ShipitDbContextFactory();
+        using var npgsqlCtx = factory.CreateDbContext([]);
+        var script = npgsqlCtx.Database.GenerateCreateScript();
+        Assert.NotEmpty(script);
+        Assert.Contains("RegistryCredentialId", script);
+    }
+
+    [Fact]
     public async Task PostgresIntegration_SkippedWhenNoPgUrlConfigured()
     {
         var pgUrl = Environment.GetEnvironmentVariable("SHIPIT_TEST_PG_URL");

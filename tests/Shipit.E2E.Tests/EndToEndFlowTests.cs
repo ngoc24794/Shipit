@@ -118,6 +118,128 @@ public class EndToEndFlowTests
     }
 
     [Fact]
+    public async Task HappyPath_WithoutRegistryCredential_BuildsPushesAndDeploysWithoutLoginLogoutOrSecretLeak()
+    {
+        var customSsh = FakeSshExecutor.HappyPath();
+        using var factory = new E2EFactory();
+        using var app = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddSingleton<ISshExecutor>(customSsh);
+            });
+        });
+
+        var client = await app.LoggedInClientAsync();
+
+        // 1. Create SSH credential for Slave
+        var sshId = await client.CreateAsync("/api/credentials", new
+        {
+            name = "e2e-slave-ssh-unauth",
+            kind = "ssh_key",
+            value = E2EFactory.SshKey
+        });
+
+        // 2. Create Git credential
+        var gitId = await client.CreateAsync("/api/credentials", new
+        {
+            name = "e2e-git-token-unauth",
+            kind = "git_token",
+            value = E2EFactory.GitToken
+        });
+
+        // 3. Create Slave
+        var slaveId = await client.CreateAsync("/api/slaves", new
+        {
+            name = "e2e-build-slave-unauth",
+            host = "192.168.1.51",
+            port = 22,
+            user = "devops",
+            sshCredentialId = sshId
+        });
+
+        // 4. Test slave connection
+        var testResponse = await client.PostAsync($"/api/slaves/{slaveId}/test", content: null);
+        Assert.Equal(HttpStatusCode.OK, testResponse.StatusCode);
+        var testResult = await testResponse.ReadJsonAsync();
+        Assert.True(testResult.GetProperty("ok").GetBoolean());
+
+        // 5. Create pipeline without registryCredentialId (null)
+        var pipelineId = await client.CreateAsync("/api/pipelines", new
+        {
+            name = "unauth-reg-pipeline",
+            gitUrl = "https://git.example.com/team/demo.git",
+            gitBranch = "main",
+            gitCredentialId = gitId,
+            slaveId = slaveId,
+            dockerfilePath = "Dockerfile",
+            imageName = "shipit-demo",
+            registryHost = "192.168.1.241",
+            registryCredentialId = (long?)null,
+            deployNamespace = "devops",
+            deployDeployment = "shipit-demo",
+            deployContainer = "app"
+        });
+
+        // Verify GET pipeline returns registryCredentialId: null
+        var pipelineResp = await client.GetAsync($"/api/pipelines/{pipelineId}");
+        Assert.Equal(HttpStatusCode.OK, pipelineResp.StatusCode);
+        var pipelineJson = await pipelineResp.ReadJsonAsync();
+        Assert.True(pipelineJson.TryGetProperty("registryCredentialId", out var regProp));
+        Assert.Equal(JsonValueKind.Null, regProp.ValueKind);
+
+        // 6. Trigger run
+        var runId = await client.TriggerRunAsync(pipelineId);
+
+        // 7. Wait for success
+        var run = await client.WaitForRunAsync(runId, "success", "failed");
+        Assert.Equal("success", run.GetProperty("status").GetString());
+        Assert.Equal("abc1234", run.GetProperty("tag").GetString());
+        Assert.Equal("192.168.1.241/shipit-demo:abc1234", run.GetProperty("image").GetString());
+
+        // 8. Verify all 4 steps succeeded
+        var steps = run.GetProperty("steps").EnumerateArray().ToList();
+        Assert.Equal(["checkout", "build", "push", "deploy"], steps.Select(s => s.GetProperty("name").GetString()));
+        Assert.All(steps, s => Assert.Equal("success", s.GetProperty("status").GetString()));
+
+        // 9. Verify ExecutedCommands does NOT contain docker login or docker logout
+        var commands = customSsh.ExecutedCommands;
+        Assert.DoesNotContain(commands, c => c.CommandText.Contains("docker login"));
+        Assert.DoesNotContain(commands, c => c.CommandText.Contains("docker logout"));
+
+        // Commands must still include clone, build, push, cleanup
+        Assert.Contains(commands, c => c.CommandText.Contains("git clone"));
+        Assert.Contains(commands, c => c.CommandText.Contains("docker build"));
+        Assert.Contains(commands, c => c.CommandText.Contains("docker push"));
+        Assert.Contains(commands, c => c.CommandText.Contains("rm -rf"));
+
+        // Verify no secrets in ExecutedCommands command text
+        foreach (var cmd in commands)
+        {
+            foreach (var secret in E2EFactory.Secrets)
+            {
+                Assert.DoesNotContain(secret, cmd.CommandText);
+            }
+        }
+
+        // 10. Verify logs contain the skipped log message and contain no leaked secrets
+        var logsResponse = await client.GetAsync($"/api/runs/{runId}/logs");
+        Assert.Equal(HttpStatusCode.OK, logsResponse.StatusCode);
+        var logsJson = await logsResponse.ReadJsonAsync();
+        var logLines = logsJson.EnumerateArray().ToList();
+        Assert.Contains(logLines, l => l.GetProperty("text").GetString() == "Registry login skipped (no credential)");
+
+        foreach (var line in logLines)
+        {
+            var text = line.GetProperty("text").GetString()!;
+            foreach (var secret in E2EFactory.Secrets)
+            {
+                Assert.DoesNotContain(secret, text);
+            }
+        }
+    }
+
+    [Fact]
     public async Task DockerBuildFailure_FailsRun_SkipsLaterSteps_LogsOut_AndDoesNotDeploy()
     {
         var customSsh = new FakeSshExecutor();

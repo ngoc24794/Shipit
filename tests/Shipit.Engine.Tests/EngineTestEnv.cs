@@ -92,6 +92,15 @@ public sealed class EngineTestEnv : IDisposable
         return run.Id;
     }
 
+    public async Task ClearRegistryCredentialAsync(long? pipelineId = null)
+    {
+        await using var db = await Factory.CreateDbContextAsync();
+        var id = pipelineId ?? PipelineId;
+        var p = await db.Pipelines.FirstAsync(p => p.Id == id);
+        p.RegistryCredentialId = null;
+        await db.SaveChangesAsync();
+    }
+
     public async Task<Run> GetRunAsync(long id)
     {
         await using var db = await Factory.CreateDbContextAsync();

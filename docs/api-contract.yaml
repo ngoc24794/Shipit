@@ -486,7 +486,7 @@ components:
         dockerfilePath: { type: string, default: Dockerfile }
         imageName: { type: string, description: 'Repository name without registry host, e.g. shipit-demo' }
         registryHost: { type: string, example: 192.168.1.241 }
-        registryCredentialId: { type: integer, format: int64 }
+        registryCredentialId: { type: integer, format: int64, nullable: true }
         deployNamespace: { type: string }
         deployDeployment: { type: string }
         deployContainer: { type: string }
@@ -496,7 +496,7 @@ components:
           nullable: true
     PipelineInput:
       type: object
-      required: [name, gitUrl, gitCredentialId, slaveId, imageName, registryHost, registryCredentialId, deployNamespace, deployDeployment, deployContainer]
+      required: [name, gitUrl, gitCredentialId, slaveId, imageName, registryHost, deployNamespace, deployDeployment, deployContainer]
       properties:
         name: { type: string }
         gitUrl: { type: string }
@@ -506,7 +506,7 @@ components:
         dockerfilePath: { type: string, default: Dockerfile }
         imageName: { type: string }
         registryHost: { type: string }
-        registryCredentialId: { type: integer, format: int64 }
+        registryCredentialId: { type: integer, format: int64, nullable: true }
         deployNamespace: { type: string }
         deployDeployment: { type: string }
         deployContainer: { type: string }

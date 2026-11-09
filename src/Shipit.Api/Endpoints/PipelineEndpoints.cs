@@ -118,7 +118,7 @@ internal static partial class PipelineEndpoints
         p.DockerfilePath = string.IsNullOrWhiteSpace(i.DockerfilePath) ? "Dockerfile" : i.DockerfilePath.Trim();
         p.ImageName = i.ImageName!.Trim();
         p.RegistryHost = i.RegistryHost!.Trim();
-        p.RegistryCredentialId = i.RegistryCredentialId!.Value;
+        p.RegistryCredentialId = i.RegistryCredentialId;
         p.DeployNamespace = i.DeployNamespace!.Trim();
         p.DeployDeployment = i.DeployDeployment!.Trim();
         p.DeployContainer = i.DeployContainer!.Trim();
@@ -149,7 +149,10 @@ internal static partial class PipelineEndpoints
         Check(errors, "imageName", i.ImageName, v => RemoteCommandBuilder.BuildImageRef("example.com", v, "t"), required: true);
 
         await CheckCredentialAsync(errors, db, "gitCredentialId", i.GitCredentialId, CredentialKind.GitToken, "git_token", ct);
-        await CheckCredentialAsync(errors, db, "registryCredentialId", i.RegistryCredentialId, CredentialKind.Registry, "registry", ct);
+        if (i.RegistryCredentialId is not null)
+        {
+            await CheckCredentialAsync(errors, db, "registryCredentialId", i.RegistryCredentialId, CredentialKind.Registry, "registry", ct);
+        }
 
         if (i.SlaveId is null)
         {

@@ -197,4 +197,147 @@ public class ResourceTests
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/api/slaves/9999/test", null)).StatusCode);
         await AssertNoSecretsAsync(client, "/api/slaves", "/api/pipelines");
     }
+
+    [Fact]
+    public async Task Pipeline_creation_and_update_supports_optional_registry_credential()
+    {
+        using var factory = new ApiFactory();
+        var client = await factory.LoggedInClientAsync();
+        var seeded = await client.SeedAsync();
+
+        // 1. Create pipeline without sending registryCredentialId -> 201, registryCredentialId is null
+        var bodyNoReg = new Dictionary<string, object?>
+        {
+            ["name"] = "pipe-no-reg-field",
+            ["gitUrl"] = "https://git.example.com/team/demo.git",
+            ["gitBranch"] = "main",
+            ["gitCredentialId"] = seeded.GitCred,
+            ["slaveId"] = seeded.Slave,
+            ["dockerfilePath"] = "Dockerfile",
+            ["imageName"] = "shipit-demo",
+            ["registryHost"] = "registry.example.com",
+            ["deployNamespace"] = "devops",
+            ["deployDeployment"] = "shipit-demo",
+            ["deployContainer"] = "app"
+        };
+        var respNoReg = await client.PostAsJsonAsync("/api/pipelines", bodyNoReg);
+        Assert.Equal(HttpStatusCode.Created, respNoReg.StatusCode);
+        var jsonNoReg = await respNoReg.ReadJsonAsync();
+        Assert.True(jsonNoReg.TryGetProperty("registryCredentialId", out var propNoReg));
+        Assert.Equal(JsonValueKind.Null, propNoReg.ValueKind);
+        var noRegId = jsonNoReg.GetProperty("id").GetInt64();
+
+        // GET confirms registryCredentialId is null
+        var getNoReg = await client.GetAsync($"/api/pipelines/{noRegId}");
+        Assert.Equal(HttpStatusCode.OK, getNoReg.StatusCode);
+        var getNoRegJson = await getNoReg.ReadJsonAsync();
+        Assert.Equal(JsonValueKind.Null, getNoRegJson.GetProperty("registryCredentialId").ValueKind);
+
+        // 2. Create pipeline with explicit null registryCredentialId -> 201, registryCredentialId is null
+        var bodyNullReg = new Dictionary<string, object?>(bodyNoReg)
+        {
+            ["name"] = "pipe-null-reg",
+            ["registryCredentialId"] = null
+        };
+        var respNullReg = await client.PostAsJsonAsync("/api/pipelines", bodyNullReg);
+        Assert.Equal(HttpStatusCode.Created, respNullReg.StatusCode);
+        var jsonNullReg = await respNullReg.ReadJsonAsync();
+        Assert.True(jsonNullReg.TryGetProperty("registryCredentialId", out var propNullReg));
+        Assert.Equal(JsonValueKind.Null, propNullReg.ValueKind);
+
+        // 3. Invalid or non-existent registryCredentialId -> 400 Bad Request with field error
+        var bodyBadId = new Dictionary<string, object?>(bodyNoReg)
+        {
+            ["name"] = "pipe-bad-reg-id",
+            ["registryCredentialId"] = 99999
+        };
+        var respBadId = await client.PostAsJsonAsync("/api/pipelines", bodyBadId);
+        Assert.Equal(HttpStatusCode.BadRequest, respBadId.StatusCode);
+        var badIdErrors = (await respBadId.ReadJsonAsync()).GetProperty("errors");
+        Assert.True(badIdErrors.TryGetProperty("registryCredentialId", out _));
+
+        // Wrong kind (using GitToken instead of Registry) -> 400 Bad Request with field error
+        var bodyWrongKind = new Dictionary<string, object?>(bodyNoReg)
+        {
+            ["name"] = "pipe-wrong-reg-kind",
+            ["registryCredentialId"] = seeded.GitCred
+        };
+        var respWrongKind = await client.PostAsJsonAsync("/api/pipelines", bodyWrongKind);
+        Assert.Equal(HttpStatusCode.BadRequest, respWrongKind.StatusCode);
+        var wrongKindErrors = (await respWrongKind.ReadJsonAsync()).GetProperty("errors");
+        Assert.True(wrongKindErrors.TryGetProperty("registryCredentialId", out _));
+
+        // 4. PUT with null removes credential from existing pipeline that had a credential
+        var getSeeded = await client.GetAsync($"/api/pipelines/{seeded.Pipeline}");
+        Assert.Equal(HttpStatusCode.OK, getSeeded.StatusCode);
+        var seededJson = await getSeeded.ReadJsonAsync();
+        Assert.Equal(seeded.RegCred, seededJson.GetProperty("registryCredentialId").GetInt64());
+
+        var updateBody = new Dictionary<string, object?>
+        {
+            ["name"] = seededJson.GetProperty("name").GetString(),
+            ["gitUrl"] = seededJson.GetProperty("gitUrl").GetString(),
+            ["gitBranch"] = seededJson.GetProperty("gitBranch").GetString(),
+            ["gitCredentialId"] = seededJson.GetProperty("gitCredentialId").GetInt64(),
+            ["slaveId"] = seededJson.GetProperty("slaveId").GetInt64(),
+            ["dockerfilePath"] = seededJson.GetProperty("dockerfilePath").GetString(),
+            ["imageName"] = seededJson.GetProperty("imageName").GetString(),
+            ["registryHost"] = seededJson.GetProperty("registryHost").GetString(),
+            ["registryCredentialId"] = null,
+            ["deployNamespace"] = seededJson.GetProperty("deployNamespace").GetString(),
+            ["deployDeployment"] = seededJson.GetProperty("deployDeployment").GetString(),
+            ["deployContainer"] = seededJson.GetProperty("deployContainer").GetString()
+        };
+        var putResp = await client.PutAsJsonAsync($"/api/pipelines/{seeded.Pipeline}", updateBody);
+        Assert.Equal(HttpStatusCode.OK, putResp.StatusCode);
+        var putJson = await putResp.ReadJsonAsync();
+        Assert.True(putJson.TryGetProperty("registryCredentialId", out var putRegProp));
+        Assert.Equal(JsonValueKind.Null, putRegProp.ValueKind);
+
+        // GET confirms it was updated to null
+        var getUpdated = await client.GetAsync($"/api/pipelines/{seeded.Pipeline}");
+        var getUpdatedJson = await getUpdated.ReadJsonAsync();
+        Assert.Equal(JsonValueKind.Null, getUpdatedJson.GetProperty("registryCredentialId").ValueKind);
+    }
+
+    [Fact]
+    public async Task Registry_credential_deletion_blocked_when_in_use_and_allowed_when_no_pipeline_uses_it()
+    {
+        using var factory = new ApiFactory();
+        var client = await factory.LoggedInClientAsync();
+        var seeded = await client.SeedAsync();
+
+        // Also create a pipeline that does NOT use any registry credential
+        var unauthenticatedPipeline = await client.CreateAsync("/api/pipelines", new
+        {
+            name = "unauth-pipeline",
+            gitUrl = "https://git.example.com/team/demo.git",
+            gitBranch = "main",
+            gitCredentialId = seeded.GitCred,
+            slaveId = seeded.Slave,
+            dockerfilePath = "Dockerfile",
+            imageName = "shipit-demo",
+            registryHost = "registry.example.com",
+            registryCredentialId = (long?)null,
+            deployNamespace = "devops",
+            deployDeployment = "shipit-demo",
+            deployContainer = "app"
+        });
+        Assert.True(unauthenticatedPipeline > 0);
+
+        // seeded.RegCred is used by seeded.Pipeline -> DELETE returns 409 Conflict
+        var deleteInUseResp = await client.DeleteAsync($"/api/credentials/{seeded.RegCred}");
+        Assert.Equal(HttpStatusCode.Conflict, deleteInUseResp.StatusCode);
+
+        // Release the credential by deleting the pipeline that uses it
+        var deletePipeResp = await client.DeleteAsync($"/api/pipelines/{seeded.Pipeline}");
+        Assert.Equal(HttpStatusCode.NoContent, deletePipeResp.StatusCode);
+
+        // Now, even though unauth-pipeline still exists, seeded.RegCred is not used by any pipeline -> DELETE returns 204 NoContent
+        var deleteReleasedResp = await client.DeleteAsync($"/api/credentials/{seeded.RegCred}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteReleasedResp.StatusCode);
+
+        // Subsequent delete returns 404
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/credentials/{seeded.RegCred}")).StatusCode);
+    }
 }
