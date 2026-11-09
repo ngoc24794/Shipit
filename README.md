@@ -234,6 +234,7 @@ Trong thư mục `examples/hello-shipit` có sẵn một ứng dụng ASP.NET Co
 
 ## Mô hình an toàn (Security Model)
 
+- **Ghi nhớ đăng nhập & Quản lý phiên:** Tuỳ chọn "Ghi nhớ đăng nhập (30 ngày)" tạo cookie bền vững kéo dài 30 ngày (trượt); nếu không chọn, cookie phiên hết hạn khi đóng trình duyệt hoặc tối đa 8 giờ. Khoá Data Protection được lưu bền vững trong CSDL và mã hoá bằng master key. Mọi phiên đăng nhập đều gắn với dấu bảo mật; việc thay đổi mật khẩu admin (`SHIPIT_ADMIN_PASSWORD`) sẽ lập tức làm mất hiệu lực toàn bộ các phiên làm việc cũ.
 - **Secret chỉ ghi (Write-only):** Mọi bí mật (SSH private key, Git token, Registry password) được bảo vệ bằng chuẩn mã hoá `AES-256-GCM` với khoá đối xứng `SHIPIT_MASTER_KEY`. Các API trả về không bao giờ để lộ giá trị secret gốc.
 - **Che giấu bí mật trong Log (Log Masking):** Cơ chế `LogMasker` tự động phát hiện và thay thế các chuỗi bí mật bằng `***` trên mọi dòng log stdout/stderr cũng như sự kiện Server-Sent Events (SSE).
 - **Hạn chế Command Injection:** `RemoteCommandBuilder` kiểm tra định dạng an toàn cho tên nhánh, URL, container name; truyền mật khẩu Git và Docker qua `stdin` hoặc file askpass tạm thời, không đưa bí mật vào tham số dòng lệnh (`argv`).
