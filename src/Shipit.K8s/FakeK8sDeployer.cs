@@ -37,6 +37,16 @@ public sealed class FakeK8sDeployer : IK8sDeployer
     /// </summary>
     public TimeProvider? TimeProvider { get; set; }
 
+    /// <summary>
+    /// When true, simulates a rollout failure followed by auto-rollback to <see cref="PreviousImage"/>.
+    /// </summary>
+    public bool SimulateRolloutFailureWithRollback { get; set; }
+
+    /// <summary>
+    /// The previous image to simulate rolling back to. Defaults to "app:previous".
+    /// </summary>
+    public string PreviousImage { get; set; } = "app:previous";
+
     public FakeK8sDeployer(DeployAllowList allowList)
     {
         AllowList = allowList ?? throw new ArgumentNullException(nameof(allowList));
@@ -61,6 +71,15 @@ public sealed class FakeK8sDeployer : IK8sDeployer
 
         await log.WriteAsync($"[fake-k8s] Setting image of {request.Namespace}/{request.Deployment}:{request.Container} to {request.Image}", LogStream.System, cancellationToken);
         await log.WriteAsync($"[fake-k8s] Waiting for rollout of {request.Deployment}...", LogStream.System, cancellationToken);
+
+        if (SimulateRolloutFailureWithRollback)
+        {
+            await log.WriteAsync($"Rollout failed, reverting to {PreviousImage}", LogStream.System, cancellationToken);
+            _requests.Add(request with { Image = PreviousImage });
+            await log.WriteAsync($"[fake-k8s] Rollout complete for {request.Deployment}", LogStream.System, cancellationToken);
+            return new DeployResult(false, $"rollout timed out waiting for deployment '{request.Deployment}' in namespace '{request.Namespace}'; đã hoàn tác về {PreviousImage}", RolledBack: true);
+        }
+
         await log.WriteAsync($"[fake-k8s] Rollout complete for {request.Deployment}", LogStream.System, cancellationToken);
 
         if (ResultFactory != null)
