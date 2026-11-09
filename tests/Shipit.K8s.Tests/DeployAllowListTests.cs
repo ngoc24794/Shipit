@@ -56,7 +56,7 @@ public class DeployAllowListTests
     [Fact]
     public void IsAllowed_NullEntries_RejectsEverything()
     {
-        var allowList = new DeployAllowList(null);
+        var allowList = new DeployAllowList((IEnumerable<DeployAllowListEntry>?)null);
 
         Assert.False(allowList.IsAllowed("devops", "shipit-demo"));
     }

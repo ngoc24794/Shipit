@@ -27,6 +27,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Pipeline' }
   },
   {
+    path: '/deploy-targets',
+    name: 'deploy-targets',
+    component: () => import('../views/config/DeployTargetsView.vue'),
+    meta: { title: 'Deployment được phép' }
+  },
+  {
     path: '/slaves',
     name: 'slaves',
     component: () => import('../views/config/SlavesView.vue'),

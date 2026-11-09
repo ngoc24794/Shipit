@@ -11,6 +11,8 @@ import type {
   CredentialUpdate,
   Pipeline,
   PipelineInput,
+  DeployTarget,
+  DeployTargetInput,
   Run,
   RunDetail,
   LogLine,
@@ -75,6 +77,11 @@ export interface ShipitApi {
   getPipeline(id: number): Promise<Pipeline>
   updatePipeline(id: number, input: PipelineInput): Promise<Pipeline>
   deletePipeline(id: number): Promise<void>
+
+  // Deploy Targets
+  getDeployTargets(): Promise<DeployTarget[]>
+  createDeployTarget(input: DeployTargetInput): Promise<DeployTarget>
+  deleteDeployTarget(id: number): Promise<void>
 
   // Runs
   triggerRun(pipelineId: number): Promise<Run>
@@ -252,6 +259,23 @@ export class HttpShipitApi implements ShipitApi {
 
   async deletePipeline(id: number): Promise<void> {
     await this.request<void>(`/api/pipelines/${id}`, {
+      method: 'DELETE'
+    })
+  }
+
+  async getDeployTargets(): Promise<DeployTarget[]> {
+    return this.request<DeployTarget[]>('/api/deploy-targets')
+  }
+
+  async createDeployTarget(input: DeployTargetInput): Promise<DeployTarget> {
+    return this.request<DeployTarget>('/api/deploy-targets', {
+      method: 'POST',
+      body: JSON.stringify(input)
+    })
+  }
+
+  async deleteDeployTarget(id: number): Promise<void> {
+    await this.request<void>(`/api/deploy-targets/${id}`, {
       method: 'DELETE'
     })
   }

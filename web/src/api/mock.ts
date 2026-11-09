@@ -11,6 +11,8 @@ import type {
   CredentialUpdate,
   Pipeline,
   PipelineInput,
+  DeployTarget,
+  DeployTargetInput,
   Run,
   RunDetail,
   LogLine,
@@ -82,6 +84,21 @@ export class MockShipitApi implements ShipitApi {
       port: 22,
       user: 'deployer',
       sshCredentialId: 1
+    }
+  ]
+
+  private deployTargets: DeployTarget[] = [
+    {
+      id: 1,
+      namespace: 'devops',
+      deployment: 'shipit-demo',
+      createdAt: '2026-11-09T08:00:00Z'
+    },
+    {
+      id: 2,
+      namespace: 'avina-workspace',
+      deployment: 'avina-catalog',
+      createdAt: '2026-11-09T08:00:00Z'
     }
   ]
 
@@ -589,6 +606,74 @@ export class MockShipitApi implements ShipitApi {
       throw new ApiError(409, 'Không thể xoá pipeline khi đang có lượt chạy hoạt động')
     }
     this.pipelines = this.pipelines.filter((p) => p.id !== id)
+  }
+
+  async getDeployTargets(): Promise<DeployTarget[]> {
+    await delay()
+    this.checkAuth()
+    return [...this.deployTargets].sort((a, b) => {
+      const cmp = a.namespace.localeCompare(b.namespace)
+      return cmp !== 0 ? cmp : a.deployment.localeCompare(b.deployment)
+    })
+  }
+
+  async createDeployTarget(input: DeployTargetInput): Promise<DeployTarget> {
+    await delay()
+    this.checkAuth()
+    const ns = (input.namespace || '').trim()
+    const deployment = (input.deployment || '').trim()
+
+    const errors: Record<string, string[]> = {}
+    if (!ns || ns.length > 63 || !/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(ns)) {
+      errors.namespace = ['Namespace phải tuân theo chuẩn DNS-1123 label (1-63 ký tự)']
+    }
+    if (!deployment || deployment.length > 253 || !/^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$/.test(deployment)) {
+      errors.deployment = ['Deployment phải tuân theo chuẩn DNS-1123 subdomain (1-253 ký tự)']
+    }
+
+    if (Object.keys(errors).length > 0) {
+      throw new ApiError(400, 'Dữ liệu không hợp lệ', {
+        title: 'Validation failed',
+        errors
+      })
+    }
+
+    if (this.deployTargets.some((t) => t.namespace === ns && t.deployment === deployment)) {
+      throw new ApiError(409, `Deployment '${ns}/${deployment}' đã tồn tại`, {
+        title: 'Deploy target already exists',
+        detail: `Deploy target '${ns}/${deployment}' already exists.`
+      })
+    }
+
+    const newTarget: DeployTarget = {
+      id: this.deployTargets.length > 0 ? Math.max(...this.deployTargets.map((t) => t.id)) + 1 : 1,
+      namespace: ns,
+      deployment,
+      createdAt: new Date().toISOString()
+    }
+    this.deployTargets.push(newTarget)
+    return newTarget
+  }
+
+  async deleteDeployTarget(id: number): Promise<void> {
+    await delay()
+    this.checkAuth()
+    const target = this.deployTargets.find((t) => t.id === id)
+    if (!target) throw new ApiError(404, 'Không tìm thấy deployment được phép')
+
+    const usingPipelines = this.pipelines
+      .filter((p) => p.deployNamespace === target.namespace && p.deployDeployment === target.deployment)
+      .map((p) => p.name)
+
+    if (usingPipelines.length > 0) {
+      const names = usingPipelines.map((n) => `'${n}'`).join(', ')
+      throw new ApiError(409, `Không thể xoá vì đang được dùng bởi pipeline: ${names}`, {
+        title: 'Deploy target is in use',
+        detail: `Cannot delete deploy target '${target.namespace}/${target.deployment}' because it is in use by pipeline(s): ${names}.`
+      })
+    }
+
+    this.deployTargets = this.deployTargets.filter((t) => t.id !== id)
   }
 
   async triggerRun(pipelineId: number): Promise<Run> {

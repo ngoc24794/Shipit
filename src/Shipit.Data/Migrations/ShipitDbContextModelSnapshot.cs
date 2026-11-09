@@ -22,6 +22,20 @@ namespace Shipit.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Shipit.Data.Entities.AppSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("AppSettings");
+                });
+
             modelBuilder.Entity("Shipit.Data.Entities.Credential", b =>
                 {
                     b.Property<long>("Id")
@@ -57,6 +71,33 @@ namespace Shipit.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Credentials");
+                });
+
+            modelBuilder.Entity("Shipit.Data.Entities.DeployTarget", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Deployment")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Namespace")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Namespace", "Deployment")
+                        .IsUnique();
+
+                    b.ToTable("DeployTargets");
                 });
 
             modelBuilder.Entity("Shipit.Data.Entities.Pipeline", b =>

@@ -135,3 +135,15 @@ export interface PipelineInput {
   deployDeployment: string
   deployContainer: string
 }
+
+export interface DeployTarget {
+  id: number
+  namespace: string
+  deployment: string
+  createdAt: string
+}
+
+export interface DeployTargetInput {
+  namespace: string
+  deployment: string
+}
