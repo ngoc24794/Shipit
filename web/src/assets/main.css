@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-fg: var(--fg);
+  --color-muted-fg: var(--muted-fg);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-info: var(--info);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-ring: var(--ring);
+  --color-log-bg: var(--log-bg);
+
+  --font-sans: 'Fira Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Fira Code', ui-monospace, Consolas, monospace;
+}
+
+:root {
+  --bg: #F8FAFC;
+  --card: #FFFFFF;
+  --muted: #F1F5F9;
+  --fg: #0F172A;
+  --muted-fg: #475569;
+  --border: #CBD5E1;
+  --primary: #15803D;
+  --on-primary: #FFFFFF;
+  --info: #0369A1;
+  --warn: #B45309;
+  --danger: #DC2626;
+  --ring: #2563EB;
+  --log-bg: #090D16;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0F172A;
+  --card: #1B2336;
+  --muted: #272F42;
+  --fg: #F8FAFC;
+  --muted-fg: #94A3B8;
+  --border: rgba(71, 85, 105, 0.5);
+  --primary: #22C55E;
+  --on-primary: #0F172A;
+  --info: #38BDF8;
+  --warn: #FBBF24;
+  --danger: #EF4444;
+  --ring: #FFFFFF;
+  --log-bg: #090D16;
+  color-scheme: dark;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Focus visibility requirement: outline 2px var(--ring) + offset 2px */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
