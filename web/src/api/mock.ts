@@ -22,6 +22,28 @@ function delay(ms: number = 20): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function normalizeBuildContext(value?: string | null): string | null {
+  if (value === undefined || value === null) return null
+  const trimmed = value.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+function validateBuildContext(val: string): string | null {
+  if (val.length > 200) {
+    return 'Thư mục context build tối đa 200 ký tự'
+  }
+  if (val.startsWith('/') || val.startsWith('-')) {
+    return 'Thư mục context build không được bắt đầu bằng / hoặc -'
+  }
+  if (val.includes('..')) {
+    return 'Thư mục context build không được chứa ..'
+  }
+  if (!/^[A-Za-z0-9._/-]+$/.test(val)) {
+    return 'Thư mục context build chỉ chứa chữ cái, số và ký tự . _ / -'
+  }
+  return null
+}
+
 export class MockShipitApi implements ShipitApi {
   private loggedInUser: Me | null = { username: 'admin' }
 
@@ -150,6 +172,7 @@ export class MockShipitApi implements ShipitApi {
       gitCredentialId: 2,
       slaveId: 1,
       dockerfilePath: 'Dockerfile',
+      buildContext: null,
       imageName: 'shipit-demo',
       registryHost: '192.168.1.241',
       registryCredentialId: 3,
@@ -176,6 +199,7 @@ export class MockShipitApi implements ShipitApi {
       gitCredentialId: 2,
       slaveId: 1,
       dockerfilePath: 'Dockerfile',
+      buildContext: null,
       imageName: 'avina-catalog',
       registryHost: '192.168.1.241',
       registryCredentialId: 3,
@@ -403,6 +427,19 @@ export class MockShipitApi implements ShipitApi {
       }
     }
 
+    const buildContext = normalizeBuildContext(input.buildContext)
+    if (buildContext !== null) {
+      const err = validateBuildContext(buildContext)
+      if (err) {
+        throw new ApiError(400, err, {
+          title: 'Validation failed',
+          errors: {
+            buildContext: [err]
+          }
+        })
+      }
+    }
+
     const newPipeline: Pipeline = {
       id: Date.now(),
       name: input.name,
@@ -411,6 +448,7 @@ export class MockShipitApi implements ShipitApi {
       gitCredentialId: input.gitCredentialId,
       slaveId: input.slaveId,
       dockerfilePath: input.dockerfilePath || 'Dockerfile',
+      buildContext,
       imageName: input.imageName,
       registryHost: input.registryHost,
       registryCredentialId,
@@ -451,6 +489,23 @@ export class MockShipitApi implements ShipitApi {
     }
 
     const current = this.pipelines[idx]
+    const buildContext =
+      input.buildContext !== undefined
+        ? normalizeBuildContext(input.buildContext)
+        : current.buildContext
+
+    if (buildContext !== null) {
+      const err = validateBuildContext(buildContext)
+      if (err) {
+        throw new ApiError(400, err, {
+          title: 'Validation failed',
+          errors: {
+            buildContext: [err]
+          }
+        })
+      }
+    }
+
     const updated: Pipeline = {
       ...current,
       name: input.name,
@@ -459,6 +514,7 @@ export class MockShipitApi implements ShipitApi {
       gitCredentialId: input.gitCredentialId,
       slaveId: input.slaveId,
       dockerfilePath: input.dockerfilePath || 'Dockerfile',
+      buildContext,
       imageName: input.imageName,
       registryHost: input.registryHost,
       registryCredentialId,

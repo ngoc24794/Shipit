@@ -108,6 +108,7 @@ export interface Pipeline {
   gitCredentialId: number
   slaveId: number
   dockerfilePath?: string
+  buildContext: string | null
   imageName: string
   registryHost: string
   registryCredentialId: number | null
@@ -124,6 +125,7 @@ export interface PipelineInput {
   gitCredentialId: number
   slaveId: number
   dockerfilePath?: string
+  buildContext?: string | null
   imageName: string
   registryHost: string
   registryCredentialId?: number | null

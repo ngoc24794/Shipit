@@ -317,6 +317,7 @@ describe('Pipelines View & Store', () => {
       gitCredentialId: 2,
       slaveId: 1,
       dockerfilePath: 'Dockerfile',
+      buildContext: null,
       imageName: 'test-app',
       registryHost: 'registry.example.com',
       registryCredentialId: null,
@@ -404,5 +405,250 @@ describe('Pipelines View & Store', () => {
     const vm = wrapper.vm as any
     expect(vm.getRegistryCredentialName(null)).toBe('Không cần đăng nhập')
     expect(vm.getRegistryCredentialName(undefined)).toBe('Không cần đăng nhập')
+  })
+
+  it('creates pipeline leaving buildContext empty sends payload with buildContext: null', async () => {
+    const credStore = useConfigCredentialsStore()
+    const slaveStore = useConfigSlavesStore()
+    await credStore.fetchCredentials()
+    await slaveStore.fetchSlaves()
+
+    const createSpy = vi.spyOn(mockApi, 'createPipeline')
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm pipeline'))
+    await addBtn!.trigger('click')
+
+    const vm = wrapper.vm as any
+    vm.form.name = 'pipeline-empty-context'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.buildContext = ''
+    vm.form.imageName = 'empty-ctx-app'
+    vm.form.registryHost = 'registry.example.com'
+    vm.form.registryCredentialId = null
+    vm.form.deployNamespace = 'default'
+    vm.form.deployDeployment = 'empty-ctx-deploy'
+    vm.form.deployContainer = 'app'
+
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'pipeline-empty-context',
+        buildContext: null
+      })
+    )
+  })
+
+  it('creates pipeline with buildContext "." and "docker" sends proper payloads', async () => {
+    const credStore = useConfigCredentialsStore()
+    const slaveStore = useConfigSlavesStore()
+    await credStore.fetchCredentials()
+    await slaveStore.fetchSlaves()
+
+    const createSpy = vi.spyOn(mockApi, 'createPipeline')
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm pipeline'))
+    await addBtn!.trigger('click')
+
+    const vm = wrapper.vm as any
+    vm.form.name = 'pipeline-dot'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.buildContext = '.'
+    vm.form.imageName = 'dot-app'
+    vm.form.registryHost = 'registry.example.com'
+    vm.form.registryCredentialId = null
+    vm.form.deployNamespace = 'default'
+    vm.form.deployDeployment = 'dot-deploy'
+    vm.form.deployContainer = 'app'
+
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'pipeline-dot',
+        buildContext: '.'
+      })
+    )
+
+    // Now test "docker"
+    vm.openAddDialog()
+    await wrapper.vm.$nextTick()
+
+    vm.form.name = 'pipeline-docker-ctx'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.buildContext = 'docker'
+    vm.form.imageName = 'docker-app'
+    vm.form.registryHost = 'registry.example.com'
+    vm.form.registryCredentialId = null
+    vm.form.deployNamespace = 'default'
+    vm.form.deployDeployment = 'docker-deploy'
+    vm.form.deployContainer = 'app'
+
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'pipeline-docker-ctx',
+        buildContext: 'docker'
+      })
+    )
+  })
+
+  it('displays error and does not call API when buildContext is invalid (../x, /abs, a b)', async () => {
+    const credStore = useConfigCredentialsStore()
+    const slaveStore = useConfigSlavesStore()
+    await credStore.fetchCredentials()
+    await slaveStore.fetchSlaves()
+
+    const createSpy = vi.spyOn(mockApi, 'createPipeline')
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm pipeline'))
+    await addBtn!.trigger('click')
+
+    const vm = wrapper.vm as any
+    vm.form.name = 'pipeline-test'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.imageName = 'test-app'
+    vm.form.registryHost = 'registry.example.com'
+    vm.form.registryCredentialId = null
+    vm.form.deployNamespace = 'default'
+    vm.form.deployDeployment = 'test-deploy'
+    vm.form.deployContainer = 'app'
+
+    const invalidCases = ['../x', '/abs', 'a b']
+    for (const invalidVal of invalidCases) {
+      createSpy.mockClear()
+      vm.form.buildContext = invalidVal
+
+      await vm.handleSave()
+      await wrapper.vm.$nextTick()
+
+      // API was NOT called
+      expect(createSpy).not.toHaveBeenCalled()
+      // Error message exists on formErrors.buildContext and in DOM
+      expect(vm.formErrors.buildContext).toBeDefined()
+      expect(vm.formErrors.buildContext.length).toBeGreaterThan(0)
+      expect(document.body.textContent).toContain(vm.formErrors.buildContext)
+    }
+  })
+
+  it('edits pipeline with buildContext ".", displays ".", and clearing it saves as null', async () => {
+    const credStore = useConfigCredentialsStore()
+    const slaveStore = useConfigSlavesStore()
+    await credStore.fetchCredentials()
+    await slaveStore.fetchSlaves()
+
+    const updateSpy = vi.spyOn(mockApi, 'updatePipeline')
+
+    const existingPipeline: Pipeline = {
+      id: 88,
+      name: 'edit-context-pipeline',
+      gitUrl: 'https://git.example.com/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      dockerfilePath: 'Dockerfile',
+      buildContext: '.',
+      imageName: 'test-app',
+      registryHost: 'registry.example.com',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'test-deploy',
+      deployContainer: 'app',
+      lastRun: null
+    }
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const vm = wrapper.vm as any
+    vm.openEditDialog(existingPipeline)
+    await wrapper.vm.$nextTick()
+
+    // Form state has "."
+    expect(vm.form.buildContext).toBe('.')
+
+    // DOM input with placeholder ". (gốc repo)" has value "."
+    const contextInput = document.body.querySelector('input[placeholder=". (gốc repo)"]') as HTMLInputElement
+    expect(contextInput).toBeDefined()
+    expect(contextInput.value).toBe('.')
+
+    // Clear input and save
+    vm.form.buildContext = ''
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      88,
+      expect.objectContaining({
+        buildContext: null
+      })
+    )
+  })
+
+  it('renders "Thư mục context build" field with description and placeholder', async () => {
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    const vm = wrapper.vm as any
+    vm.openAddDialog()
+    await wrapper.vm.$nextTick()
+
+    const input = document.body.querySelector('input[placeholder=". (gốc repo)"]')
+    expect(input).toBeDefined()
+
+    expect(document.body.textContent).toContain('Thư mục context build')
+    expect(document.body.textContent).toContain('Tuỳ chọn. Đường dẫn trong repo dùng làm context khi build.')
   })
 })
