@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Shipit.Data;
+using Shipit.Security;
 
 namespace Shipit.Api;
 
@@ -42,7 +43,7 @@ internal static class HealthAndAuthEndpoints
 
     public static void MapAuth(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/auth/login", async (LoginRequest body, AdminLogin admin, HttpContext http) =>
+        app.MapPost("/api/auth/login", async (LoginRequest body, AdminLogin admin, SecurityStampProvider securityStamp, HttpContext http) =>
         {
             if (!admin.Verify(body.Username, body.Password))
             {
@@ -51,9 +52,26 @@ internal static class HealthAndAuthEndpoints
             }
 
             var identity = new ClaimsIdentity(
-                [new Claim(ClaimTypes.Name, admin.Username)],
+                [
+                    new Claim(ClaimTypes.Name, admin.Username),
+                    new Claim(SecurityStampProvider.SecurityStampClaimType, securityStamp.CurrentStamp)
+                ],
                 CookieAuthenticationDefaults.AuthenticationScheme);
-            await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
+
+            var authProperties = new AuthenticationProperties
+            {
+                IsPersistent = body.RememberMe,
+                AllowRefresh = true,
+                ExpiresUtc = body.RememberMe
+                    ? DateTimeOffset.UtcNow.AddDays(30)
+                    : DateTimeOffset.UtcNow.AddHours(8)
+            };
+
+            await http.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                new ClaimsPrincipal(identity),
+                authProperties);
+
             return Results.NoContent();
         }).AllowAnonymous();
 

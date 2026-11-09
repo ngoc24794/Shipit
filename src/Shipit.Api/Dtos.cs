@@ -5,7 +5,7 @@ namespace Shipit.Api;
 
 // Wire types, shaped exactly like docs/api-contract.yaml (System.Text.Json web defaults give camelCase).
 
-public sealed record LoginRequest(string? Username, string? Password);
+public sealed record LoginRequest(string? Username, string? Password, bool RememberMe = false);
 
 public sealed record MeDto(string Username);
 

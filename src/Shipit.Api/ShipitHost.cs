@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Shipit.Core;
@@ -45,8 +48,21 @@ public static class ShipitHost
             var o = sp.GetRequiredService<ShipitOptions>();
             return new AdminLogin(o.AdminUser, o.AdminPassword ?? "admin");
         });
+        services.AddSingleton(sp =>
+        {
+            var o = sp.GetRequiredService<ShipitOptions>();
+            var masterKey = o.MasterKey
+                ?? (o.UseFakes ? "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=" : AesGcmSecretProtector.GenerateKey());
+            return new MasterKeyHolder(masterKey);
+        });
         services.AddSingleton<ISecretProtector>(sp =>
-            new AesGcmSecretProtector(sp.GetRequiredService<ShipitOptions>().MasterKey ?? AesGcmSecretProtector.GenerateKey()));
+            new AesGcmSecretProtector(sp.GetRequiredService<MasterKeyHolder>().Key));
+        services.AddSingleton(sp =>
+        {
+            var o = sp.GetRequiredService<ShipitOptions>();
+            var masterKey = sp.GetRequiredService<MasterKeyHolder>().Key;
+            return new SecurityStampProvider(masterKey, o.AdminUser, o.AdminPassword ?? "admin");
+        });
         services.AddSingleton(sp => new DeployAllowList(sp.GetRequiredService<ShipitOptions>().DeployAllowList));
 
         services.AddDbContextFactory<ShipitDbContext>((sp, o) =>
@@ -78,9 +94,21 @@ public static class ShipitHost
 
         services.AddShipitEngine();
 
-        // Session cookies are encrypted with a per-process key: logging in again after a restart is fine for one admin,
-        // and it avoids writing a key ring to the (read-only) container file system.
-        services.AddDataProtection().UseEphemeralDataProtectionProvider();
+        // Data Protection keys are persisted to the database and encrypted at rest with the master key.
+        services.AddDataProtection()
+            .SetApplicationName("Shipit");
+        services.AddSingleton<IXmlRepository>(sp =>
+        {
+            var dbFactory = sp.GetRequiredService<IDbContextFactory<ShipitDbContext>>();
+            var protector = sp.GetRequiredService<ISecretProtector>();
+            return new DbXmlRepository(dbFactory, protector);
+        });
+        services.AddOptions<KeyManagementOptions>()
+            .Configure<IXmlRepository>((options, repo) =>
+            {
+                options.XmlRepository = repo;
+            });
+
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(o =>
             {
@@ -90,6 +118,24 @@ public static class ShipitHost
                 o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // UI is reached through port-forward over plain HTTP
                 o.ExpireTimeSpan = TimeSpan.FromHours(8);
                 o.SlidingExpiration = true;
+                o.Events.OnSigningIn = ctx =>
+                {
+                    if (ctx.Properties.IsPersistent)
+                    {
+                        ctx.CookieOptions.MaxAge = TimeSpan.FromDays(30);
+                    }
+                    return Task.CompletedTask;
+                };
+                o.Events.OnValidatePrincipal = async ctx =>
+                {
+                    var stampProvider = ctx.HttpContext.RequestServices.GetRequiredService<SecurityStampProvider>();
+                    var claimStamp = ctx.Principal?.FindFirst(SecurityStampProvider.SecurityStampClaimType)?.Value;
+                    if (!stampProvider.ValidateStamp(claimStamp))
+                    {
+                        ctx.RejectPrincipal();
+                        await ctx.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    }
+                };
                 o.Events.OnRedirectToLogin = ctx =>
                 {
                     ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -198,3 +244,5 @@ public sealed class AdminLogin(string username, string password)
         return userOk & passwordOk;
     }
 }
+
+internal sealed record MasterKeyHolder(string Key);

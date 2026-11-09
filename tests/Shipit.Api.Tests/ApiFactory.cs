@@ -15,12 +15,17 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public const string GitToken = "ghp_TESTTOKEN_api_12345";
     public const string RegistryPassword = "reg-pass-api-67890";
 
-    private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"shipit-api-{Guid.NewGuid():N}.db");
+    private readonly string _dbPath;
+    private readonly bool _deleteDbOnDispose;
     private readonly IReadOnlyDictionary<string, string> _extraSettings;
 
-    public ApiFactory(IReadOnlyDictionary<string, string>? extraSettings = null)
+    public string DbPath => _dbPath;
+
+    public ApiFactory(IReadOnlyDictionary<string, string>? extraSettings = null, string? dbPath = null, bool deleteDbOnDispose = true)
     {
+        _dbPath = dbPath ?? Path.Combine(Path.GetTempPath(), $"shipit-api-{Guid.NewGuid():N}.db");
         _extraSettings = extraSettings ?? new Dictionary<string, string>();
+        _deleteDbOnDispose = deleteDbOnDispose;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -56,15 +61,18 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         }
 
         SqliteConnection.ClearAllPools();
-        foreach (var path in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
+        if (_deleteDbOnDispose)
         {
-            try
+            foreach (var path in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
             {
-                File.Delete(path);
-            }
-            catch (IOException)
-            {
-                // Temp file; best effort.
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (IOException)
+                {
+                    // Temp file; best effort.
+                }
             }
         }
     }
