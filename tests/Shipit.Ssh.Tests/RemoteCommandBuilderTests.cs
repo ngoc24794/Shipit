@@ -396,6 +396,32 @@ public class RemoteCommandBuilderTests
         }
     }
 
+    [Theory]
+    [InlineData("192.168.1.241")]
+    [InlineData("192.168.1.241:5000")]
+    [InlineData("registry.example.com")]
+    [InlineData("registry.example.com:443")]
+    [InlineData("localhost")]
+    [InlineData("localhost:5000")]
+    public void ValidateRegistryHost_ValidHost_DoesNotThrow(string host)
+    {
+        var ex = Record.Exception(() => RemoteCommandBuilder.ValidateRegistryHost(host));
+        Assert.Null(ex);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("-invalid")]
+    [InlineData("host..com")]
+    [InlineData("a b")]
+    [InlineData("x;y")]
+    [InlineData("http://x")]
+    public void ValidateRegistryHost_InvalidHost_ThrowsArgumentException(string host)
+    {
+        Assert.Throws<ArgumentException>(() => RemoteCommandBuilder.ValidateRegistryHost(host));
+    }
+
     [Fact]
     public void DockerLogout_ValidHost_BuildsCorrectCommand()
     {
