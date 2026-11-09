@@ -1,15 +1,11 @@
-using Shipit.Core;
+using Shipit.Api;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Env vars are part of the default configuration; ShipitOptions reads them by their exact names.
-var options = ShipitOptions.FromLookup(name => builder.Configuration[name]);
-builder.Services.AddSingleton(options);
+builder.AddShipit();
 
 var app = builder.Build();
-
-app.MapGet("/healthz", () => Results.Text("ok"));
-
+await app.PrepareDatabaseAsync();
+app.MapShipit();
 app.Run();
 
 // Required so WebApplicationFactory<Program> can see the entry point from test projects.
