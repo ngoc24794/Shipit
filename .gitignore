@@ -1,0 +1,14 @@
+bin/
+obj/
+*.user
+.vs/
+.idea/
+.secrets/
+node_modules/
+web/dist/
+src/Shipit.Api/wwwroot/*
+!src/Shipit.Api/wwwroot/.gitkeep
+TestResults/
+*.log
+.env
+.env.*
