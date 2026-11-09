@@ -25,6 +25,9 @@ public static class ShipitHost
     {
         var services = builder.Services;
 
+        // EF Core logs every SQL command at Information (each readiness probe would print queries); warnings are enough.
+        builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
+
         services.AddSingleton(sp =>
         {
             var config = sp.GetRequiredService<IConfiguration>();
