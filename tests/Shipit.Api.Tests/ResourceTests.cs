@@ -444,4 +444,99 @@ public class ResourceTests
             Assert.True(errors.TryGetProperty("buildContext", out _), $"Expected buildContext error for '{bad}'");
         }
     }
+
+    [Fact]
+    public async Task Pipeline_creation_and_update_supports_deploy_registry_host()
+    {
+        using var factory = new ApiFactory();
+        var client = await factory.LoggedInClientAsync();
+        var seeded = await client.SeedAsync();
+
+        var baseBody = new Dictionary<string, object?>
+        {
+            ["gitUrl"] = "https://git.example.com/team/demo.git",
+            ["gitBranch"] = "main",
+            ["gitCredentialId"] = seeded.GitCred,
+            ["slaveId"] = seeded.Slave,
+            ["dockerfilePath"] = "Dockerfile",
+            ["imageName"] = "shipit-demo",
+            ["registryHost"] = "registry.example.com",
+            ["deployNamespace"] = "devops",
+            ["deployDeployment"] = "shipit-demo",
+            ["deployContainer"] = "app"
+        };
+
+        // 1. Omitted deployRegistryHost -> returns null
+        var bodyNoDrh = new Dictionary<string, object?>(baseBody) { ["name"] = "pipe-no-drh" };
+        var respNoDrh = await client.PostAsJsonAsync("/api/pipelines", bodyNoDrh);
+        Assert.Equal(HttpStatusCode.Created, respNoDrh.StatusCode);
+        var jsonNoDrh = await respNoDrh.ReadJsonAsync();
+        Assert.True(jsonNoDrh.TryGetProperty("deployRegistryHost", out var propNoDrh));
+        Assert.Equal(JsonValueKind.Null, propNoDrh.ValueKind);
+        var noDrhId = jsonNoDrh.GetProperty("id").GetInt64();
+
+        var getNoDrh = await client.GetAsync($"/api/pipelines/{noDrhId}");
+        Assert.Equal(HttpStatusCode.OK, getNoDrh.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await getNoDrh.ReadJsonAsync()).GetProperty("deployRegistryHost").ValueKind);
+
+        // 2. Explicit null -> returns null
+        var bodyNullDrh = new Dictionary<string, object?>(baseBody) { ["name"] = "pipe-null-drh", ["deployRegistryHost"] = null };
+        var respNullDrh = await client.PostAsJsonAsync("/api/pipelines", bodyNullDrh);
+        Assert.Equal(HttpStatusCode.Created, respNullDrh.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await respNullDrh.ReadJsonAsync()).GetProperty("deployRegistryHost").ValueKind);
+
+        // 3. Whitespace or empty -> normalized to null
+        var bodyWsDrh = new Dictionary<string, object?>(baseBody) { ["name"] = "pipe-ws-drh", ["deployRegistryHost"] = "   " };
+        var respWsDrh = await client.PostAsJsonAsync("/api/pipelines", bodyWsDrh);
+        Assert.Equal(HttpStatusCode.Created, respWsDrh.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await respWsDrh.ReadJsonAsync()).GetProperty("deployRegistryHost").ValueKind);
+
+        var bodyEmptyDrh = new Dictionary<string, object?>(baseBody) { ["name"] = "pipe-empty-drh", ["deployRegistryHost"] = "" };
+        var respEmptyDrh = await client.PostAsJsonAsync("/api/pipelines", bodyEmptyDrh);
+        Assert.Equal(HttpStatusCode.Created, respEmptyDrh.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await respEmptyDrh.ReadJsonAsync()).GetProperty("deployRegistryHost").ValueKind);
+
+        // 4. Valid host with port -> returns exact value
+        var bodyValidDrh = new Dictionary<string, object?>(baseBody) { ["name"] = "pipe-valid-drh", ["deployRegistryHost"] = "registry.k8s.local:5000" };
+        var respValidDrh = await client.PostAsJsonAsync("/api/pipelines", bodyValidDrh);
+        Assert.Equal(HttpStatusCode.Created, respValidDrh.StatusCode);
+        var jsonValidDrh = await respValidDrh.ReadJsonAsync();
+        Assert.Equal("registry.k8s.local:5000", jsonValidDrh.GetProperty("deployRegistryHost").GetString());
+        var validDrhId = jsonValidDrh.GetProperty("id").GetInt64();
+
+        var getValidDrh = await client.GetAsync($"/api/pipelines/{validDrhId}");
+        Assert.Equal(HttpStatusCode.OK, getValidDrh.StatusCode);
+        Assert.Equal("registry.k8s.local:5000", (await getValidDrh.ReadJsonAsync()).GetProperty("deployRegistryHost").GetString());
+
+        // 5. PUT replaces deployRegistryHost: update to another host, then clear to null with whitespace
+        var updateBody = new Dictionary<string, object?>(baseBody)
+        {
+            ["name"] = "pipe-valid-drh",
+            ["deployRegistryHost"] = "internal-mirror.local"
+        };
+        var putResp = await client.PutAsJsonAsync($"/api/pipelines/{validDrhId}", updateBody);
+        Assert.Equal(HttpStatusCode.OK, putResp.StatusCode);
+        Assert.Equal("internal-mirror.local", (await putResp.ReadJsonAsync()).GetProperty("deployRegistryHost").GetString());
+
+        // PUT with whitespace -> clears to null
+        updateBody["deployRegistryHost"] = "   ";
+        var putClearResp = await client.PutAsJsonAsync($"/api/pipelines/{validDrhId}", updateBody);
+        Assert.Equal(HttpStatusCode.OK, putClearResp.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await putClearResp.ReadJsonAsync()).GetProperty("deployRegistryHost").ValueKind);
+
+        // 6. Validation rejects bad deployRegistryHost values
+        string[] badValues = ["a b", "x;y", "http://x", "-bad", "host..com"];
+        foreach (var bad in badValues)
+        {
+            var badBody = new Dictionary<string, object?>(baseBody)
+            {
+                ["name"] = "pipe-bad-" + Guid.NewGuid().ToString("N")[..8],
+                ["deployRegistryHost"] = bad
+            };
+            var badResp = await client.PostAsJsonAsync("/api/pipelines", badBody);
+            Assert.Equal(HttpStatusCode.BadRequest, badResp.StatusCode);
+            var errors = (await badResp.ReadJsonAsync()).GetProperty("errors");
+            Assert.True(errors.TryGetProperty("deployRegistryHost", out _), $"Expected deployRegistryHost error for '{bad}'");
+        }
+    }
 }

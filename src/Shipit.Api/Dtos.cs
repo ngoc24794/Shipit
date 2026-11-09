@@ -33,6 +33,7 @@ public sealed record PipelineDto(
     string? BuildContext,
     string ImageName,
     string RegistryHost,
+    string? DeployRegistryHost,
     long? RegistryCredentialId,
     string DeployNamespace,
     string DeployDeployment,
@@ -49,6 +50,7 @@ public sealed record PipelineInput(
     string? BuildContext,
     string? ImageName,
     string? RegistryHost,
+    string? DeployRegistryHost,
     long? RegistryCredentialId,
     string? DeployNamespace,
     string? DeployDeployment,
@@ -149,7 +151,7 @@ internal static class Mapping
 
     public static PipelineDto ToDto(this Pipeline p, Run? lastRun) => new(
         p.Id, p.Name, p.GitUrl, p.GitBranch, p.GitCredentialId, p.SlaveId, p.DockerfilePath, p.BuildContext, p.ImageName,
-        p.RegistryHost, p.RegistryCredentialId, p.DeployNamespace, p.DeployDeployment, p.DeployContainer,
+        p.RegistryHost, p.DeployRegistryHost, p.RegistryCredentialId, p.DeployNamespace, p.DeployDeployment, p.DeployContainer,
         lastRun?.ToDto());
 
     public static LogLineDto ToDto(this RunLog l) =>

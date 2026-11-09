@@ -119,6 +119,7 @@ internal static partial class PipelineEndpoints
         p.BuildContext = string.IsNullOrWhiteSpace(i.BuildContext) ? null : i.BuildContext.Trim();
         p.ImageName = i.ImageName!.Trim();
         p.RegistryHost = i.RegistryHost!.Trim();
+        p.DeployRegistryHost = string.IsNullOrWhiteSpace(i.DeployRegistryHost) ? null : i.DeployRegistryHost.Trim();
         p.RegistryCredentialId = i.RegistryCredentialId;
         p.DeployNamespace = i.DeployNamespace!.Trim();
         p.DeployDeployment = i.DeployDeployment!.Trim();
@@ -147,7 +148,8 @@ internal static partial class PipelineEndpoints
         var dockerfile = string.IsNullOrWhiteSpace(i.DockerfilePath) ? "Dockerfile" : i.DockerfilePath.Trim();
         Check(errors, "dockerfilePath", dockerfile, v => RemoteCommandBuilder.DockerBuild("/tmp/shipit/run-1", v, "example.com/x:t"));
         Check(errors, "buildContext", i.BuildContext, v => RemoteCommandBuilder.ValidateBuildContext(v));
-        Check(errors, "registryHost", i.RegistryHost, v => RemoteCommandBuilder.DockerLogout(v), required: true);
+        Check(errors, "registryHost", i.RegistryHost, v => RemoteCommandBuilder.ValidateRegistryHost(v), required: true);
+        Check(errors, "deployRegistryHost", i.DeployRegistryHost, v => RemoteCommandBuilder.ValidateRegistryHost(v));
         Check(errors, "imageName", i.ImageName, v => RemoteCommandBuilder.BuildImageRef("example.com", v, "t"), required: true);
 
         await CheckCredentialAsync(errors, db, "gitCredentialId", i.GitCredentialId, CredentialKind.GitToken, "git_token", ct);
