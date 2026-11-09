@@ -6,7 +6,8 @@ import {
   CheckCircle2,
   XCircle,
   MinusCircle,
-  Circle
+  Circle,
+  CircleStop
 } from 'lucide-vue-next'
 import type { RunStatus, StepStatus } from '../api/types'
 
@@ -51,6 +52,13 @@ const config = computed(() => {
         icon: XCircle,
         spin: false,
         classes: 'text-danger bg-danger/10 border-danger/30'
+      }
+    case 'cancelled':
+      return {
+        label: 'Đã dừng',
+        icon: CircleStop,
+        spin: false,
+        classes: 'text-warn bg-warn/10 border-warn/30'
       }
     case 'skipped':
       return {

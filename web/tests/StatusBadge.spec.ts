@@ -9,6 +9,7 @@ describe('StatusBadge', () => {
     { status: 'running', label: 'Đang chạy' },
     { status: 'success', label: 'Thành công' },
     { status: 'failed', label: 'Thất bại' },
+    { status: 'cancelled', label: 'Đã dừng' },
     { status: 'skipped', label: 'Bỏ qua' },
     { status: 'pending', label: 'Chưa chạy' }
   ]
@@ -32,5 +33,14 @@ describe('StatusBadge', () => {
         expect(svg.classes()).not.toContain('animate-spin')
       }
     })
+  })
+
+  it('renders cancelled with neutral/amber color and without red error classes', () => {
+    const wrapper = mount(StatusBadge, {
+      props: { status: 'cancelled' }
+    })
+    expect(wrapper.text()).toContain('Đã dừng')
+    expect(wrapper.classes().some((c) => c.includes('danger'))).toBe(false)
+    expect(wrapper.classes().some((c) => c.includes('warn'))).toBe(true)
   })
 })

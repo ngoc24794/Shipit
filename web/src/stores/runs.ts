@@ -82,6 +82,29 @@ export const useRunsStore = defineStore('runs', () => {
     return newRun
   }
 
+  async function cancelRun(id: number): Promise<Run> {
+    const api = getApi()
+    const updated = await api.cancelRun(id)
+    if (currentRun.value && currentRun.value.id === id) {
+      currentRun.value.status = updated.status
+      if (updated.failureReason) {
+        currentRun.value.failureReason = updated.failureReason
+      }
+      if (updated.finishedAt) {
+        currentRun.value.finishedAt = updated.finishedAt
+      }
+    }
+    const idx = runs.value.findIndex((r) => r.id === id)
+    if (idx !== -1) {
+      runs.value[idx] = { ...runs.value[idx], ...updated }
+    }
+    const pipeline = pipelines.value.find((p) => p.id === updated.pipelineId)
+    if (pipeline && pipeline.lastRun?.id === updated.id) {
+      pipeline.lastRun = { ...pipeline.lastRun, ...updated }
+    }
+    return updated
+  }
+
   return {
     runs,
     pipelines,
@@ -95,6 +118,7 @@ export const useRunsStore = defineStore('runs', () => {
     fetchRuns,
     refreshRuns,
     fetchRun,
-    triggerRun
+    triggerRun,
+    cancelRun
   }
 })

@@ -58,4 +58,53 @@ describe('StepTimeline', () => {
     expect(stepElements[3].attributes('data-step-name')).toBe('deploy')
     expect(stepElements[3].attributes('data-step-status')).toBe('pending')
   })
+
+  it('renders cancelled step with "Đã dừng" label, distinct icon, and without red error classes', () => {
+    const cancelledSteps: RunStep[] = [
+      {
+        name: 'checkout',
+        status: 'success',
+        startedAt: '2026-11-09T08:00:00Z',
+        finishedAt: '2026-11-09T08:00:15Z'
+      },
+      {
+        name: 'build',
+        status: 'cancelled',
+        startedAt: '2026-11-09T08:00:15Z',
+        finishedAt: '2026-11-09T08:00:25Z'
+      },
+      {
+        name: 'push',
+        status: 'skipped',
+        startedAt: null,
+        finishedAt: null
+      },
+      {
+        name: 'deploy',
+        status: 'skipped',
+        startedAt: null,
+        finishedAt: null
+      }
+    ]
+
+    const wrapper = mount(StepTimeline, {
+      props: { steps: cancelledSteps }
+    })
+
+    const buildStep = wrapper.findAll('li')[1]
+    expect(buildStep.attributes('data-step-status')).toBe('cancelled')
+    expect(buildStep.text()).toContain('Đã dừng')
+
+    // Circle icon should use warn classes, NOT danger
+    const iconCircle = buildStep.find('div.rounded-full')
+    expect(iconCircle.classes()).toContain('border-warn')
+    expect(iconCircle.classes()).toContain('text-warn')
+    expect(iconCircle.classes()).not.toContain('border-danger')
+    expect(iconCircle.classes()).not.toContain('text-danger')
+
+    // Check status icon in step header is not failed (XCircle) or skipped (MinusCircle)
+    const statusIcon = buildStep.findAll('svg')[1]
+    expect(statusIcon.classes()).toContain('text-warn')
+    expect(statusIcon.classes()).not.toContain('text-danger')
+  })
 })

@@ -9,7 +9,8 @@ import {
   XCircle,
   Loader2,
   MinusCircle,
-  Circle
+  Circle,
+  CircleStop
 } from 'lucide-vue-next'
 import type { RunStep, StepName, StepStatus } from '../api/types'
 
@@ -62,6 +63,8 @@ function getStatusBadge(status: StepStatus) {
       return { icon: CheckCircle2, class: 'text-primary' }
     case 'failed':
       return { icon: XCircle, class: 'text-danger' }
+    case 'cancelled':
+      return { icon: CircleStop, class: 'text-warn' }
     case 'running':
       return { icon: Loader2, class: 'text-info animate-spin' }
     case 'skipped':
@@ -101,6 +104,7 @@ function getStatusBadge(status: StepStatus) {
             step.status === 'success' ? 'border-primary text-primary shadow-xs' : '',
             step.status === 'failed' ? 'border-danger text-danger' : '',
             step.status === 'running' ? 'border-info text-info ring-4 ring-info/10' : '',
+            step.status === 'cancelled' ? 'border-warn text-warn' : '',
             step.status === 'skipped' ? 'border-border text-muted-fg' : '',
             step.status === 'pending' ? 'border-border text-muted-fg' : ''
           ]"
@@ -123,6 +127,12 @@ function getStatusBadge(status: StepStatus) {
             class="text-xs text-info"
           >
             Đang chạy...
+          </span>
+          <span
+            v-else-if="step.status === 'cancelled'"
+            class="text-xs text-warn"
+          >
+            {{ step.duration ? `Đã dừng (${step.duration})` : 'Đã dừng' }}
           </span>
           <span
             v-else-if="step.duration"
