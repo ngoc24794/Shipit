@@ -9,3 +9,7 @@ tests
 deploy
 examples
 *.md
+.dev
+*.db
+*.db-wal
+*.db-shm
