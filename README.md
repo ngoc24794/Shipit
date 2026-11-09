@@ -218,8 +218,9 @@ Trong thư mục `examples/hello-shipit` có sẵn một ứng dụng ASP.NET Co
 
 2. **Cấu hình trên giao diện Shipit:**
    - **Git URL:** `https://git.example.com/team/hello-shipit.git`, nhánh `main`.
-   - **Dockerfile:** `Dockerfile` (hoặc đường dẫn dùng dấu `/`, ví dụ `examples/hello-shipit/Dockerfile`). Context build là thư mục chứa Dockerfile.
-   - **Dockerfile:** `Dockerfile`.
+   - **Slave:** Chọn slave đã tạo (`192.168.1.49`).
+   - **Dockerfile:** `Dockerfile` (hoặc đường dẫn dùng dấu `/`, ví dụ `examples/hello-shipit/Dockerfile`).
+   - **Thư mục context build (tuỳ chọn):** đường dẫn trong repo dùng làm context khi build; nhập `.` để dùng gốc repo (cần khi Dockerfile nằm ở thư mục con nhưng `COPY` các thư mục ở gốc repo). Để trống thì dùng thư mục chứa Dockerfile.
    - **Image Name:** `shipit-demo`, Registry Host `192.168.1.241`.
    - **Thông tin xác thực Registry:** chọn credential nếu registry yêu cầu đăng nhập; chọn "Không cần đăng nhập" nếu registry mở (khi đó Shipit bỏ qua `docker login`/`logout`).
    - **Deploy:** Namespace `devops`, Deployment `shipit-demo`, Container `app`.
