@@ -19,6 +19,8 @@ public class ShipitDbContext : DbContext
     public DbSet<RunStep> RunSteps => Set<RunStep>();
     public DbSet<RunLog> RunLogs => Set<RunLog>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+    public DbSet<DeployTarget> DeployTargets => Set<DeployTarget>();
+    public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -116,6 +118,19 @@ public class ShipitDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             b.HasIndex(l => new { l.RunId, l.Id });
+        });
+
+        // 7. DeployTarget
+        modelBuilder.Entity<DeployTarget>(b =>
+        {
+            b.HasKey(t => t.Id);
+            b.HasIndex(t => new { t.Namespace, t.Deployment }).IsUnique();
+        });
+
+        // 8. AppSetting
+        modelBuilder.Entity<AppSetting>(b =>
+        {
+            b.HasKey(s => s.Key);
         });
     }
 

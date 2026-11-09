@@ -34,7 +34,27 @@ public static class ShipitHost
         services.AddSingleton(sp =>
         {
             var config = sp.GetRequiredService<IConfiguration>();
-            var options = ShipitOptions.FromLookup(name => config[name]);
+            var options = ShipitOptions.FromLookup(name =>
+            {
+                if (name == ShipitOptions.AllowListVar)
+                {
+                    // SHIPIT_DEPLOY_ALLOWLIST is now only initial seed data.
+                    // If invalid JSON, return null so ShipitOptions returns empty list without error.
+                    var raw = config[name];
+                    if (string.IsNullOrWhiteSpace(raw)) return null;
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(raw);
+                        if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+                        return raw;
+                    }
+                    catch
+                    {
+                        return null;
+                    }
+                }
+                return config[name];
+            });
             var missing = MissingSettings(options);
             if (missing.Count > 0)
             {
@@ -63,7 +83,6 @@ public static class ShipitHost
             var masterKey = sp.GetRequiredService<MasterKeyHolder>().Key;
             return new SecurityStampProvider(masterKey, o.AdminUser, o.AdminPassword ?? "admin");
         });
-        services.AddSingleton(sp => new DeployAllowList(sp.GetRequiredService<ShipitOptions>().DeployAllowList));
 
         services.AddDbContextFactory<ShipitDbContext>((sp, o) =>
         {
@@ -81,6 +100,9 @@ public static class ShipitHost
             }
         });
         services.AddScoped(sp => sp.GetRequiredService<IDbContextFactory<ShipitDbContext>>().CreateDbContext());
+
+        services.AddSingleton<IDeployTargetStore, DbDeployTargetStore>();
+        services.AddSingleton(sp => new DeployAllowList(sp.GetRequiredService<IDeployTargetStore>()));
 
         services.AddSingleton<ISshExecutor>(sp =>
             sp.GetRequiredService<ShipitOptions>().UseFakes ? FakeSshExecutor.HappyPath() : new SshNetExecutor());
@@ -172,6 +194,7 @@ public static class ShipitHost
                     await db.Database.EnsureCreatedAsync();
                 }
 
+                await SeedDeployTargetsAsync(scope.ServiceProvider, logger);
                 return;
             }
             catch (Exception ex) when (attempt < 5)
@@ -196,10 +219,83 @@ public static class ShipitHost
         app.MapCredentials();
         app.MapPipelines();
         app.MapRuns();
+        app.MapDeployTargets();
 
         // Unknown API paths must be a plain 404, never the SPA shell.
         app.Map("/api/{**path}", () => Results.NotFound());
         app.MapFallbackToFile("index.html").AllowAnonymous();
+    }
+
+    private static async Task SeedDeployTargetsAsync(IServiceProvider sp, ILogger logger)
+    {
+        var db = sp.GetRequiredService<ShipitDbContext>();
+
+        var isSeeded = await db.AppSettings.AnyAsync(s => s.Key == "deploy_targets_seeded");
+        if (isSeeded)
+        {
+            return;
+        }
+
+        var hasExistingData = await db.DeployTargets.AnyAsync();
+        if (hasExistingData)
+        {
+            db.AppSettings.Add(new Shipit.Data.Entities.AppSetting { Key = "deploy_targets_seeded", Value = "true" });
+            await db.SaveChangesAsync();
+            return;
+        }
+
+        var config = sp.GetRequiredService<IConfiguration>();
+        var rawAllowList = config[ShipitOptions.AllowListVar];
+        if (string.IsNullOrWhiteSpace(rawAllowList))
+        {
+            return;
+        }
+
+        try
+        {
+            var entries = ShipitOptions.ParseAllowList(rawAllowList);
+            if (entries.Count > 0)
+            {
+                var now = DateTime.UtcNow;
+                var targetsToAdd = new List<Shipit.Data.Entities.DeployTarget>();
+                var seen = new HashSet<(string, string)>();
+
+                foreach (var entry in entries)
+                {
+                    if (string.IsNullOrWhiteSpace(entry.Namespace)) continue;
+                    var ns = entry.Namespace.Trim();
+                    if (entry.Deployments != null)
+                    {
+                        foreach (var dep in entry.Deployments)
+                        {
+                            if (string.IsNullOrWhiteSpace(dep)) continue;
+                            var d = dep.Trim();
+                            if (seen.Add((ns, d)))
+                            {
+                                targetsToAdd.Add(new Shipit.Data.Entities.DeployTarget
+                                {
+                                    Namespace = ns,
+                                    Deployment = d,
+                                    CreatedAt = now
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if (targetsToAdd.Count > 0)
+                {
+                    db.DeployTargets.AddRange(targetsToAdd);
+                }
+            }
+
+            db.AppSettings.Add(new Shipit.Data.Entities.AppSetting { Key = "deploy_targets_seeded", Value = "true" });
+            await db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to parse or seed initial SHIPIT_DEPLOY_ALLOWLIST. Leaving deploy targets empty.");
+        }
     }
 
     private static List<string> MissingSettings(ShipitOptions options)

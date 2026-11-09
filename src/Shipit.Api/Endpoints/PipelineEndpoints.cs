@@ -13,6 +13,9 @@ internal static partial class PipelineEndpoints
     [GeneratedRegex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")]
     private static partial Regex K8sLabel();
 
+    [GeneratedRegex("^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$")]
+    private static partial Regex K8sSubdomain();
+
     public static void MapPipelines(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/pipelines");
@@ -177,7 +180,7 @@ internal static partial class PipelineEndpoints
             targetOk = false;
         }
 
-        if (!K8sLabel().IsMatch(deployment) || deployment.Length > 253)
+        if (!K8sSubdomain().IsMatch(deployment) || deployment.Length > 253)
         {
             errors.Add("deployDeployment", "Deployment must be a valid Kubernetes name.");
             targetOk = false;
@@ -188,9 +191,9 @@ internal static partial class PipelineEndpoints
             errors.Add("deployContainer", "Container must be a valid Kubernetes name.");
         }
 
-        if (targetOk && !allowList.IsAllowed(ns, deployment))
+        if (targetOk && !await allowList.IsAllowedAsync(ns, deployment, ct))
         {
-            errors.Add("deployDeployment", "This deployment is not allowed by Shipit's deploy allowlist (SHIPIT_DEPLOY_ALLOWLIST).");
+            errors.Add("deployDeployment", "This deployment is not in the allowed list. Add it under 'Allowed Deployments'.");
         }
 
         return errors;

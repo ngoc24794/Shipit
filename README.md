@@ -93,8 +93,9 @@ Shipit hỗ trợ chế độ giả lập (`Shipit:UseFakes=true`), cho phép ch
 
 3. **Luồng thử nghiệm:**
    - **Credentials:** Tạo 3 credential (SSH Key, Git Token, Registry Password).
+   - **Deployment được phép:** Thêm namespace và deployment cho phép cập nhật container image (danh sách được lưu trữ trong DB và có thể khởi tạo từ allowlist ban đầu).
    - **Slaves:** Tạo slave (ví dụ host `192.168.1.49`, port `22`, user `devops`), bấm **Test Connection** để kiểm tra kết nối giả lập.
-   - **Pipelines:** Tạo pipeline trỏ tới repository, chọn slave và thông tin image.
+   - **Pipelines:** Tạo pipeline trỏ tới repository, chọn slave và thông tin image (namespace và deployment có gợi ý từ danh sách deployment được phép).
    - **Trigger Run:** Bấm **Run** để khởi chạy pipeline, theo dõi 4 bước (`checkout` → `build` → `push` → `deploy`) cùng log thời gian thực qua Server-Sent Events (SSE).
 
 ---
@@ -107,7 +108,7 @@ Shipit hỗ trợ chế độ giả lập (`Shipit:UseFakes=true`), cho phép ch
 | `SHIPIT_MASTER_KEY` | Có (Production/Staging) | Khoá Base64 32 byte dùng để mã hoá AES-GCM mọi credential. | *(Xem cách sinh bên dưới)* |
 | `SHIPIT_ADMIN_USER` | Không | Tên tài khoản quản trị viên (mặc định: `admin`). | `admin` |
 | `SHIPIT_ADMIN_PASSWORD` | Có (Production/Staging) | Mật khẩu tài khoản quản trị viên. Mặc định `admin` trong fake mode. | `s3cur3-p@ssw0rd!` |
-| `SHIPIT_DEPLOY_ALLOWLIST` | Có (Production/Staging) | JSON allowlist quy định namespace và deployment được phép cập nhật. | `{"devops":["shipit-demo"]}` |
+| `SHIPIT_DEPLOY_ALLOWLIST` | Không | JSON allowlist dùng làm dữ liệu khởi tạo lần đầu (seed) cho danh sách deployment được phép. Sau khi khởi tạo vào cơ sở dữ liệu, quản lý trực tiếp qua giao diện web hoặc API `/api/deploy-targets`. | `{"devops":["shipit-demo"]}` |
 | `Shipit:UseFakes` | Không | Cờ bật chế độ giả lập (`true`/`false`). Mặc định: `false`. | `true` |
 | `Shipit:SqlitePath` | Không | Đường dẫn file SQLite khi chạy ở chế độ fake. | `.dev/shipit-dev.db` |
 

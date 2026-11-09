@@ -58,7 +58,7 @@ public sealed partial class KubernetesDeployer : IK8sDeployer
         }
 
         // 2. Allowlist check (reject immediately without calling cluster)
-        if (!_allowList.IsAllowed(request.Namespace, request.Deployment))
+        if (!await _allowList.IsAllowedAsync(request.Namespace, request.Deployment, cancellationToken))
         {
             return new DeployResult(false, $"Deployment '{request.Deployment}' in namespace '{request.Namespace}' is not allowed.");
         }

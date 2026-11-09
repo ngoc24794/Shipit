@@ -22,6 +22,10 @@ public sealed record CredentialInput(string? Name, string? Kind, string? Usernam
 
 public sealed record CredentialUpdate(string? Name, string? Username, string? Value);
 
+public sealed record DeployTargetDto(long Id, string Namespace, string Deployment, DateTime CreatedAt);
+
+public sealed record DeployTargetInput(string? Namespace, string? Deployment);
+
 public sealed record PipelineDto(
     long Id,
     string Name,
@@ -156,4 +160,7 @@ internal static class Mapping
 
     public static LogLineDto ToDto(this RunLog l) =>
         new(l.Id, Wire.Of(l.Step), Wire.Of(l.Stream), l.Text, Wire.Utc(l.At));
+
+    public static DeployTargetDto ToDto(this DeployTarget t) =>
+        new(t.Id, t.Namespace, t.Deployment, Wire.Utc(t.CreatedAt));
 }

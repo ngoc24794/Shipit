@@ -59,7 +59,7 @@ public sealed class FakeK8sDeployer : IK8sDeployer
 
         _requests.Add(request);
 
-        if (!AllowList.IsAllowed(request.Namespace, request.Deployment))
+        if (!await AllowList.IsAllowedAsync(request.Namespace, request.Deployment, cancellationToken))
         {
             return new DeployResult(false, $"Deployment '{request.Deployment}' in namespace '{request.Namespace}' is not allowed.");
         }

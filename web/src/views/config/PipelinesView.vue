@@ -25,6 +25,7 @@ import StatusBadge from '../../components/StatusBadge.vue'
 import { useConfigPipelinesStore } from '../../stores/configPipelines'
 import { useConfigSlavesStore } from '../../stores/configSlaves'
 import { useConfigCredentialsStore } from '../../stores/configCredentials'
+import { useConfigDeployTargetsStore } from '../../stores/configDeployTargets'
 import { useToast } from '../../composables/useToast'
 import type { Pipeline, PipelineInput } from '../../api/types'
 import { ApiError } from '../../api/client'
@@ -33,6 +34,7 @@ const router = useRouter()
 const store = useConfigPipelinesStore()
 const slaveStore = useConfigSlavesStore()
 const credStore = useConfigCredentialsStore()
+const deployTargetStore = useConfigDeployTargetsStore()
 const toast = useToast()
 
 const isDialogOpen = ref(false)
@@ -108,6 +110,18 @@ const slaveOptions = computed(() => {
     label: `${s.name} (${s.host})`,
     value: s.id
   }))
+})
+
+const allowedNamespaces = computed(() => {
+  return [...new Set(deployTargetStore.deployTargets.map((t) => t.namespace))].sort()
+})
+
+const allowedDeployments = computed(() => {
+  const ns = form.value.deployNamespace.trim()
+  const targets = ns
+    ? deployTargetStore.deployTargets.filter((t) => t.namespace === ns)
+    : deployTargetStore.deployTargets
+  return [...new Set(targets.map((t) => t.deployment))].sort()
 })
 
 function getSlaveName(slaveId: number): string {
@@ -394,6 +408,7 @@ onMounted(() => {
   store.fetchPipelines().catch(() => {})
   slaveStore.fetchSlaves().catch(() => {})
   credStore.fetchCredentials().catch(() => {})
+  deployTargetStore.fetchDeployTargets().catch(() => {})
 })
 </script>
 
@@ -753,7 +768,11 @@ onMounted(() => {
                     placeholder="devops"
                     :error="error"
                     :aria-describedby="ariaDescribedby"
+                    list="allowed-namespaces-list"
                   />
+                  <datalist id="allowed-namespaces-list">
+                    <option v-for="ns in allowedNamespaces" :key="ns" :value="ns" />
+                  </datalist>
                 </template>
               </AppField>
             </div>
@@ -771,7 +790,11 @@ onMounted(() => {
                     placeholder="shipit-demo"
                     :error="error"
                     :aria-describedby="ariaDescribedby"
+                    list="allowed-deployments-list"
                   />
+                  <datalist id="allowed-deployments-list">
+                    <option v-for="dep in allowedDeployments" :key="dep" :value="dep" />
+                  </datalist>
                 </template>
               </AppField>
             </div>
