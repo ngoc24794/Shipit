@@ -17,6 +17,10 @@ spec:
       labels:
         app.kubernetes.io/name: shipit
     spec:
+      # Pod traffic to the node LAN (the build slave) is only SNATed on worker1 (iptables rule shipit-pod-snat-to-node-lan),
+      # so Shipit is pinned there. Remove this when the rule exists on every node.
+      nodeSelector:
+        kubernetes.io/hostname: worker1
       serviceAccountName: shipit
       imagePullSecrets:
         - name: registry-secret
