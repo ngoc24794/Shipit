@@ -475,7 +475,7 @@ components:
         value: { type: string, format: password, description: Omit to keep the stored value }
     Pipeline:
       type: object
-      required: [id, name, gitUrl, gitBranch, gitCredentialId, slaveId, dockerfilePath, buildContext, imageName, registryHost, registryCredentialId, deployNamespace, deployDeployment, deployContainer]
+      required: [id, name, gitUrl, gitBranch, gitCredentialId, slaveId, dockerfilePath, buildContext, imageName, registryHost, deployRegistryHost, registryCredentialId, deployNamespace, deployDeployment, deployContainer]
       properties:
         id: { type: integer, format: int64 }
         name: { type: string }
@@ -490,6 +490,11 @@ components:
           description: Relative path within repo for docker build context (. for repo root). Null defaults to the directory containing Dockerfile.
         imageName: { type: string, description: 'Repository name without registry host, e.g. shipit-demo' }
         registryHost: { type: string, example: 192.168.1.241 }
+        deployRegistryHost:
+          type: string
+          nullable: true
+          description: Host (and optional port) placed into the Deployment's image reference. Null/empty defaults to registryHost.
+          example: 10.0.0.1:5000
         registryCredentialId: { type: integer, format: int64, nullable: true }
         deployNamespace: { type: string }
         deployDeployment: { type: string }
@@ -514,6 +519,10 @@ components:
           description: Relative path within repo for docker build context (. for repo root). Null/empty defaults to the directory containing Dockerfile.
         imageName: { type: string }
         registryHost: { type: string }
+        deployRegistryHost:
+          type: string
+          nullable: true
+          description: Host (and optional port) placed into the Deployment's image reference. Null/empty defaults to registryHost.
         registryCredentialId: { type: integer, format: int64, nullable: true }
         deployNamespace: { type: string }
         deployDeployment: { type: string }
