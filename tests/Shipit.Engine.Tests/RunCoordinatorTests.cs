@@ -144,4 +144,80 @@ public class RunCoordinatorTests
             await coordinator.StopAsync(CancellationToken.None);
         }
     }
+
+    [Fact]
+    public async Task CancelAsync_on_queued_run_cancels_immediately_and_is_not_executed_when_dequeued()
+    {
+        using var env = new EngineTestEnv();
+        var ssh = EngineTestEnv.Slave();
+        var k8s = new FakeK8sDeployer(EngineTestEnv.AllowDemo());
+        var coordinator = env.Coordinator(env.Runner(ssh, k8s));
+
+        var run = await coordinator.TriggerAsync(env.PipelineId);
+        var (status, cancelledRun) = await coordinator.CancelAsync(run.Id);
+
+        Assert.Equal(CancelResult.Accepted, status);
+        Assert.NotNull(cancelledRun);
+        Assert.Equal(RunStatus.Cancelled, cancelledRun.Status);
+        Assert.Equal("cancelled by user", cancelledRun.FailureReason);
+        Assert.NotNull(cancelledRun.FinishedAt);
+        Assert.All(cancelledRun.Steps, s => Assert.Equal(StepStatus.Skipped, s.Status));
+
+        var stored = await env.GetRunAsync(run.Id);
+        Assert.Equal(RunStatus.Cancelled, stored.Status);
+        Assert.Equal("cancelled by user", stored.FailureReason);
+        Assert.All(stored.Steps, s => Assert.Equal(StepStatus.Skipped, s.Status));
+
+        var logs = await env.GetLogsAsync(run.Id);
+        Assert.Contains(logs, l => l.Text == "Run cancelled by user.");
+
+        // Start hosted loop; the queued item should be skipped and never executed on the slave
+        await coordinator.StartAsync(CancellationToken.None);
+        try
+        {
+            await Task.Delay(200);
+            Assert.Empty(ssh.ExecutedCommands);
+            Assert.Empty(k8s.Requests);
+        }
+        finally
+        {
+            await coordinator.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task Pipeline_can_be_triggered_immediately_after_run_is_cancelled()
+    {
+        using var env = new EngineTestEnv();
+        var ssh = EngineTestEnv.Slave();
+        var k8s = new FakeK8sDeployer(EngineTestEnv.AllowDemo());
+        var coordinator = env.Coordinator(env.Runner(ssh, k8s));
+
+        var first = await coordinator.TriggerAsync(env.PipelineId);
+        var (cancelResult, _) = await coordinator.CancelAsync(first.Id);
+        Assert.Equal(CancelResult.Accepted, cancelResult);
+
+        // Immediate trigger succeeds without 409 conflict
+        var second = await coordinator.TriggerAsync(env.PipelineId);
+        Assert.NotEqual(first.Id, second.Id);
+        Assert.Equal(RunStatus.Queued, second.Status);
+    }
+
+    [Fact]
+    public async Task CancelAsync_returns_AlreadyFinished_when_run_is_done_and_NotFound_when_missing()
+    {
+        using var env = new EngineTestEnv();
+        var ssh = EngineTestEnv.Slave();
+        var k8s = new FakeK8sDeployer(EngineTestEnv.AllowDemo());
+        var coordinator = env.Coordinator(env.Runner(ssh, k8s));
+
+        // Unknown run id
+        var (notFoundStatus, _) = await coordinator.CancelAsync(999999);
+        Assert.Equal(CancelResult.NotFound, notFoundStatus);
+
+        // Completed run
+        var runId = await env.QueueRunAsync(RunStatus.Success, StepStatus.Success);
+        var (alreadyFinishedStatus, _) = await coordinator.CancelAsync(runId);
+        Assert.Equal(CancelResult.AlreadyFinished, alreadyFinishedStatus);
+    }
 }

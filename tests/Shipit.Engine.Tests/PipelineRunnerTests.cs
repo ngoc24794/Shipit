@@ -240,6 +240,83 @@ public class PipelineRunnerTests
     }
 
     [Fact]
+    public async Task User_cancellation_during_build_marks_run_cancelled_and_cleans_up()
+    {
+        using var env = new EngineTestEnv();
+        var ssh = EngineTestEnv.Slave(f => f.AddRule("docker build", 0, delay: TimeSpan.FromSeconds(30)));
+        var k8s = new FakeK8sDeployer(EngineTestEnv.AllowDemo());
+        var runId = await env.QueueRunAsync();
+        using var userCts = new CancellationTokenSource();
+
+        var execution = env.Runner(ssh, k8s).ExecuteAsync(runId, CancellationToken.None, userCts.Token);
+        await WaitForAsync(async () => (await env.GetRunAsync(runId)).Steps.Any(s => s.Name == StepName.Build && s.Status == StepStatus.Running));
+        await userCts.CancelAsync();
+        await execution.WaitAsync(TimeSpan.FromSeconds(20));
+
+        var run = await env.GetRunAsync(runId);
+        Assert.Equal(RunStatus.Cancelled, run.Status);
+        Assert.Equal("cancelled by user", run.FailureReason);
+        Assert.NotNull(run.FinishedAt);
+        Assert.Equal(StepStatus.Success, EngineTestEnv.StepStatusOf(run, StepName.Checkout));
+        Assert.Equal(StepStatus.Cancelled, EngineTestEnv.StepStatusOf(run, StepName.Build));
+        Assert.Equal(StepStatus.Skipped, EngineTestEnv.StepStatusOf(run, StepName.Push));
+        Assert.Equal(StepStatus.Skipped, EngineTestEnv.StepStatusOf(run, StepName.Deploy));
+        Assert.Equal(["logout", "cleanup"], Order(ssh).TakeLast(2));
+        Assert.Empty(k8s.Requests);
+
+        var logs = await env.GetLogsAsync(runId);
+        Assert.Contains(logs, l => l.Text == "Run cancelled by user.");
+    }
+
+    [Fact]
+    public async Task User_cancellation_during_rollout_marks_run_cancelled_and_logs_warning_without_rollback()
+    {
+        using var env = new EngineTestEnv();
+        var ssh = EngineTestEnv.Slave();
+        var deployer = new SlowRolloutDeployer();
+        var runId = await env.QueueRunAsync();
+        using var userCts = new CancellationTokenSource();
+
+        var execution = env.Runner(ssh, deployer).ExecuteAsync(runId, CancellationToken.None, userCts.Token);
+        await deployer.RolloutStarted.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        await userCts.CancelAsync();
+        await execution.WaitAsync(TimeSpan.FromSeconds(20));
+
+        var run = await env.GetRunAsync(runId);
+        Assert.Equal(RunStatus.Cancelled, run.Status);
+        Assert.Equal("cancelled by user", run.FailureReason);
+        Assert.NotNull(run.FinishedAt);
+        Assert.Equal(StepStatus.Success, EngineTestEnv.StepStatusOf(run, StepName.Checkout));
+        Assert.Equal(StepStatus.Success, EngineTestEnv.StepStatusOf(run, StepName.Build));
+        Assert.Equal(StepStatus.Success, EngineTestEnv.StepStatusOf(run, StepName.Push));
+        Assert.Equal(StepStatus.Cancelled, EngineTestEnv.StepStatusOf(run, StepName.Deploy));
+
+        // Exactly 1 deploy request, NO rollback request
+        Assert.Single(deployer.Requests);
+
+        var logs = await env.GetLogsAsync(runId);
+        Assert.Contains(logs, l => l.Text == "Deploy was cancelled while the rollout was in progress; the Deployment may still be rolling out the new image.");
+        Assert.Contains(logs, l => l.Text == "Run cancelled by user.");
+    }
+
+    private sealed class SlowRolloutDeployer : IK8sDeployer
+    {
+        private readonly List<DeployRequest> _requests = [];
+        public IReadOnlyList<DeployRequest> Requests => _requests;
+        public TaskCompletionSource RolloutStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<DeployResult> SetImageAsync(DeployRequest request, ILogSink log, CancellationToken cancellationToken = default)
+        {
+            _requests.Add(request);
+            await log.WriteAsync($"[fake-k8s] Setting image of {request.Namespace}/{request.Deployment}:{request.Container} to {request.Image}", LogStream.System, cancellationToken);
+            await log.WriteAsync($"[fake-k8s] Waiting for rollout of {request.Deployment}...", LogStream.System, cancellationToken);
+            RolloutStarted.TrySetResult();
+            await Task.Delay(TimeSpan.FromSeconds(60), cancellationToken);
+            return new DeployResult(true, "deployed");
+        }
+    }
+
+    [Fact]
     public async Task Wrong_master_key_fails_the_run_without_touching_the_slave()
     {
         using var env = new EngineTestEnv();

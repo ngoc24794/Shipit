@@ -181,7 +181,8 @@ public class ShipitDbContextTests : IDisposable
         // 6. Multiple finished runs for the same pipeline should succeed
         var finishedRun1 = new Run { PipelineId = pipe1.Id, Status = RunStatus.Success };
         var finishedRun2 = new Run { PipelineId = pipe1.Id, Status = RunStatus.Failed };
-        ctx.Runs.AddRange(finishedRun1, finishedRun2);
+        var cancelledRun = new Run { PipelineId = pipe1.Id, Status = RunStatus.Cancelled };
+        ctx.Runs.AddRange(finishedRun1, finishedRun2, cancelledRun);
         await ctx.SaveChangesAsync();
     }
 

@@ -759,4 +759,103 @@ public class EndToEndFlowTests
 
         Assert.Contains(deployLogLines, text => text != null && text.Contains($"{deployRegistry}/shipit-demo:abc1234"));
     }
+
+    [Fact]
+    public async Task CancelRun_DuringSlowBuild_CancelsRun_ClosesSseWithEnd_AndDoesNotLeakSecrets()
+    {
+        var customSsh = new FakeSshExecutor();
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("git clone"), exitCode: 0, outputLines: [("Cloning repo...", LogStream.Stdout)]);
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("rev-parse --short=7 HEAD"), exitCode: 0, outputLines: [("abc1234", LogStream.Stdout)]);
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("docker login"), exitCode: 0, outputLines: [("Login Succeeded", LogStream.Stdout)]);
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("docker build"), exitCode: 0, delay: TimeSpan.FromSeconds(30));
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("docker logout"), exitCode: 0, outputLines: [("Removing login credentials", LogStream.Stdout)]);
+        customSsh.AddRule(cmd => cmd.CommandText.Contains("rm -rf"), exitCode: 0);
+
+        var buildStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        customSsh.CommandExecuting += cmd =>
+        {
+            if (cmd.CommandText.Contains("docker build"))
+            {
+                buildStarted.TrySetResult();
+            }
+        };
+
+        using var factory = new E2EFactory();
+        using var customApp = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddSingleton<ISshExecutor>(customSsh);
+            });
+        });
+
+        var client = await customApp.LoggedInClientAsync();
+        var seeded = await client.SeedResourcesAsync();
+
+        var pipelineId = await client.CreateAsync("/api/pipelines", new
+        {
+            name = "cancel-test-pipe",
+            gitUrl = "https://git.example.com/team/demo.git",
+            gitBranch = "main",
+            gitCredentialId = seeded.GitId,
+            slaveId = seeded.SlaveId,
+            dockerfilePath = "Dockerfile",
+            imageName = "shipit-demo",
+            registryHost = "192.168.1.241",
+            registryCredentialId = seeded.RegId,
+            deployNamespace = "devops",
+            deployDeployment = "shipit-demo",
+            deployContainer = "app"
+        });
+
+        var runId = await client.TriggerRunAsync(pipelineId);
+
+        // Connect SSE client
+        using var sseCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var sseRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/runs/{runId}/logs");
+        sseRequest.Headers.Accept.ParseAdd("text/event-stream");
+        var sseTask = client.SendAsync(sseRequest, HttpCompletionOption.ResponseHeadersRead, sseCts.Token);
+
+        // Wait until build starts
+        await buildStarted.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+        // Cancel the run
+        var cancelResponse = await client.PostAsync($"/api/runs/{runId}/cancel", null);
+        Assert.Equal(HttpStatusCode.Accepted, cancelResponse.StatusCode);
+
+        // The SSE connection should finish and receive `end` event with cancelled status
+        using var sseResponse = await sseTask;
+        Assert.Equal(HttpStatusCode.OK, sseResponse.StatusCode);
+        var sseBody = await sseResponse.Content.ReadAsStringAsync(sseCts.Token);
+
+        Assert.Contains("event: end", sseBody);
+        Assert.Contains("\"status\":\"cancelled\"", sseBody);
+
+        // Verify run details in database via API
+        var run = await client.WaitForRunAsync(runId, "cancelled");
+        Assert.Equal("cancelled", run.GetProperty("status").GetString());
+        Assert.Equal("cancelled by user", run.GetProperty("failureReason").GetString());
+
+        var steps = run.GetProperty("steps").EnumerateArray()
+            .ToDictionary(s => s.GetProperty("name").GetString()!, s => s.GetProperty("status").GetString()!);
+        Assert.Equal("success", steps["checkout"]);
+        Assert.Equal("cancelled", steps["build"]);
+        Assert.Equal("skipped", steps["push"]);
+        Assert.Equal("skipped", steps["deploy"]);
+
+        // Verify cleanup commands executed (logout and rm -rf)
+        Assert.Contains(customSsh.ExecutedCommands, c => c.CommandText.Contains("docker logout"));
+        Assert.Contains(customSsh.ExecutedCommands, c => c.CommandText.Contains("rm -rf"));
+
+        // Verify no secrets leaked in SSE stream or logs endpoint
+        var logsResponse = await client.GetAsync($"/api/runs/{runId}/logs");
+        Assert.Equal(HttpStatusCode.OK, logsResponse.StatusCode);
+        var logsText = await logsResponse.Content.ReadAsStringAsync();
+
+        foreach (var secret in E2EFactory.Secrets)
+        {
+            Assert.DoesNotContain(secret, sseBody);
+            Assert.DoesNotContain(secret, logsText);
+        }
+    }
 }
