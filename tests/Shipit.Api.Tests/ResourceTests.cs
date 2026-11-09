@@ -176,6 +176,8 @@ public class ResourceTests
         Assert.True((await Errors(new() { ["gitUrl"] = "https://host/repo.git; rm -rf /" })).TryGetProperty("gitUrl", out _));
         Assert.True((await Errors(new() { ["gitBranch"] = "main; id" })).TryGetProperty("gitBranch", out _));
         Assert.True((await Errors(new() { ["dockerfilePath"] = "../../etc/passwd" })).TryGetProperty("dockerfilePath", out _));
+        Assert.True((await Errors(new() { ["buildContext"] = "../../etc" })).TryGetProperty("buildContext", out _));
+        Assert.True((await Errors(new() { ["buildContext"] = "/root" })).TryGetProperty("buildContext", out _));
         Assert.True((await Errors(new() { ["imageName"] = "Bad Name" })).TryGetProperty("imageName", out _));
         Assert.True((await Errors(new() { ["slaveId"] = 9999 })).TryGetProperty("slaveId", out _));
         Assert.True((await Errors(new() { ["deployNamespace"] = "Bad_NS" })).TryGetProperty("deployNamespace", out _));
@@ -339,5 +341,107 @@ public class ResourceTests
 
         // Subsequent delete returns 404
         Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/api/credentials/{seeded.RegCred}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Pipeline_creation_and_update_supports_build_context()
+    {
+        using var factory = new ApiFactory();
+        var client = await factory.LoggedInClientAsync();
+        var seeded = await client.SeedAsync();
+
+        var baseBody = new Dictionary<string, object?>
+        {
+            ["gitUrl"] = "https://git.example.com/team/demo.git",
+            ["gitBranch"] = "main",
+            ["gitCredentialId"] = seeded.GitCred,
+            ["slaveId"] = seeded.Slave,
+            ["dockerfilePath"] = "Dockerfile",
+            ["imageName"] = "shipit-demo",
+            ["registryHost"] = "registry.example.com",
+            ["deployNamespace"] = "devops",
+            ["deployDeployment"] = "shipit-demo",
+            ["deployContainer"] = "app"
+        };
+
+        // 1. Omitted buildContext -> returns null
+        var bodyNoBc = new Dictionary<string, object?>(baseBody) { ["name"] = "pipe-no-bc" };
+        var respNoBc = await client.PostAsJsonAsync("/api/pipelines", bodyNoBc);
+        Assert.Equal(HttpStatusCode.Created, respNoBc.StatusCode);
+        var jsonNoBc = await respNoBc.ReadJsonAsync();
+        Assert.True(jsonNoBc.TryGetProperty("buildContext", out var propNoBc));
+        Assert.Equal(JsonValueKind.Null, propNoBc.ValueKind);
+        var noBcId = jsonNoBc.GetProperty("id").GetInt64();
+
+        var getNoBc = await client.GetAsync($"/api/pipelines/{noBcId}");
+        Assert.Equal(HttpStatusCode.OK, getNoBc.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await getNoBc.ReadJsonAsync()).GetProperty("buildContext").ValueKind);
+
+        // 2. Explicit null -> returns null
+        var bodyNullBc = new Dictionary<string, object?>(baseBody) { ["name"] = "pipe-null-bc", ["buildContext"] = null };
+        var respNullBc = await client.PostAsJsonAsync("/api/pipelines", bodyNullBc);
+        Assert.Equal(HttpStatusCode.Created, respNullBc.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await respNullBc.ReadJsonAsync()).GetProperty("buildContext").ValueKind);
+
+        // 3. Whitespace or empty -> normalized to null
+        var bodyWsBc = new Dictionary<string, object?>(baseBody) { ["name"] = "pipe-ws-bc", ["buildContext"] = "   " };
+        var respWsBc = await client.PostAsJsonAsync("/api/pipelines", bodyWsBc);
+        Assert.Equal(HttpStatusCode.Created, respWsBc.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await respWsBc.ReadJsonAsync()).GetProperty("buildContext").ValueKind);
+
+        var bodyEmptyBc = new Dictionary<string, object?>(baseBody) { ["name"] = "pipe-empty-bc", ["buildContext"] = "" };
+        var respEmptyBc = await client.PostAsJsonAsync("/api/pipelines", bodyEmptyBc);
+        Assert.Equal(HttpStatusCode.Created, respEmptyBc.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await respEmptyBc.ReadJsonAsync()).GetProperty("buildContext").ValueKind);
+
+        // 4. Valid "." -> returns "."
+        var bodyDotBc = new Dictionary<string, object?>(baseBody) { ["name"] = "pipe-dot-bc", ["buildContext"] = "." };
+        var respDotBc = await client.PostAsJsonAsync("/api/pipelines", bodyDotBc);
+        Assert.Equal(HttpStatusCode.Created, respDotBc.StatusCode);
+        var jsonDotBc = await respDotBc.ReadJsonAsync();
+        Assert.Equal(".", jsonDotBc.GetProperty("buildContext").GetString());
+        var dotBcId = jsonDotBc.GetProperty("id").GetInt64();
+
+        var getDotBc = await client.GetAsync($"/api/pipelines/{dotBcId}");
+        Assert.Equal(".", (await getDotBc.ReadJsonAsync()).GetProperty("buildContext").GetString());
+
+        // 5. Valid relative path "src/app" -> returns "src/app"
+        var bodySubBc = new Dictionary<string, object?>(baseBody) { ["name"] = "pipe-sub-bc", ["buildContext"] = "src/app" };
+        var respSubBc = await client.PostAsJsonAsync("/api/pipelines", bodySubBc);
+        Assert.Equal(HttpStatusCode.Created, respSubBc.StatusCode);
+        var jsonSubBc = await respSubBc.ReadJsonAsync();
+        Assert.Equal("src/app", jsonSubBc.GetProperty("buildContext").GetString());
+        var subBcId = jsonSubBc.GetProperty("id").GetInt64();
+
+        // 6. PUT replaces buildContext: update from "src/app" to "." then to null
+        var updateBody = new Dictionary<string, object?>(baseBody)
+        {
+            ["name"] = "pipe-sub-bc",
+            ["buildContext"] = "."
+        };
+        var putResp = await client.PutAsJsonAsync($"/api/pipelines/{subBcId}", updateBody);
+        Assert.Equal(HttpStatusCode.OK, putResp.StatusCode);
+        Assert.Equal(".", (await putResp.ReadJsonAsync()).GetProperty("buildContext").GetString());
+
+        // PUT with whitespace -> clears to null
+        updateBody["buildContext"] = "   ";
+        var putClearResp = await client.PutAsJsonAsync($"/api/pipelines/{subBcId}", updateBody);
+        Assert.Equal(HttpStatusCode.OK, putClearResp.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await putClearResp.ReadJsonAsync()).GetProperty("buildContext").ValueKind);
+
+        // 7. Validation rejects bad buildContext values
+        string[] badValues = ["/abs", "../x", "a/../b", "-x", "a b", "a;b", new string('x', 201)];
+        foreach (var bad in badValues)
+        {
+            var badBody = new Dictionary<string, object?>(baseBody)
+            {
+                ["name"] = "pipe-bad-" + Guid.NewGuid().ToString("N")[..8],
+                ["buildContext"] = bad
+            };
+            var badResp = await client.PostAsJsonAsync("/api/pipelines", badBody);
+            Assert.Equal(HttpStatusCode.BadRequest, badResp.StatusCode);
+            var errors = (await badResp.ReadJsonAsync()).GetProperty("errors");
+            Assert.True(errors.TryGetProperty("buildContext", out _), $"Expected buildContext error for '{bad}'");
+        }
     }
 }

@@ -407,6 +407,96 @@ public class ShipitDbContextTests : IDisposable
     }
 
     [Fact]
+    public void AddBuildContext_Migration_IsRegistered_And_GeneratesScript()
+    {
+        using var ctx = CreateContext();
+        var migrations = ctx.Database.GetMigrations().ToList();
+        Assert.Contains("20261109035520_InitialCreate", migrations);
+        Assert.Contains(migrations, m => m.EndsWith("OptionalRegistryCredential"));
+        Assert.Contains(migrations, m => m.EndsWith("AddBuildContext"));
+
+        var factory = new ShipitDbContextFactory();
+        using var npgsqlCtx = factory.CreateDbContext([]);
+        var script = npgsqlCtx.Database.GenerateCreateScript();
+        Assert.NotEmpty(script);
+        Assert.Contains("BuildContext", script);
+    }
+
+    [Fact]
+    public async Task Pipeline_BuildContext_AllowsNullAndExplicitValues_OldDataReadsAsNull()
+    {
+        using var ctx = CreateContext();
+
+        var gitCred = new Credential { Name = "git-cred-bc", Kind = CredentialKind.GitToken, ProtectedValue = "v1:git" };
+        var sshCred = new Credential { Name = "ssh-cred-bc", Kind = CredentialKind.SshKey, ProtectedValue = "v1:ssh" };
+        ctx.Credentials.AddRange(gitCred, sshCred);
+        await ctx.SaveChangesAsync();
+
+        var slave = new Slave { Name = "worker-bc", Host = "worker.local", User = "devops", SshCredentialId = sshCred.Id };
+        ctx.Slaves.Add(slave);
+        await ctx.SaveChangesAsync();
+
+        // 1. Pipeline with null BuildContext
+        var pipeNull = new Pipeline
+        {
+            Name = "pipe-bc-null",
+            GitUrl = "https://git.example.com/repo.git",
+            GitCredentialId = gitCred.Id,
+            SlaveId = slave.Id,
+            ImageName = "bc-null",
+            RegistryHost = "registry.local",
+            BuildContext = null,
+            DeployNamespace = "devops",
+            DeployDeployment = "app-bc-null",
+            DeployContainer = "app"
+        };
+
+        // 2. Pipeline with "." BuildContext
+        var pipeDot = new Pipeline
+        {
+            Name = "pipe-bc-dot",
+            GitUrl = "https://git.example.com/repo.git",
+            GitCredentialId = gitCred.Id,
+            SlaveId = slave.Id,
+            ImageName = "bc-dot",
+            RegistryHost = "registry.local",
+            BuildContext = ".",
+            DeployNamespace = "devops",
+            DeployDeployment = "app-bc-dot",
+            DeployContainer = "app"
+        };
+
+        // 3. Pipeline with subpath BuildContext
+        var pipeSub = new Pipeline
+        {
+            Name = "pipe-bc-sub",
+            GitUrl = "https://git.example.com/repo.git",
+            GitCredentialId = gitCred.Id,
+            SlaveId = slave.Id,
+            ImageName = "bc-sub",
+            RegistryHost = "registry.local",
+            BuildContext = "src/app",
+            DeployNamespace = "devops",
+            DeployDeployment = "app-bc-sub",
+            DeployContainer = "app"
+        };
+
+        ctx.Pipelines.AddRange(pipeNull, pipeDot, pipeSub);
+        await ctx.SaveChangesAsync();
+
+        // Verify values read back
+        using var ctxRead = CreateContext();
+        var loadedNull = await ctxRead.Pipelines.AsNoTracking().FirstAsync(p => p.Id == pipeNull.Id);
+        Assert.Null(loadedNull.BuildContext);
+
+        var loadedDot = await ctxRead.Pipelines.AsNoTracking().FirstAsync(p => p.Id == pipeDot.Id);
+        Assert.Equal(".", loadedDot.BuildContext);
+
+        var loadedSub = await ctxRead.Pipelines.AsNoTracking().FirstAsync(p => p.Id == pipeSub.Id);
+        Assert.Equal("src/app", loadedSub.BuildContext);
+    }
+
+    [Fact]
     public async Task PostgresIntegration_SkippedWhenNoPgUrlConfigured()
     {
         var pgUrl = Environment.GetEnvironmentVariable("SHIPIT_TEST_PG_URL");

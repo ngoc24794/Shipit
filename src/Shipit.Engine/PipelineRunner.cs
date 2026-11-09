@@ -207,7 +207,7 @@ public sealed partial class PipelineRunner(
             }
         }
 
-        var build = RemoteCommandBuilder.DockerBuild(c.WorkDir!, p.DockerfilePath, c.Image!);
+        var build = RemoteCommandBuilder.DockerBuild(c.WorkDir!, p.DockerfilePath, c.Image!, p.BuildContext);
         var code = await RunRemoteAsync(c, build, options.BuildTimeout, c.Writer, ct).ConfigureAwait(false);
         return code == 0 ? (true, null) : (false, ExitFailure("docker build", code));
     }
@@ -327,7 +327,7 @@ public sealed partial class PipelineRunner(
 
         return new RunPlan(
             runId,
-            p.GitUrl, p.GitBranch, p.DockerfilePath, p.ImageName, p.RegistryHost,
+            p.GitUrl, p.GitBranch, p.DockerfilePath, p.BuildContext, p.ImageName, p.RegistryHost,
             p.DeployNamespace, p.DeployDeployment, p.DeployContainer,
             p.Slave.Host, p.Slave.Port, p.Slave.User,
             p.Slave.SshCredential.ProtectedValue,
@@ -431,6 +431,7 @@ public sealed partial class PipelineRunner(
         string GitUrl,
         string GitBranch,
         string DockerfilePath,
+        string? BuildContext,
         string ImageName,
         string RegistryHost,
         string DeployNamespace,

@@ -234,6 +234,112 @@ public class RemoteCommandBuilderTests
             cmd.CommandText);
     }
 
+    [Fact]
+    public void DockerBuild_BuildContextNull_SubdirectoryDockerfile_UsesDockerfileDirectory()
+    {
+        var cmd = RemoteCommandBuilder.DockerBuild(
+            "/tmp/shipit/run-1",
+            "docker/Dockerfile.x",
+            "192.168.1.241/app:abc1234",
+            buildContext: null);
+
+        Assert.Equal(
+            "docker build -f '/tmp/shipit/run-1/docker/Dockerfile.x' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1/docker'",
+            cmd.CommandText);
+    }
+
+    [Fact]
+    public void DockerBuild_BuildContextDot_UsesWorkDirAsContext()
+    {
+        var cmd = RemoteCommandBuilder.DockerBuild(
+            "/tmp/shipit/run-1",
+            "docker/Dockerfile.x",
+            "192.168.1.241/app:abc1234",
+            buildContext: ".");
+
+        Assert.Equal(
+            "docker build -f '/tmp/shipit/run-1/docker/Dockerfile.x' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1'",
+            cmd.CommandText);
+    }
+
+    [Fact]
+    public void DockerBuild_BuildContextCustomRelativePath_AppendsToWorkDir()
+    {
+        var cmd = RemoteCommandBuilder.DockerBuild(
+            "/tmp/shipit/run-1",
+            "docker/Dockerfile.x",
+            "192.168.1.241/app:abc1234",
+            buildContext: "src/app");
+
+        Assert.Equal(
+            "docker build -f '/tmp/shipit/run-1/docker/Dockerfile.x' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1/src/app'",
+            cmd.CommandText);
+    }
+
+    [Fact]
+    public void DockerBuild_RootDockerfile_NullBuildContext_UsesWorkDir()
+    {
+        var cmd = RemoteCommandBuilder.DockerBuild(
+            "/tmp/shipit/run-1",
+            "Dockerfile",
+            "192.168.1.241/app:abc1234",
+            buildContext: null);
+
+        Assert.Equal(
+            "docker build -f '/tmp/shipit/run-1/Dockerfile' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1'",
+            cmd.CommandText);
+    }
+
+    [Theory]
+    [InlineData("/abs")]
+    [InlineData("../x")]
+    [InlineData("a/../b")]
+    [InlineData("-x")]
+    [InlineData("a b")]
+    [InlineData("a;b")]
+    [InlineData("$(x)")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void DockerBuild_MaliciousBuildContext_ThrowsArgumentException(string badContext)
+    {
+        Assert.Throws<ArgumentException>(() => RemoteCommandBuilder.DockerBuild(
+            "/tmp/shipit/run-1",
+            "docker/Dockerfile.x",
+            "192.168.1.241/app:abc1234",
+            buildContext: badContext));
+    }
+
+    [Fact]
+    public void DockerBuild_TooLongBuildContext_ThrowsArgumentException()
+    {
+        var tooLong = new string('a', 201);
+        Assert.Throws<ArgumentException>(() => RemoteCommandBuilder.DockerBuild(
+            "/tmp/shipit/run-1",
+            "docker/Dockerfile.x",
+            "192.168.1.241/app:abc1234",
+            buildContext: tooLong));
+
+        // 200 characters is allowed
+        var exactly200 = new string('a', 200);
+        var cmd = RemoteCommandBuilder.DockerBuild(
+            "/tmp/shipit/run-1",
+            "docker/Dockerfile.x",
+            "192.168.1.241/app:abc1234",
+            buildContext: exactly200);
+        Assert.Contains(exactly200, cmd.CommandText);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(".")]
+    [InlineData("src/app")]
+    [InlineData("docker/build-context")]
+    [InlineData("a.b_c-d")]
+    public void ValidateBuildContext_ValidInputs_DoNotThrow(string? validContext)
+    {
+        RemoteCommandBuilder.ValidateBuildContext(validContext);
+    }
+
     [Theory]
     [InlineData("/absolute/Dockerfile")]
     [InlineData("-f")]

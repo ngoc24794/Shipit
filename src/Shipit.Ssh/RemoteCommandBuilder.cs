@@ -31,6 +31,9 @@ public static class RemoteCommandBuilder
     private static readonly Regex DockerfilePathRegex =
         new(@"^[A-Za-z0-9._/-]+$", RegexOptions.Compiled);
 
+    private static readonly Regex BuildContextRegex =
+        new(@"^[A-Za-z0-9._/-]+$", RegexOptions.Compiled);
+
     private static readonly Regex SafeWorkDirRegex =
         new(@"^/tmp/shipit/[A-Za-z0-9_][A-Za-z0-9._/-]*$", RegexOptions.Compiled);
 
@@ -136,18 +139,37 @@ public static class RemoteCommandBuilder
     /// <summary>
     /// Builds a Docker image.
     /// </summary>
-    public static RemoteCommand DockerBuild(string workDir, string dockerfilePath, string image)
+    public static RemoteCommand DockerBuild(string workDir, string dockerfilePath, string image, string? buildContext = null)
     {
         ValidateWorkDir(workDir);
         ValidateDockerfilePath(dockerfilePath);
         ValidateImage(image);
+        ValidateBuildContext(buildContext);
 
-        // The build context is the directory that holds the Dockerfile (the repository root for a root Dockerfile).
         var fullDockerfilePath = $"{workDir}/{dockerfilePath}";
-        var lastSlash = dockerfilePath.LastIndexOf('/');
-        var contextDir = lastSlash > 0 ? $"{workDir}/{dockerfilePath[..lastSlash]}" : workDir;
+        string contextDir;
+        if (buildContext is null)
+        {
+            var lastSlash = dockerfilePath.LastIndexOf('/');
+            contextDir = lastSlash > 0 ? $"{workDir}/{dockerfilePath[..lastSlash]}" : workDir;
+        }
+        else if (buildContext == ".")
+        {
+            contextDir = workDir;
+        }
+        else
+        {
+            contextDir = $"{workDir}/{buildContext}";
+        }
+
         return new RemoteCommand($"docker build -f {Quote(fullDockerfilePath)} -t {Quote(image)} {Quote(contextDir)}");
     }
+
+    /// <summary>
+    /// Builds a Docker image (backward-compatible overload without buildContext).
+    /// </summary>
+    public static RemoteCommand DockerBuild(string workDir, string dockerfilePath, string image)
+        => DockerBuild(workDir, dockerfilePath, image, null);
 
     /// <summary>
     /// Pushes a Docker image to the registry.
@@ -188,6 +210,27 @@ public static class RemoteCommandBuilder
         var imageRef = $"{registryHost}/{imageName}:{tag}";
         ValidateImage(imageRef);
         return imageRef;
+    }
+
+    /// <summary>
+    /// Validates the optional build context relative path.
+    /// </summary>
+    public static void ValidateBuildContext(string? buildContext)
+    {
+        if (buildContext is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(buildContext) ||
+            buildContext.Length > 200 ||
+            buildContext.StartsWith('/') ||
+            buildContext.StartsWith('-') ||
+            buildContext.Contains("..") ||
+            !BuildContextRegex.IsMatch(buildContext))
+        {
+            throw new ArgumentException($"Invalid build context: '{buildContext}'.", nameof(buildContext));
+        }
     }
 
     private static void ValidateRepoUrl(string repoUrl)

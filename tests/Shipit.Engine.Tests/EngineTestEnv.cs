@@ -101,6 +101,19 @@ public sealed class EngineTestEnv : IDisposable
         await db.SaveChangesAsync();
     }
 
+    public async Task SetBuildContextAsync(string? buildContext, string? dockerfilePath = null, long? pipelineId = null)
+    {
+        await using var db = await Factory.CreateDbContextAsync();
+        var id = pipelineId ?? PipelineId;
+        var p = await db.Pipelines.FirstAsync(p => p.Id == id);
+        p.BuildContext = buildContext;
+        if (dockerfilePath is not null)
+        {
+            p.DockerfilePath = dockerfilePath;
+        }
+        await db.SaveChangesAsync();
+    }
+
     public async Task<Run> GetRunAsync(long id)
     {
         await using var db = await Factory.CreateDbContextAsync();
