@@ -9,7 +9,7 @@ export interface SelectOption {
 
 const props = withDefaults(
   defineProps<{
-    modelValue?: string | number
+    modelValue?: string | number | null
     options: SelectOption[]
     id?: string
     name?: string
@@ -46,7 +46,7 @@ function onChange(event: Event) {
     <select
       :id="id"
       :name="name"
-      :value="modelValue"
+      :value="modelValue ?? ''"
       :disabled="disabled"
       :aria-invalid="!!error ? 'true' : undefined"
       :aria-describedby="ariaDescribedby"

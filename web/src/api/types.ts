@@ -110,7 +110,7 @@ export interface Pipeline {
   dockerfilePath?: string
   imageName: string
   registryHost: string
-  registryCredentialId: number
+  registryCredentialId: number | null
   deployNamespace: string
   deployDeployment: string
   deployContainer: string
@@ -126,7 +126,7 @@ export interface PipelineInput {
   dockerfilePath?: string
   imageName: string
   registryHost: string
-  registryCredentialId: number
+  registryCredentialId?: number | null
   deployNamespace: string
   deployDeployment: string
   deployContainer: string

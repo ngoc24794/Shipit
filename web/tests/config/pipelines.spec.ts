@@ -9,11 +9,13 @@ import { MockShipitApi } from '../../src/api/mock'
 import { setApi } from '../../src/api'
 import { router } from '../../src/router'
 import { ApiError } from '../../src/api/client'
+import type { Pipeline } from '../../src/api/types'
 
 describe('Pipelines View & Store', () => {
   let mockApi: MockShipitApi
 
   beforeEach(() => {
+    document.body.innerHTML = ''
     setActivePinia(createPinia())
     mockApi = new MockShipitApi()
     setApi(mockApi)
@@ -208,5 +210,199 @@ describe('Pipelines View & Store', () => {
     expect(vm.formErrors.gitUrl).toBe('Git URL không thể truy cập')
     expect(vm.formErrors.imageName).toBe('Tên image đã tồn tại trên registry')
     expect(vm.formErrors.deployNamespace).toBe('Namespace chưa được cấp phép')
+  })
+
+  it('creates pipeline with "Không cần đăng nhập" sending registryCredentialId: null without required error', async () => {
+    const credStore = useConfigCredentialsStore()
+    const slaveStore = useConfigSlavesStore()
+    await credStore.fetchCredentials()
+    await slaveStore.fetchSlaves()
+
+    const createSpy = vi.spyOn(mockApi, 'createPipeline')
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm pipeline'))
+    await addBtn!.trigger('click')
+
+    const vm = wrapper.vm as any
+    vm.form.name = 'pipeline-no-auth'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.imageName = 'my-image'
+    vm.form.registryHost = 'registry.example.com'
+    vm.form.registryCredentialId = '' // "Không cần đăng nhập"
+    vm.form.deployNamespace = 'production'
+    vm.form.deployDeployment = 'my-deploy'
+    vm.form.deployContainer = 'app'
+
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(vm.formErrors.registryCredentialId).toBeUndefined()
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'pipeline-no-auth',
+        registryCredentialId: null
+      })
+    )
+  })
+
+  it('creates pipeline selecting a registry credential sending valid credential id', async () => {
+    const credStore = useConfigCredentialsStore()
+    const slaveStore = useConfigSlavesStore()
+    await credStore.fetchCredentials()
+    await slaveStore.fetchSlaves()
+
+    const createSpy = vi.spyOn(mockApi, 'createPipeline')
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm pipeline'))
+    await addBtn!.trigger('click')
+
+    const vm = wrapper.vm as any
+    vm.form.name = 'pipeline-with-auth'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.imageName = 'my-image'
+    vm.form.registryHost = 'registry.example.com'
+    vm.form.registryCredentialId = 3
+    vm.form.deployNamespace = 'production'
+    vm.form.deployDeployment = 'my-deploy'
+    vm.form.deployContainer = 'app'
+
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'pipeline-with-auth',
+        registryCredentialId: 3
+      })
+    )
+  })
+
+  it('edits pipeline with null registryCredentialId, displays "Không cần đăng nhập", switches to credential and back', async () => {
+    const credStore = useConfigCredentialsStore()
+    const slaveStore = useConfigSlavesStore()
+    await credStore.fetchCredentials()
+    await slaveStore.fetchSlaves()
+
+    const updateSpy = vi.spyOn(mockApi, 'updatePipeline')
+
+    const existingPipeline: Pipeline = {
+      id: 99,
+      name: 'edit-test-pipeline',
+      gitUrl: 'https://git.example.com/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      dockerfilePath: 'Dockerfile',
+      imageName: 'test-app',
+      registryHost: 'registry.example.com',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'test-deploy',
+      deployContainer: 'app',
+      lastRun: null
+    }
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const vm = wrapper.vm as any
+    vm.openEditDialog(existingPipeline)
+    await wrapper.vm.$nextTick()
+
+    // Select should show "Không cần đăng nhập" (represented by empty string in select model)
+    expect(vm.form.registryCredentialId).toBe('')
+
+    // Find the registry credential select element
+    const selects = Array.from(document.body.querySelectorAll('select'))
+    const regSelect = selects.find((s) => {
+      const options = Array.from(s.options)
+      return options.some((o) => o.text.includes('Không cần đăng nhập'))
+    })
+    expect(regSelect).toBeDefined()
+    expect(regSelect!.value).toBe('')
+
+    // Change to credential id 3 and save
+    vm.form.registryCredentialId = 3
+    await vm.handleSave()
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      99,
+      expect.objectContaining({
+        registryCredentialId: 3
+      })
+    )
+
+    // Reopen with credential id 3 and change back to "Không cần đăng nhập"
+    vm.openEditDialog({ ...existingPipeline, registryCredentialId: 3 })
+    await wrapper.vm.$nextTick()
+    expect(vm.form.registryCredentialId).toBe(3)
+
+    // Switch back to "Không cần đăng nhập" (value '')
+    vm.form.registryCredentialId = ''
+    await vm.handleSave()
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      99,
+      expect.objectContaining({
+        registryCredentialId: null
+      })
+    )
+  })
+
+  it('defaults to "Không cần đăng nhập" when no registry credentials exist', async () => {
+    const credStore = useConfigCredentialsStore()
+    credStore.credentials = credStore.credentials.filter((c) => c.kind !== 'registry')
+
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+
+    const vm = wrapper.vm as any
+    vm.openAddDialog()
+    await wrapper.vm.$nextTick()
+
+    expect(vm.form.registryCredentialId).toBe('')
+  })
+
+  it('helper getRegistryCredentialName handles null correctly', () => {
+    const wrapper = mount(PipelinesView, {
+      global: {
+        plugins: [createPinia(), router]
+      }
+    })
+    const vm = wrapper.vm as any
+    expect(vm.getRegistryCredentialName(null)).toBe('Không cần đăng nhập')
+    expect(vm.getRegistryCredentialName(undefined)).toBe('Không cần đăng nhập')
   })
 })
