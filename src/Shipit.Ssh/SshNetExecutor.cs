@@ -161,31 +161,6 @@ public class SshNetExecutor : ISshExecutor
         using var runner = connection.CreateCommand(command.CommandText);
         runner.CommandTimeout = command.Timeout ?? TimeSpan.FromMinutes(30);
 
-        Task? stdinTask = null;
-        if (command.StdinSecret != null)
-        {
-            var inStream = runner.CreateInputStream();
-            if (inStream != null)
-            {
-                stdinTask = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await using (inStream.ConfigureAwait(false))
-                        {
-                            var bytes = Encoding.UTF8.GetBytes(command.StdinSecret + "\n");
-                            await inStream.WriteAsync(bytes, executionToken).ConfigureAwait(false);
-                            await inStream.FlushAsync(executionToken).ConfigureAwait(false);
-                        }
-                    }
-                    catch
-                    {
-                        // Channel closed or caller cancelled
-                    }
-                }, executionToken);
-            }
-        }
-
         var stdoutTask = StreamLinesAsync(runner.OutputStream, LogStream.Stdout, output, executionToken);
         var stderrTask = StreamLinesAsync(runner.ExtendedOutputStream, LogStream.Stderr, output, executionToken);
 
@@ -193,6 +168,15 @@ public class SshNetExecutor : ISshExecutor
         try
         {
             var execTask = runner.ExecuteAsync(executionToken);
+
+            // SSH.NET only hands out the input stream once the command is executing, so the command must be
+            // started first. The secret goes in through stdin only (never on the command line).
+            Task? stdinTask = null;
+            if (command.StdinSecret != null)
+            {
+                stdinTask = WriteStdinAsync(runner, command.StdinSecret, executionToken);
+            }
+
             exitCode = await execTask.ConfigureAwait(false);
             if (stdinTask != null)
             {
@@ -213,6 +197,42 @@ public class SshNetExecutor : ISshExecutor
         }
 
         return exitCode;
+    }
+
+    private static async Task WriteStdinAsync(ISshCommandRunner runner, string secret, CancellationToken cancellationToken)
+    {
+        try
+        {
+            Stream? inStream = null;
+            for (var attempt = 0; attempt < 100 && inStream == null; attempt++)
+            {
+                try
+                {
+                    inStream = runner.CreateInputStream();
+                }
+                catch (InvalidOperationException)
+                {
+                    // The command has not started executing yet; try again shortly.
+                    await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            if (inStream == null)
+            {
+                return;
+            }
+
+            await using (inStream.ConfigureAwait(false))
+            {
+                var bytes = Encoding.UTF8.GetBytes(secret + "\n");
+                await inStream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+                await inStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            // Channel closed or caller cancelled; the command's exit code reports the outcome.
+        }
     }
 
     private static async Task StreamLinesAsync(
