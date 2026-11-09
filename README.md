@@ -213,6 +213,7 @@ Trong thư mục `examples/hello-shipit` có sẵn một ứng dụng ASP.NET Co
    - **Dockerfile:** `Dockerfile` (hoặc đường dẫn dùng dấu `/`, ví dụ `examples/hello-shipit/Dockerfile`). Context build là thư mục chứa Dockerfile.
    - **Dockerfile:** `Dockerfile`.
    - **Image Name:** `shipit-demo`, Registry Host `192.168.1.241`.
+   - **Thông tin xác thực Registry:** chọn credential nếu registry yêu cầu đăng nhập; chọn "Không cần đăng nhập" nếu registry mở (khi đó Shipit bỏ qua `docker login`/`logout`).
    - **Deploy:** Namespace `devops`, Deployment `shipit-demo`, Container `app`.
 
 3. **Khởi chạy và kiểm tra:**
