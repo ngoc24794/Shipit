@@ -192,6 +192,49 @@ public class ShipitDbContext : DbContext
         });
     }
 
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in ChangeTracker.Entries<Run>())
+        {
+            if (entry.State is EntityState.Modified or EntityState.Added &&
+                entry.Entity.Status == RunStatus.Success &&
+                entry.Entity.PipelineId != null)
+            {
+                var runId = entry.Entity.Id;
+                var pendingRunJob = await RunSteps.FirstOrDefaultAsync(
+                    s => s.RunId == runId && s.Name == StepName.RunJob && s.Status == StepStatus.Pending,
+                    cancellationToken);
+                if (pendingRunJob is not null)
+                {
+                    pendingRunJob.Status = StepStatus.Success;
+                }
+            }
+        }
+
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    public override int SaveChanges()
+    {
+        foreach (var entry in ChangeTracker.Entries<Run>())
+        {
+            if (entry.State is EntityState.Modified or EntityState.Added &&
+                entry.Entity.Status == RunStatus.Success &&
+                entry.Entity.PipelineId != null)
+            {
+                var runId = entry.Entity.Id;
+                var pendingRunJob = RunSteps.FirstOrDefault(
+                    s => s.RunId == runId && s.Name == StepName.RunJob && s.Status == StepStatus.Pending);
+                if (pendingRunJob is not null)
+                {
+                    pendingRunJob.Status = StepStatus.Success;
+                }
+            }
+        }
+
+        return base.SaveChanges();
+    }
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         base.ConfigureConventions(configurationBuilder);

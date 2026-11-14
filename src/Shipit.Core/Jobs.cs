@@ -23,8 +23,31 @@ public sealed record JobTaskRequest(
     int BackoffLimit,
     TimeSpan Ttl);
 
+/// <summary>
+/// Request to build or run a Kubernetes Job. Synonymous with <see cref="JobTaskRequest"/>;
+/// represents the spec for one task within a Job run.
+/// </summary>
+public sealed record JobRequest(
+    string Namespace,
+    string JobName,
+    string ContainerName,
+    string Image,
+    IReadOnlyList<string> Args,
+    IReadOnlyList<string> EnvFromConfigMaps,
+    IReadOnlyList<string> EnvFromSecrets,
+    IReadOnlyList<JobEnvVar> Env,
+    IReadOnlyList<string> ImagePullSecrets,
+    string? ServiceAccount,
+    IReadOnlyDictionary<string, string> Labels,
+    TimeSpan Timeout,
+    int BackoffLimit,
+    TimeSpan Ttl);
+
 /// <summary>Outcome of one task. <see cref="ExitCode"/> is null when the pod never produced one (not scheduled, deleted, API error).</summary>
 public sealed record JobTaskResult(bool Success, int? ExitCode, string Message, bool TimedOut = false);
+
+/// <summary>Result of executing a Job or task. Synonymous with <see cref="JobTaskResult"/>.</summary>
+public sealed record JobResult(bool Success, int? ExitCode, string Message, bool TimedOut = false);
 
 /// <summary>Runs a task as a Kubernetes Job, streams the pod log, and waits for completion.</summary>
 public interface IK8sJobRunner

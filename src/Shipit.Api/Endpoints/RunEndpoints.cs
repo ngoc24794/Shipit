@@ -32,13 +32,17 @@ internal static class RunEndpoints
             }
         });
 
-        app.MapGet("/api/runs", async (long? pipelineId, int? limit, ShipitDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/runs", async (long? pipelineId, long? jobId, int? limit, ShipitDbContext db, CancellationToken ct) =>
         {
             var take = Math.Clamp(limit ?? 50, 1, 200);
             var query = db.Runs.AsNoTracking();
             if (pipelineId is not null)
             {
                 query = query.Where(r => r.PipelineId == pipelineId);
+            }
+            if (jobId is not null)
+            {
+                query = query.Where(r => r.JobId == jobId);
             }
 
             var runs = await query.OrderByDescending(r => r.Id).Take(take).ToListAsync(ct);
@@ -47,7 +51,10 @@ internal static class RunEndpoints
 
         app.MapGet("/api/runs/{id:long}", async (long id, ShipitDbContext db, CancellationToken ct) =>
         {
-            var run = await db.Runs.AsNoTracking().Include(r => r.Steps).FirstOrDefaultAsync(r => r.Id == id, ct);
+            var run = await db.Runs.AsNoTracking()
+                .Include(r => r.Steps)
+                .Include(r => r.Tasks)
+                .FirstOrDefaultAsync(r => r.Id == id, ct);
             return run is null ? Results.NotFound() : Results.Ok(run.ToDetailDto());
         });
 
