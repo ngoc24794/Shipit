@@ -3,24 +3,28 @@ using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Shipit.Core;
 using Shipit.Data;
 using Shipit.Data.Entities;
 
 namespace Shipit.Engine;
 
 /// <summary>
-/// Owns the run queue. <see cref="TriggerAsync"/> creates queued runs (one active run per pipeline, also enforced
-/// by a database index); the hosted loop executes them with bounded concurrency. On start-up it repairs runs
-/// left behind by a restart: running ones become <c>failed (interrupted)</c>, queued ones are scheduled again.
+/// Owns the run queue. <see cref="TriggerAsync"/> and <see cref="TriggerJobAsync"/> create queued runs (one active run per pipeline / job,
+/// also enforced by database indexes); the hosted loop executes them with bounded concurrency. On start-up it repairs runs
+/// left behind by a restart: running ones become <c>failed (interrupted)</c>, orphan Kubernetes jobs are cleaned up,
+/// and queued ones are scheduled again.
 /// </summary>
 public sealed class RunCoordinator(
     IDbContextFactory<ShipitDbContext> dbFactory,
     PipelineRunner runner,
     EngineOptions options,
     TimeProvider time,
-    ILogger<RunCoordinator> logger) : BackgroundService, IRunCoordinator
+    ILogger<RunCoordinator> logger,
+    IK8sJobRunner? jobRunner = null) : BackgroundService, IRunCoordinator
 {
-    private static readonly StepName[] StepOrder = [StepName.Checkout, StepName.Build, StepName.Push, StepName.Deploy];
+    private static readonly StepName[] PipelineStepOrder = [StepName.Checkout, StepName.Build, StepName.Push, StepName.Deploy];
+    private static readonly StepName[] JobStepOrder = [StepName.Checkout, StepName.Build, StepName.Push, StepName.RunJob];
 
     private readonly Channel<long> _queue = Channel.CreateUnbounded<long>();
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _inFlight = new();
@@ -44,7 +48,7 @@ public sealed class RunCoordinator(
             PipelineId = pipelineId,
             Status = RunStatus.Queued,
             CreatedAt = time.GetUtcNow().UtcDateTime,
-            Steps = StepOrder.Select(n => new RunStep { Name = n, Status = StepStatus.Pending }).ToList(),
+            Steps = PipelineStepOrder.Select(n => new RunStep { Name = n, Status = StepStatus.Pending }).ToList(),
         };
         db.Runs.Add(run);
 
@@ -68,12 +72,69 @@ public sealed class RunCoordinator(
         return run;
     }
 
+    public async Task<Run> TriggerJobAsync(long jobId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!await db.Jobs.AnyAsync(j => j.Id == jobId, cancellationToken).ConfigureAwait(false))
+        {
+            throw new JobNotFoundException(jobId);
+        }
+
+        if (await HasActiveJobRunAsync(db, jobId, cancellationToken).ConfigureAwait(false))
+        {
+            throw new JobRunConflictException(jobId);
+        }
+
+        var tasks = await db.JobTasks
+            .Where(t => t.JobId == jobId)
+            .OrderBy(t => t.Position)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        var run = new Run
+        {
+            JobId = jobId,
+            Status = RunStatus.Queued,
+            CreatedAt = time.GetUtcNow().UtcDateTime,
+            Steps = JobStepOrder.Select(n => new RunStep { Name = n, Status = StepStatus.Pending }).ToList(),
+            Tasks = tasks.Select(t => new RunTask
+            {
+                Position = t.Position,
+                Label = t.Label,
+                Status = StepStatus.Pending,
+            }).ToList(),
+        };
+        db.Runs.Add(run);
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateException)
+        {
+            // Two triggers raced: the unique index on active runs rejected ours.
+            await using var check = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            if (await HasActiveJobRunAsync(check, jobId, cancellationToken).ConfigureAwait(false))
+            {
+                throw new JobRunConflictException(jobId);
+            }
+
+            throw;
+        }
+
+        await _queue.Writer.WriteAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        return run;
+    }
+
     /// <summary>Repairs runs left over from a previous process. Called once when the service starts.</summary>
     public async Task RecoverAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        var stale = await db.Runs.Include(r => r.Steps)
+        var stale = await db.Runs
+            .Include(r => r.Steps)
+            .Include(r => r.Tasks)
+            .Include(r => r.Job)
             .Where(r => r.Status == RunStatus.Running)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
         var now = time.GetUtcNow().UtcDateTime;
@@ -83,12 +144,33 @@ public sealed class RunCoordinator(
             db.RunLogs.Add(new RunLog
             {
                 RunId = run.Id,
-                Step = run.Steps.FirstOrDefault(s => s.Status == StepStatus.Failed)?.Name ?? StepName.Checkout,
+                Step = run.Steps.FirstOrDefault(s => s.Status == StepStatus.Failed)?.Name ?? (run.JobId != null ? StepName.RunJob : StepName.Checkout),
                 Stream = Shipit.Core.LogStream.System,
                 Text = "Run interrupted by a restart of Shipit.",
                 At = now,
             });
             logger.LogWarning("Run {RunId} was running when Shipit stopped; marked as interrupted.", run.Id);
+
+            if (run.JobId != null && jobRunner != null)
+            {
+                var jobNs = run.Job?.Namespace;
+                if (string.IsNullOrEmpty(jobNs))
+                {
+                    jobNs = await db.Jobs.Where(j => j.Id == run.JobId.Value).Select(j => j.Namespace).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                if (!string.IsNullOrEmpty(jobNs))
+                {
+                    try
+                    {
+                        await jobRunner.DeleteByRunAsync(jobNs, run.Id, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Failed to delete orphan Kubernetes jobs for run {RunId} in namespace {Namespace}.", run.Id, jobNs);
+                    }
+                }
+            }
         }
 
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -162,7 +244,7 @@ public sealed class RunCoordinator(
         {
             userCts.Cancel();
             await using var db = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-            var running = await db.Runs.Include(r => r.Steps).FirstOrDefaultAsync(r => r.Id == runId, cancellationToken).ConfigureAwait(false);
+            var running = await db.Runs.Include(r => r.Steps).Include(r => r.Tasks).FirstOrDefaultAsync(r => r.Id == runId, cancellationToken).ConfigureAwait(false);
             if (running is null)
             {
                 return (CancelResult.NotFound, null);
@@ -178,7 +260,7 @@ public sealed class RunCoordinator(
 
         // 2. Not in flight: check database
         await using var dbAccess = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var run = await dbAccess.Runs.Include(r => r.Steps).FirstOrDefaultAsync(r => r.Id == runId, cancellationToken).ConfigureAwait(false);
+        var run = await dbAccess.Runs.Include(r => r.Steps).Include(r => r.Tasks).FirstOrDefaultAsync(r => r.Id == runId, cancellationToken).ConfigureAwait(false);
         if (run is null)
         {
             return (CancelResult.NotFound, null);
@@ -202,11 +284,18 @@ public sealed class RunCoordinator(
                     s.Status = StepStatus.Skipped;
                 }
             }
+            foreach (var t in run.Tasks)
+            {
+                if (t.Status == StepStatus.Pending)
+                {
+                    t.Status = StepStatus.Skipped;
+                }
+            }
 
             dbAccess.RunLogs.Add(new RunLog
             {
                 RunId = run.Id,
-                Step = StepName.Checkout,
+                Step = run.JobId != null ? StepName.RunJob : StepName.Checkout,
                 Stream = Shipit.Core.LogStream.System,
                 Text = "Run cancelled by user.",
                 At = now,
@@ -232,5 +321,10 @@ public sealed class RunCoordinator(
     private static Task<bool> HasActiveRunAsync(ShipitDbContext db, long pipelineId, CancellationToken ct) =>
         db.Runs.AnyAsync(
             r => r.PipelineId == pipelineId && (r.Status == RunStatus.Queued || r.Status == RunStatus.Running),
+            ct);
+
+    private static Task<bool> HasActiveJobRunAsync(ShipitDbContext db, long jobId, CancellationToken ct) =>
+        db.Runs.AnyAsync(
+            r => r.JobId == jobId && (r.Status == RunStatus.Queued || r.Status == RunStatus.Running),
             ct);
 }

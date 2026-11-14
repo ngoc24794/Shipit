@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -11,8 +13,9 @@ using Shipit.Ssh;
 namespace Shipit.Engine;
 
 /// <summary>
-/// Executes one run: checkout, build, push, deploy. Stops at the first failing step, always cleans up
-/// registry login and the clone on the slave, masks secrets in every log line, and persists state as it goes.
+/// Executes one run: checkout, build, push, deploy (for pipelines) or checkout, build, push, run-job (for jobs).
+/// Stops at the first failing step, always cleans up registry login and the clone on the slave, masks secrets
+/// in every log line, and persists state as it goes.
 /// </summary>
 public sealed partial class PipelineRunner(
     IDbContextFactory<ShipitDbContext> dbFactory,
@@ -21,15 +24,64 @@ public sealed partial class PipelineRunner(
     ISecretProtector protector,
     EngineOptions options,
     TimeProvider time,
-    ILogger<PipelineRunner> logger)
+    ILogger<PipelineRunner> logger,
+    IK8sJobRunner? jobRunner = null,
+    IJobAllowList? allowList = null)
 {
     /// <summary>Reason stored when a run is cut short by a restart or shutdown.</summary>
     public const string InterruptedReason = "interrupted";
 
-    private static readonly StepName[] Steps = [StepName.Checkout, StepName.Build, StepName.Push, StepName.Deploy];
+    private static readonly StepName[] PipelineSteps = [StepName.Checkout, StepName.Build, StepName.Push, StepName.Deploy];
+    private static readonly StepName[] JobSteps = [StepName.Checkout, StepName.Build, StepName.Push, StepName.RunJob];
 
     [GeneratedRegex("^[0-9a-f]{7,40}$")]
     private static partial Regex ShaRegex();
+
+    internal static string BuildK8sJobName(string jobName, long runId, int position)
+    {
+        var suffix = $"-{runId}-{position}";
+        var maxPrefixLen = Math.Max(1, 63 - suffix.Length);
+
+        var raw = (jobName ?? string.Empty).ToLowerInvariant();
+        var sb = new StringBuilder();
+        foreach (var ch in raw)
+        {
+            if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-')
+            {
+                sb.Append(ch);
+            }
+            else
+            {
+                sb.Append('-');
+            }
+        }
+        var cleaned = sb.ToString();
+        while (cleaned.Contains("--"))
+        {
+            cleaned = cleaned.Replace("--", "-");
+        }
+        cleaned = cleaned.Trim('-');
+        if (string.IsNullOrEmpty(cleaned))
+        {
+            cleaned = "job";
+        }
+
+        if (cleaned.Length > maxPrefixLen)
+        {
+            cleaned = cleaned[..maxPrefixLen].TrimEnd('-');
+            if (string.IsNullOrEmpty(cleaned))
+            {
+                cleaned = "j";
+            }
+        }
+
+        var result = $"{cleaned}{suffix}".Trim('-');
+        if (result.Length > 63)
+        {
+            result = result[..63].TrimEnd('-');
+        }
+        return result;
+    }
 
     /// <summary>Runs a previously queued run to completion. Never throws for run failures; they are recorded.</summary>
     public async Task ExecuteAsync(long runId, CancellationToken cancellationToken, CancellationToken userCancellationToken = default)
@@ -45,6 +97,10 @@ public sealed partial class PipelineRunner(
         var combinedToken = linkedCts.Token;
 
         var masker = new LogMasker();
+        foreach (var s in options.AdditionalSecretsToMask)
+        {
+            masker.Add(s);
+        }
         var writer = new RunLogWriter(dbFactory, runId, masker, options, time);
         var ctx = new RunContext(plan, writer, masker);
 
@@ -64,10 +120,12 @@ public sealed partial class PipelineRunner(
                 return;
             }
 
-            foreach (var step in Steps)
+            var steps = plan.IsJob ? JobSteps : PipelineSteps;
+            foreach (var step in steps)
             {
                 combinedToken.ThrowIfCancellationRequested();
                 writer.CurrentStep = step;
+                writer.CurrentTaskPosition = null;
                 await SetStepAsync(runId, step, StepStatus.Running).ConfigureAwait(false);
                 await writer.WriteAsync($"== {step} ==", LogStream.System, CancellationToken.None).ConfigureAwait(false);
 
@@ -93,7 +151,7 @@ public sealed partial class PipelineRunner(
             }
 
             await writer.WriteAsync("Run cancelled by user.", LogStream.System, CancellationToken.None).ConfigureAwait(false);
-            await CancelStepsAsync(runId).ConfigureAwait(false);
+            await CancelStepsAndTasksAsync(runId).ConfigureAwait(false);
             ctx.FinalStatus = RunStatus.Cancelled;
             ctx.FinalReason = "cancelled by user";
         }
@@ -144,6 +202,7 @@ public sealed partial class PipelineRunner(
                 StepName.Build => await BuildAsync(c, ct).ConfigureAwait(false),
                 StepName.Push => await PushAsync(c, ct).ConfigureAwait(false),
                 StepName.Deploy => await DeployAsync(c, ct).ConfigureAwait(false),
+                StepName.RunJob => await RunJobStepAsync(c, ct).ConfigureAwait(false),
                 _ => (false, "unknown step"),
             };
         }
@@ -239,6 +298,11 @@ public sealed partial class PipelineRunner(
     private async Task<(bool, string?)> DeployAsync(RunContext c, CancellationToken ct)
     {
         var p = c.Plan;
+        if (p.DeployNamespace is null || p.DeployDeployment is null || p.DeployContainer is null)
+        {
+            return (false, "pipeline deploy configuration is incomplete");
+        }
+
         var deployHost = string.IsNullOrWhiteSpace(p.DeployRegistryHost) ? p.RegistryHost : p.DeployRegistryHost;
         var deployImage = RemoteCommandBuilder.BuildImageRef(deployHost, p.ImageName, c.Tag!);
         await c.Writer.WriteAsync($"Deploying image {deployImage} to {p.DeployNamespace}/{p.DeployDeployment}", LogStream.System, ct).ConfigureAwait(false);
@@ -252,6 +316,207 @@ public sealed partial class PipelineRunner(
 
         await c.Writer.WriteAsync(result.Message, LogStream.System, ct).ConfigureAwait(false);
         return (true, null);
+    }
+
+    private async Task<(bool, string?)> RunJobStepAsync(RunContext c, CancellationToken ct)
+    {
+        if (jobRunner is null)
+        {
+            return (false, "no Kubernetes job runner configured");
+        }
+
+        var p = c.Plan;
+        var deployHost = string.IsNullOrWhiteSpace(p.DeployRegistryHost) ? p.RegistryHost : p.DeployRegistryHost;
+        var clusterImage = RemoteCommandBuilder.BuildImageRef(deployHost, p.ImageName, c.Tag!);
+
+        IReadOnlyList<string> imagePullSecrets;
+        try
+        {
+            imagePullSecrets = string.IsNullOrWhiteSpace(p.JobImagePullSecretsJson)
+                ? []
+                : JsonSerializer.Deserialize<List<string>>(p.JobImagePullSecretsJson) ?? [];
+        }
+        catch (Exception ex)
+        {
+            return (false, $"invalid imagePullSecrets JSON: {ex.Message}");
+        }
+
+        await using var db = await dbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var jobTasks = await db.JobTasks
+            .Where(t => t.JobId == p.JobId)
+            .OrderBy(t => t.Position)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        foreach (var task in jobTasks)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            IReadOnlyList<string> args;
+            IReadOnlyList<string> envFromConfigMaps;
+            IReadOnlyList<string> envFromSecrets;
+            IReadOnlyList<JobEnvVar> env;
+
+            try
+            {
+                args = string.IsNullOrWhiteSpace(task.ArgsJson)
+                    ? []
+                    : JsonSerializer.Deserialize<List<string>>(task.ArgsJson, jsonOptions) ?? [];
+                envFromConfigMaps = string.IsNullOrWhiteSpace(task.EnvFromConfigMapsJson)
+                    ? []
+                    : JsonSerializer.Deserialize<List<string>>(task.EnvFromConfigMapsJson, jsonOptions) ?? [];
+                envFromSecrets = string.IsNullOrWhiteSpace(task.EnvFromSecretsJson)
+                    ? []
+                    : JsonSerializer.Deserialize<List<string>>(task.EnvFromSecretsJson, jsonOptions) ?? [];
+                env = string.IsNullOrWhiteSpace(task.EnvJson)
+                    ? []
+                    : JsonSerializer.Deserialize<List<JobEnvVar>>(task.EnvJson, jsonOptions) ?? [];
+            }
+            catch (Exception ex)
+            {
+                var parseError = $"invalid JSON: {ex.Message}";
+                await UpdateRunTaskAsync(p.RunId, task.Position, t =>
+                {
+                    t.Status = StepStatus.Failed;
+                    t.FinishedAt = Now();
+                }).ConfigureAwait(false);
+                await SkipRemainingRunTasksAsync(p.RunId, task.Position).ConfigureAwait(false);
+                await c.Writer.WriteAsync($"Task {task.Position} ({task.Label}) failed: {parseError}", LogStream.System, CancellationToken.None).ConfigureAwait(false);
+                return (false, $"task {task.Position} ({task.Label}) failed: {parseError}");
+            }
+
+            var k8sJobName = BuildK8sJobName(p.JobName!, p.RunId, task.Position);
+
+            var request = new JobTaskRequest(
+                Namespace: p.JobNamespace!,
+                JobName: k8sJobName,
+                ContainerName: string.IsNullOrWhiteSpace(p.JobContainerName) ? "app" : p.JobContainerName,
+                Image: clusterImage,
+                Args: args,
+                EnvFromConfigMaps: envFromConfigMaps,
+                EnvFromSecrets: envFromSecrets,
+                Env: env,
+                ImagePullSecrets: imagePullSecrets,
+                ServiceAccount: p.JobServiceAccount,
+                Labels: new Dictionary<string, string>
+                {
+                    ["shipit/run-id"] = p.RunId.ToString(),
+                    ["shipit/job-id"] = p.JobId!.Value.ToString(),
+                    ["shipit/task"] = task.Position.ToString(),
+                    ["app.kubernetes.io/managed-by"] = "shipit",
+                },
+                Timeout: task.TimeoutSeconds > 0 ? TimeSpan.FromSeconds(task.TimeoutSeconds) : TimeSpan.FromSeconds(1800),
+                BackoffLimit: task.BackoffLimit,
+                Ttl: task.TtlSeconds > 0 ? TimeSpan.FromSeconds(task.TtlSeconds) : TimeSpan.FromSeconds(3600));
+
+            if (allowList != null)
+            {
+                var (allowed, reason) = await CheckAllowListAsync(allowList, request, ct).ConfigureAwait(false);
+                if (!allowed)
+                {
+                    var allowReason = $"not allowed: {reason}";
+                    await UpdateRunTaskAsync(p.RunId, task.Position, t =>
+                    {
+                        t.Status = StepStatus.Failed;
+                        t.K8sJobName = k8sJobName;
+                        t.FinishedAt = Now();
+                    }).ConfigureAwait(false);
+                    await SkipRemainingRunTasksAsync(p.RunId, task.Position).ConfigureAwait(false);
+                    await c.Writer.WriteAsync(allowReason, LogStream.System, CancellationToken.None).ConfigureAwait(false);
+                    return (false, $"task {task.Position} ({task.Label}) failed: {allowReason}");
+                }
+            }
+
+            await UpdateRunTaskAsync(p.RunId, task.Position, t =>
+            {
+                t.Status = StepStatus.Running;
+                t.K8sJobName = k8sJobName;
+                t.StartedAt = Now();
+            }).ConfigureAwait(false);
+
+            c.Writer.CurrentStep = StepName.RunJob;
+            c.Writer.CurrentTaskPosition = task.Position;
+            await c.Writer.WriteAsync($"== Task {task.Position}: {task.Label} ({k8sJobName}) ==", LogStream.System, ct).ConfigureAwait(false);
+
+            var result = await jobRunner.RunAsync(request, c.Writer, ct).ConfigureAwait(false);
+
+            await UpdateRunTaskAsync(p.RunId, task.Position, t =>
+            {
+                t.Status = result.Success ? StepStatus.Success : StepStatus.Failed;
+                t.ExitCode = result.ExitCode;
+                t.FinishedAt = Now();
+            }).ConfigureAwait(false);
+
+            if (!result.Success)
+            {
+                string taskFailure;
+                if (result.TimedOut)
+                {
+                    taskFailure = "job timed out";
+                }
+                else if (result.ExitCode != null)
+                {
+                    taskFailure = $"job exited with code {result.ExitCode}";
+                }
+                else
+                {
+                    taskFailure = result.Message;
+                }
+
+                await SkipRemainingRunTasksAsync(p.RunId, task.Position).ConfigureAwait(false);
+                return (false, $"task {task.Position} ({task.Label}) failed: {taskFailure}");
+            }
+        }
+
+        c.Writer.CurrentTaskPosition = null;
+        return (true, null);
+    }
+
+    private static async Task<(bool Allowed, string Reason)> CheckAllowListAsync(
+        IJobAllowList allow,
+        JobTaskRequest request,
+        CancellationToken ct)
+    {
+        if (!await allow.IsNamespaceAllowedAsync(request.Namespace, ct).ConfigureAwait(false))
+        {
+            return (false, $"namespace '{request.Namespace}' is not allowed");
+        }
+
+        foreach (var cm in request.EnvFromConfigMaps)
+        {
+            if (!string.IsNullOrEmpty(cm) && !await allow.IsConfigMapAllowedAsync(request.Namespace, cm, ct).ConfigureAwait(false))
+            {
+                return (false, $"ConfigMap '{cm}' in namespace '{request.Namespace}' is not allowed");
+            }
+        }
+
+        foreach (var sec in request.EnvFromSecrets)
+        {
+            if (!string.IsNullOrEmpty(sec) && !await allow.IsSecretAllowedAsync(request.Namespace, sec, ct).ConfigureAwait(false))
+            {
+                return (false, $"Secret '{sec}' in namespace '{request.Namespace}' is not allowed");
+            }
+        }
+
+        foreach (var ips in request.ImagePullSecrets)
+        {
+            if (!string.IsNullOrEmpty(ips) && !await allow.IsPullSecretAllowedAsync(request.Namespace, ips, ct).ConfigureAwait(false))
+            {
+                return (false, $"image pull secret '{ips}' in namespace '{request.Namespace}' is not allowed");
+            }
+        }
+
+        foreach (var ev in request.Env)
+        {
+            if (!string.IsNullOrEmpty(ev.SecretName) && !await allow.IsSecretAllowedAsync(request.Namespace, ev.SecretName, ct).ConfigureAwait(false))
+            {
+                return (false, $"Secret '{ev.SecretName}' referenced by env var '{ev.Name}' in namespace '{request.Namespace}' is not allowed");
+            }
+        }
+
+        return (true, string.Empty);
     }
 
     private static string ExitFailure(string what, int code) =>
@@ -334,29 +599,91 @@ public sealed partial class PipelineRunner(
             .Include(r => r.Pipeline).ThenInclude(p => p!.Slave).ThenInclude(s => s!.SshCredential)
             .Include(r => r.Pipeline).ThenInclude(p => p!.GitCredential)
             .Include(r => r.Pipeline).ThenInclude(p => p!.RegistryCredential)
+            .Include(r => r.Job).ThenInclude(j => j!.Slave).ThenInclude(s => s!.SshCredential)
+            .Include(r => r.Job).ThenInclude(j => j!.GitCredential)
+            .Include(r => r.Job).ThenInclude(j => j!.RegistryCredential)
             .FirstOrDefaultAsync(r => r.Id == runId && r.Status == RunStatus.Queued)
             .ConfigureAwait(false);
-        var p = run?.Pipeline;
-        if (run is null || p?.Slave?.SshCredential is null || p.GitCredential is null)
+
+        if (run is null)
         {
             return null;
         }
 
-        if (p.RegistryCredentialId is not null && p.RegistryCredential is null)
+        if (run.PipelineId != null)
         {
-            return null;
+            var p = run.Pipeline;
+            if (p?.Slave?.SshCredential is null || p.GitCredential is null)
+            {
+                return null;
+            }
+
+            if (p.RegistryCredentialId is not null && p.RegistryCredential is null)
+            {
+                return null;
+            }
+
+            return new RunPlan(
+                RunId: runId,
+                IsJob: false,
+                GitUrl: p.GitUrl,
+                GitBranch: p.GitBranch,
+                DockerfilePath: p.DockerfilePath,
+                BuildContext: p.BuildContext,
+                ImageName: p.ImageName,
+                RegistryHost: p.RegistryHost,
+                DeployRegistryHost: p.DeployRegistryHost,
+                SlaveHost: p.Slave.Host,
+                SlavePort: p.Slave.Port,
+                SlaveUser: p.Slave.User,
+                SshKeyProtected: p.Slave.SshCredential.ProtectedValue,
+                GitTokenProtected: p.GitCredential.ProtectedValue,
+                RegistryPasswordProtected: p.RegistryCredential?.ProtectedValue,
+                RegistryUsername: p.RegistryCredential?.Username,
+                DeployNamespace: p.DeployNamespace,
+                DeployDeployment: p.DeployDeployment,
+                DeployContainer: p.DeployContainer);
         }
 
-        return new RunPlan(
-            runId,
-            p.GitUrl, p.GitBranch, p.DockerfilePath, p.BuildContext, p.ImageName, p.RegistryHost,
-            p.DeployRegistryHost,
-            p.DeployNamespace, p.DeployDeployment, p.DeployContainer,
-            p.Slave.Host, p.Slave.Port, p.Slave.User,
-            p.Slave.SshCredential.ProtectedValue,
-            p.GitCredential.ProtectedValue,
-            p.RegistryCredential?.ProtectedValue,
-            p.RegistryCredential?.Username);
+        if (run.JobId != null)
+        {
+            var j = run.Job;
+            if (j?.Slave?.SshCredential is null || j.GitCredential is null)
+            {
+                return null;
+            }
+
+            if (j.RegistryCredentialId is not null && j.RegistryCredential is null)
+            {
+                return null;
+            }
+
+            return new RunPlan(
+                RunId: runId,
+                IsJob: true,
+                GitUrl: j.GitUrl,
+                GitBranch: j.GitBranch,
+                DockerfilePath: j.DockerfilePath,
+                BuildContext: j.BuildContext,
+                ImageName: j.ImageName,
+                RegistryHost: j.RegistryHost,
+                DeployRegistryHost: j.DeployRegistryHost,
+                SlaveHost: j.Slave.Host,
+                SlavePort: j.Slave.Port,
+                SlaveUser: j.Slave.User,
+                SshKeyProtected: j.Slave.SshCredential.ProtectedValue,
+                GitTokenProtected: j.GitCredential.ProtectedValue,
+                RegistryPasswordProtected: j.RegistryCredential?.ProtectedValue,
+                RegistryUsername: j.RegistryCredential?.Username,
+                JobId: j.Id,
+                JobName: j.Name,
+                JobNamespace: j.Namespace,
+                JobContainerName: j.ContainerName,
+                JobServiceAccount: j.ServiceAccount,
+                JobImagePullSecretsJson: j.ImagePullSecretsJson);
+        }
+
+        return null;
     }
 
     private async Task UpdateRunAsync(long runId, Action<Run> change)
@@ -364,6 +691,30 @@ public sealed partial class PipelineRunner(
         await using var db = await dbFactory.CreateDbContextAsync().ConfigureAwait(false);
         var run = await db.Runs.FirstAsync(r => r.Id == runId).ConfigureAwait(false);
         change(run);
+        await db.SaveChangesAsync().ConfigureAwait(false);
+    }
+
+    private async Task UpdateRunTaskAsync(long runId, int position, Action<RunTask> change)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var task = await db.RunTasks.FirstOrDefaultAsync(t => t.RunId == runId && t.Position == position).ConfigureAwait(false);
+        if (task != null)
+        {
+            change(task);
+            await db.SaveChangesAsync().ConfigureAwait(false);
+        }
+    }
+
+    private async Task SkipRemainingRunTasksAsync(long runId, int currentPosition)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var remaining = await db.RunTasks
+            .Where(t => t.RunId == runId && t.Position > currentPosition && t.Status == StepStatus.Pending)
+            .ToListAsync().ConfigureAwait(false);
+        foreach (var t in remaining)
+        {
+            t.Status = StepStatus.Skipped;
+        }
         await db.SaveChangesAsync().ConfigureAwait(false);
     }
 
@@ -392,7 +743,7 @@ public sealed partial class PipelineRunner(
         await c.Writer.WriteAsync($"FAILED: {masked}", LogStream.System, CancellationToken.None).ConfigureAwait(false);
 
         await using var db = await dbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var run = await db.Runs.Include(r => r.Steps).FirstAsync(r => r.Id == runId).ConfigureAwait(false);
+        var run = await db.Runs.Include(r => r.Steps).Include(r => r.Tasks).FirstAsync(r => r.Id == runId).ConfigureAwait(false);
         var now = Now();
         foreach (var s in run.Steps)
         {
@@ -408,17 +759,27 @@ public sealed partial class PipelineRunner(
             }
         }
 
+        foreach (var t in run.Tasks)
+        {
+            if (t.Status == StepStatus.Pending)
+            {
+                t.Status = StepStatus.Skipped;
+            }
+        }
+
         // Steps are visible immediately; the run itself turns final last (see ExecuteAsync).
         c.FinalStatus = RunStatus.Failed;
-        c.FinalReason = $"{failedStep.ToString().ToLowerInvariant()} failed: {masked}";
+        c.FinalReason = failedStep == StepName.RunJob ? masked : $"{failedStep.ToString().ToLowerInvariant()} failed: {masked}";
         await db.SaveChangesAsync().ConfigureAwait(false);
     }
 
-    private async Task CancelStepsAsync(long runId)
+    private async Task CancelStepsAndTasksAsync(long runId)
     {
         await using var db = await dbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var run = await db.Runs.Include(r => r.Steps).FirstAsync(r => r.Id == runId).ConfigureAwait(false);
-        MarkStepsCancelled(run.Steps, Now());
+        var run = await db.Runs.Include(r => r.Steps).Include(r => r.Tasks).FirstAsync(r => r.Id == runId).ConfigureAwait(false);
+        var now = Now();
+        MarkStepsCancelled(run.Steps, now);
+        MarkTasksCancelled(run.Tasks, now);
         await db.SaveChangesAsync().ConfigureAwait(false);
     }
 
@@ -438,11 +799,29 @@ public sealed partial class PipelineRunner(
         }
     }
 
+    private static void MarkTasksCancelled(IEnumerable<RunTask> tasks, DateTime now)
+    {
+        foreach (var t in tasks)
+        {
+            if (t.Status == StepStatus.Running)
+            {
+                t.Status = StepStatus.Cancelled;
+                t.FinishedAt = now;
+            }
+            else if (t.Status == StepStatus.Pending)
+            {
+                t.Status = StepStatus.Cancelled;
+            }
+        }
+    }
+
     private async Task InterruptAsync(long runId)
     {
         await using var db = await dbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var run = await db.Runs.Include(r => r.Steps).FirstAsync(r => r.Id == runId).ConfigureAwait(false);
-        MarkStepsInterrupted(run.Steps, Now());
+        var run = await db.Runs.Include(r => r.Steps).Include(r => r.Tasks).FirstAsync(r => r.Id == runId).ConfigureAwait(false);
+        var now = Now();
+        MarkStepsInterrupted(run.Steps, now);
+        MarkTasksInterrupted(run.Tasks, now);
         await db.SaveChangesAsync().ConfigureAwait(false);
     }
 
@@ -462,10 +841,30 @@ public sealed partial class PipelineRunner(
         }
     }
 
-    /// <summary>Marks a leftover run (and its steps) as interrupted. Used when recovering after a restart.</summary>
+    private static void MarkTasksInterrupted(IEnumerable<RunTask> tasks, DateTime now)
+    {
+        foreach (var t in tasks)
+        {
+            if (t.Status == StepStatus.Running)
+            {
+                t.Status = StepStatus.Failed;
+                t.FinishedAt = now;
+            }
+            else if (t.Status == StepStatus.Pending)
+            {
+                t.Status = StepStatus.Skipped;
+            }
+        }
+    }
+
+    /// <summary>Marks a leftover run (and its steps/tasks) as interrupted. Used when recovering after a restart.</summary>
     internal static void MarkInterrupted(Run run, DateTime now)
     {
         MarkStepsInterrupted(run.Steps, now);
+        if (run.Tasks != null)
+        {
+            MarkTasksInterrupted(run.Tasks, now);
+        }
         run.Status = RunStatus.Failed;
         run.FailureReason = InterruptedReason;
         run.FinishedAt = now;
@@ -475,6 +874,7 @@ public sealed partial class PipelineRunner(
 
     private sealed record RunPlan(
         long RunId,
+        bool IsJob,
         string GitUrl,
         string GitBranch,
         string DockerfilePath,
@@ -482,16 +882,22 @@ public sealed partial class PipelineRunner(
         string ImageName,
         string RegistryHost,
         string? DeployRegistryHost,
-        string DeployNamespace,
-        string DeployDeployment,
-        string DeployContainer,
         string SlaveHost,
         int SlavePort,
         string SlaveUser,
         string SshKeyProtected,
         string GitTokenProtected,
         string? RegistryPasswordProtected,
-        string? RegistryUsername);
+        string? RegistryUsername,
+        string? DeployNamespace = null,
+        string? DeployDeployment = null,
+        string? DeployContainer = null,
+        long? JobId = null,
+        string? JobName = null,
+        string? JobNamespace = null,
+        string? JobContainerName = null,
+        string? JobServiceAccount = null,
+        string? JobImagePullSecretsJson = null);
 
     private sealed class RunContext(RunPlan plan, RunLogWriter writer, LogMasker masker)
     {
