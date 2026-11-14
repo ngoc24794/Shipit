@@ -88,7 +88,8 @@ onMounted(async () => {
 
   await Promise.all([
     runsStore.fetchPipelines(),
-    runsStore.fetchRuns()
+    runsStore.fetchRuns(),
+    runsStore.fetchJobs()
   ])
 
   if (hasActiveRuns.value) {

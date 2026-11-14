@@ -34,6 +34,18 @@ export const useRunsStore = defineStore('runs', () => {
     return j?.name || `Job #${jobId}`
   }
 
+  async function fetchJobs(): Promise<Array<{ id: number; name: string }>> {
+    const api = getApi()
+    try {
+      const list = await api.getJobs()
+      const mapped = list.map((j) => ({ id: j.id, name: j.name }))
+      jobs.value = mapped
+      return mapped
+    } catch {
+      return jobs.value
+    }
+  }
+
   async function fetchPipelines(): Promise<Pipeline[]> {
     const api = getApi()
     loadingPipelines.value = true
@@ -135,6 +147,7 @@ export const useRunsStore = defineStore('runs', () => {
     pipelinesMap,
     getPipelineName,
     getJobName,
+    fetchJobs,
     fetchPipelines,
     fetchRuns,
     refreshRuns,

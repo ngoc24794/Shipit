@@ -98,6 +98,7 @@ export interface ShipitApi {
   validateJob(input: JobInput): Promise<JobValidation>
   previewJob(input: JobInput): Promise<JobPreview>
   triggerJobRun(id: number): Promise<Run>
+  runJob?(id: number): Promise<Run>
 
   // Job Allow Entries
   getJobAllowEntries(): Promise<JobAllowEntry[]>
@@ -362,7 +363,19 @@ export class HttpShipitApi implements ShipitApi {
     })
 
     eventSource.addEventListener('end', (event: MessageEvent) => {
-      const status = (event.data || 'success') as RunStatus
+      let status: RunStatus = 'success'
+      if (event.data) {
+        try {
+          const parsed = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+          if (parsed && typeof parsed.status === 'string') {
+            status = parsed.status as RunStatus
+          } else if (typeof parsed === 'string') {
+            status = parsed as RunStatus
+          }
+        } catch {
+          status = event.data as RunStatus
+        }
+      }
       onEnd(status)
       eventSource.close()
     })
@@ -422,6 +435,10 @@ export class HttpShipitApi implements ShipitApi {
     return this.request<Run>(`/api/jobs/${id}/runs`, {
       method: 'POST'
     })
+  }
+
+  async runJob(id: number): Promise<Run> {
+    return this.triggerJobRun(id)
   }
 
   async getJobAllowEntries(): Promise<JobAllowEntry[]> {
