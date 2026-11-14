@@ -4,7 +4,9 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   Play,
   Workflow,
+  Boxes,
   ShieldCheck,
+  ListChecks,
   Server,
   KeyRound,
   Sun,
@@ -28,7 +30,9 @@ const isMobileMenuOpen = ref(false)
 const navItems = [
   { name: 'Lượt chạy', path: '/', icon: Play },
   { name: 'Pipeline', path: '/pipelines', icon: Workflow },
+  { name: 'Job', path: '/jobs', icon: Boxes },
   { name: 'Deployment được phép', path: '/deploy-targets', icon: ShieldCheck },
+  { name: 'Allowlist Job', path: '/settings/job-allow', icon: ListChecks },
   { name: 'Máy build', path: '/slaves', icon: Server },
   { name: 'Thông tin xác thực', path: '/credentials', icon: KeyRound }
 ]

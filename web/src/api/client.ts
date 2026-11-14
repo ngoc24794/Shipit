@@ -16,7 +16,13 @@ import type {
   Run,
   RunDetail,
   LogLine,
-  RunStatus
+  RunStatus,
+  Job,
+  JobInput,
+  JobValidation,
+  JobPreview,
+  JobAllowEntry,
+  JobAllowEntryInput
 } from './types'
 
 export class ApiError extends Error {
@@ -82,6 +88,21 @@ export interface ShipitApi {
   getDeployTargets(): Promise<DeployTarget[]>
   createDeployTarget(input: DeployTargetInput): Promise<DeployTarget>
   deleteDeployTarget(id: number): Promise<void>
+
+  // Jobs
+  getJobs(): Promise<Job[]>
+  createJob(input: JobInput): Promise<Job>
+  getJob(id: number): Promise<Job>
+  updateJob(id: number, input: JobInput): Promise<Job>
+  deleteJob(id: number): Promise<void>
+  validateJob(input: JobInput): Promise<JobValidation>
+  previewJob(input: JobInput): Promise<JobPreview>
+  triggerJobRun(id: number): Promise<Run>
+
+  // Job Allow Entries
+  getJobAllowEntries(): Promise<JobAllowEntry[]>
+  createJobAllowEntry(input: JobAllowEntryInput): Promise<JobAllowEntry>
+  deleteJobAllowEntry(id: number): Promise<void>
 
   // Runs
   triggerRun(pipelineId: number): Promise<Run>
@@ -353,5 +374,70 @@ export class HttpShipitApi implements ShipitApi {
     return () => {
       eventSource.close()
     }
+  }
+
+  async getJobs(): Promise<Job[]> {
+    return this.request<Job[]>('/api/jobs')
+  }
+
+  async createJob(input: JobInput): Promise<Job> {
+    return this.request<Job>('/api/jobs', {
+      method: 'POST',
+      body: JSON.stringify(input)
+    })
+  }
+
+  async getJob(id: number): Promise<Job> {
+    return this.request<Job>(`/api/jobs/${id}`)
+  }
+
+  async updateJob(id: number, input: JobInput): Promise<Job> {
+    return this.request<Job>(`/api/jobs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(input)
+    })
+  }
+
+  async deleteJob(id: number): Promise<void> {
+    await this.request<void>(`/api/jobs/${id}`, {
+      method: 'DELETE'
+    })
+  }
+
+  async validateJob(input: JobInput): Promise<JobValidation> {
+    return this.request<JobValidation>('/api/jobs/validate', {
+      method: 'POST',
+      body: JSON.stringify(input)
+    })
+  }
+
+  async previewJob(input: JobInput): Promise<JobPreview> {
+    return this.request<JobPreview>('/api/jobs/preview', {
+      method: 'POST',
+      body: JSON.stringify(input)
+    })
+  }
+
+  async triggerJobRun(id: number): Promise<Run> {
+    return this.request<Run>(`/api/jobs/${id}/runs`, {
+      method: 'POST'
+    })
+  }
+
+  async getJobAllowEntries(): Promise<JobAllowEntry[]> {
+    return this.request<JobAllowEntry[]>('/api/job-allow-entries')
+  }
+
+  async createJobAllowEntry(input: JobAllowEntryInput): Promise<JobAllowEntry> {
+    return this.request<JobAllowEntry>('/api/job-allow-entries', {
+      method: 'POST',
+      body: JSON.stringify(input)
+    })
+  }
+
+  async deleteJobAllowEntry(id: number): Promise<void> {
+    await this.request<void>(`/api/job-allow-entries/${id}`, {
+      method: 'DELETE'
+    })
   }
 }
