@@ -52,37 +52,6 @@ public class JobEndpointStubTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    [Theory]
-    [InlineData("GET", "/api/jobs")]
-    [InlineData("POST", "/api/jobs")]
-    [InlineData("POST", "/api/jobs/validate")]
-    [InlineData("POST", "/api/jobs/preview")]
-    [InlineData("GET", "/api/jobs/1")]
-    [InlineData("PUT", "/api/jobs/1")]
-    [InlineData("DELETE", "/api/jobs/1")]
-    [InlineData("POST", "/api/jobs/1/runs")]
-    [InlineData("GET", "/api/job-allow-entries")]
-    [InlineData("POST", "/api/job-allow-entries")]
-    [InlineData("DELETE", "/api/job-allow-entries/1")]
-    public async Task Job_endpoints_return_501_not_implemented_when_logged_in(string method, string url)
-    {
-        using var factory = new ApiFactory();
-        var client = await factory.LoggedInClientAsync();
-
-        using var request = new HttpRequestMessage(new HttpMethod(method), url);
-        if (method is "POST" or "PUT")
-        {
-            request.Content = JsonContent.Create(new { name = "sample" });
-        }
-
-        var response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.NotImplemented, response.StatusCode);
-
-        var body = await response.ReadJsonAsync();
-        Assert.Equal("Not implemented", body.GetProperty("title").GetString());
-        Assert.Equal("Implemented in task J5 (job-api).", body.GetProperty("detail").GetString());
-    }
-
     [Fact]
     public async Task Get_runs_filters_by_job_id_and_returns_correct_kind_and_tasks()
     {

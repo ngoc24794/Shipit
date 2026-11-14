@@ -17,10 +17,13 @@ internal sealed class FieldErrors
         list.Add(message);
     }
 
+    public Dictionary<string, string[]> ToDictionary() =>
+        _errors.ToDictionary(kv => kv.Key, kv => kv.Value.ToArray());
+
     public IResult ToResult() => Problems.BadRequest(
         "Validation failed",
         null,
-        _errors.ToDictionary(kv => kv.Key, kv => kv.Value.ToArray()));
+        ToDictionary());
 }
 
 internal static class Problems

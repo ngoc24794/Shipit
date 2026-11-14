@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Shipit.Core;
 using Shipit.Data.Entities;
 
@@ -281,4 +282,76 @@ internal static class Mapping
 
     public static DeployTargetDto ToDto(this DeployTarget t) =>
         new(t.Id, t.Namespace, t.Deployment, Wire.Utc(t.CreatedAt));
+
+    public static JobAllowEntryDto ToDto(this JobAllowEntry e) =>
+        new(e.Id, e.Namespace, Wire.Of(e.Kind), e.Name, Wire.Utc(e.CreatedAt));
+
+    public static JobTaskDto ToDto(this JobTask t) =>
+        new(
+            t.Position,
+            t.Label,
+            DeserializeList(t.ArgsJson),
+            DeserializeList(t.EnvFromConfigMapsJson),
+            DeserializeList(t.EnvFromSecretsJson),
+            DeserializeEnvList(t.EnvJson),
+            t.TimeoutSeconds,
+            t.BackoffLimit,
+            t.TtlSeconds);
+
+    public static JobDto ToDto(this Job j, Run? lastRun) =>
+        new(
+            j.Id,
+            j.Name,
+            j.GitUrl,
+            j.GitBranch,
+            j.GitCredentialId,
+            j.SlaveId,
+            j.DockerfilePath,
+            j.BuildContext,
+            j.ImageName,
+            j.RegistryHost,
+            j.DeployRegistryHost,
+            j.RegistryCredentialId,
+            j.Namespace,
+            j.ContainerName,
+            j.ServiceAccount,
+            DeserializeList(j.ImagePullSecretsJson),
+            (j.Tasks ?? []).OrderBy(t => t.Position).Select(t => t.ToDto()).ToList(),
+            lastRun?.ToDto());
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    public static IReadOnlyList<string> DeserializeList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json, JsonOptions) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    public static IReadOnlyList<JobEnvVarDto> DeserializeEnvList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<JobEnvVarDto>>(json, JsonOptions) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
 }

@@ -449,6 +449,7 @@ paths:
               schema: { $ref: '#/components/schemas/Job' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /api/jobs/validate:
     post:
       tags: [jobs]
@@ -512,6 +513,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
     delete:
       tags: [jobs]
       summary: Delete a job (409 while a run is active)
