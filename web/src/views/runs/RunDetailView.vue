@@ -18,8 +18,10 @@ import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
 import StepTimeline from '../../components/StepTimeline.vue'
 import LogViewer from '../../components/LogViewer.vue'
+import TaskTable from '../../components/run/TaskTable.vue'
 import EmptyState from '../../components/EmptyState.vue'
 import { useApi, ApiError } from '../../api'
+import { useRunsStore } from '../../stores/runs'
 import type { RunDetail, LogLine, Pipeline, RunStatus } from '../../api/types'
 import { useToast } from '../../composables/useToast'
 import { formatDateTime, formatDuration, formatFailureReason } from './formatters'
@@ -27,10 +29,12 @@ import { formatDateTime, formatDuration, formatFailureReason } from './formatter
 const route = useRoute()
 const router = useRouter()
 const api = useApi()
+const runsStore = useRunsStore()
 const toast = useToast()
 
 const MAX_LOG_LINES = 5000
 
+const logViewerRef = ref<any>(null)
 const run = ref<RunDetail | null>(null)
 const pipeline = ref<Pipeline | null>(null)
 const lines = ref<LogLine[]>([])
@@ -49,11 +53,35 @@ let cleanupStream: (() => void) | null = null
 let pollInterval: ReturnType<typeof setInterval> | null = null
 let secondInterval: ReturnType<typeof setInterval> | null = null
 
-const pipelineName = computed(() => {
+const isJobRun = computed(() => {
+  return run.value?.kind === 'job' || (run.value?.jobId != null) || (run.value?.steps.some((s) => s.name === 'runjob') ?? false)
+})
+
+const displayName = computed(() => {
+  if (isJobRun.value) {
+    return runsStore.getJobName(run.value?.jobId)
+  }
   if (pipeline.value) return pipeline.value.name
-  if (run.value) return `Pipeline #${run.value.pipelineId}`
+  if (run.value?.pipelineId) return `Pipeline #${run.value.pipelineId}`
   return 'Lượt chạy'
 })
+
+const failedTask = computed(() => {
+  if (!isJobRun.value || !run.value?.tasks) return null
+  return run.value.tasks.find((t) => t.status === 'failed') || null
+})
+
+function scrollToTaskLog(position: number) {
+  if (logViewerRef.value?.focusTask) {
+    logViewerRef.value.focusTask(position)
+  } else {
+    const el = document.getElementById(`task-group-${position}`)
+    if (el) {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      el.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' })
+    }
+  }
+}
 
 const isRunActive = computed(() => {
   return run.value?.status === 'queued' || run.value?.status === 'running'
@@ -133,15 +161,16 @@ async function loadRunData(id: number) {
 
   try {
     const runData = await api.getRun(id)
+    runData.tasks = runData.tasks || []
     run.value = runData
 
     // Fetch pipeline info and initial logs in parallel
-    const [pipelineRes, logsRes] = await Promise.allSettled([
-      api.getPipeline(runData.pipelineId),
-      api.getRunLogs(id, 0)
+    const [logsRes, pipelineRes] = await Promise.allSettled([
+      api.getRunLogs(id, 0),
+      runData.pipelineId ? api.getPipeline(runData.pipelineId) : Promise.resolve(null)
     ])
 
-    if (pipelineRes.status === 'fulfilled') {
+    if (pipelineRes.status === 'fulfilled' && pipelineRes.value) {
       pipeline.value = pipelineRes.value
     }
     if (logsRes.status === 'fulfilled') {
@@ -195,6 +224,7 @@ function startStream(runId: number) {
       // Re-fetch detail to get final step states and timestamps
       try {
         const finalDetail = await api.getRun(runId)
+        finalDetail.tasks = finalDetail.tasks || []
         run.value = finalDetail
       } catch {
         if (run.value) {
@@ -213,12 +243,19 @@ async function handleRerun() {
   isTriggering.value = true
 
   try {
-    const newRun = await api.triggerRun(run.value.pipelineId)
-    toast.success(`Đã kích hoạt lượt chạy mới #${newRun.id}`)
-    router.push(`/runs/${newRun.id}`)
+    let newRun: any
+    if (isJobRun.value && run.value.jobId) {
+      newRun = await runsStore.runJob(run.value.jobId)
+    } else if (run.value.pipelineId) {
+      newRun = await api.triggerRun(run.value.pipelineId)
+    }
+    if (newRun) {
+      toast.success(`Đã kích hoạt lượt chạy mới #${newRun.id}`)
+      router.push(`/runs/${newRun.id}`)
+    }
   } catch (err: any) {
     if (err instanceof ApiError && err.status === 409) {
-      toast.error('Pipeline đang có lượt chạy')
+      toast.error(isJobRun.value ? 'Job đang có lượt chạy' : 'Pipeline đang có lượt chạy')
     } else {
       toast.error(err.message || 'Không thể kích hoạt lượt chạy')
     }
@@ -380,7 +417,7 @@ onBeforeUnmount(() => {
           <div class="space-y-1">
             <div class="flex items-center gap-3 flex-wrap">
               <h1 class="text-2xl font-semibold text-fg tracking-tight">
-                {{ pipelineName }}
+                {{ displayName }}
               </h1>
               <span class="font-mono text-xl text-muted-fg font-medium">
                 #{{ run.id }}
@@ -409,13 +446,34 @@ onBeforeUnmount(() => {
             <AppButton
               variant="secondary"
               :loading="isTriggering"
-              aria-label="Chạy lại pipeline này"
+              :aria-label="isJobRun ? 'Chạy lại job này' : 'Chạy lại pipeline này'"
               @click="handleRerun"
             >
               <RotateCw class="w-4 h-4" aria-hidden="true" />
               <span>Chạy lại</span>
             </AppButton>
           </div>
+        </div>
+
+        <!-- Failed Task Banner for Job Runs -->
+        <div
+          v-if="failedTask"
+          role="alert"
+          class="flex items-center justify-between p-4 rounded-[8px] border border-danger/30 bg-danger/10 text-danger text-sm"
+        >
+          <div class="flex items-center gap-2">
+            <AlertTriangle class="w-5 h-5 shrink-0" aria-hidden="true" />
+            <span class="font-semibold">
+              Tác vụ {{ failedTask.position + 1 }} thất bại (exit code {{ failedTask.exitCode ?? 1 }})
+            </span>
+          </div>
+          <button
+            type="button"
+            class="text-xs font-medium underline hover:text-danger/80 cursor-pointer focus-visible:outline-2 focus-visible:outline-ring rounded px-1"
+            @click="scrollToTaskLog(failedTask.position)"
+          >
+            Xem log tác vụ
+          </button>
         </div>
 
         <!-- Failure Reason Alert -->
@@ -515,7 +573,13 @@ onBeforeUnmount(() => {
         <!-- Step Timeline Card -->
         <div class="p-4 sm:p-6 rounded-[8px] bg-card border border-border">
           <h2 class="text-sm font-semibold text-fg mb-2">Tiến trình các bước</h2>
-          <StepTimeline :steps="run.steps" />
+          <StepTimeline :steps="run.steps" :kind="isJobRun ? 'job' : 'pipeline'" />
+        </div>
+
+        <!-- Task Table Card (Job runs only) -->
+        <div v-if="isJobRun" class="p-4 sm:p-6 rounded-[8px] bg-card border border-border space-y-3">
+          <h2 class="text-sm font-semibold text-fg">Danh sách tác vụ</h2>
+          <TaskTable :tasks="run.tasks || []" @view-log="scrollToTaskLog" />
         </div>
 
         <!-- Log Viewer Section -->
@@ -529,9 +593,12 @@ onBeforeUnmount(() => {
           </div>
 
           <LogViewer
+            ref="logViewerRef"
             :lines="lines"
             :status="run.status"
             :run-id="run.id"
+            :tasks="run.tasks"
+            :is-job="isJobRun"
           />
         </div>
       </div>

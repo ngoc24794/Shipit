@@ -241,7 +241,8 @@ function navigateToRun(id: number) {
           <template #header>
             <tr>
               <th scope="col" class="w-20">Mã</th>
-              <th scope="col">Pipeline</th>
+              <th scope="col">Loại</th>
+              <th scope="col">Tên</th>
               <th scope="col">Trạng thái</th>
               <th scope="col">Tag (SHA)</th>
               <th scope="col">Image</th>
@@ -265,9 +266,36 @@ function navigateToRun(id: number) {
               #{{ run.id }}
             </td>
 
-            <!-- Pipeline Name -->
+            <!-- Loại (Kind) -->
+            <td class="whitespace-nowrap">
+              <span
+                class="px-2 py-0.5 text-xs rounded font-medium border"
+                :class="run.kind === 'job'
+                  ? 'bg-info/10 text-info border-info/30'
+                  : 'bg-muted text-muted-fg border-border'"
+              >
+                {{ run.kind === 'job' ? 'Job' : 'Pipeline' }}
+              </span>
+            </td>
+
+            <!-- Pipeline / Job Name with link -->
             <td class="font-medium text-fg whitespace-nowrap">
-              {{ runsStore.getPipelineName(run.pipelineId) }}
+              <router-link
+                v-if="run.kind === 'job'"
+                :to="`/jobs/${run.jobId}`"
+                class="hover:underline text-fg font-medium"
+                @click.stop
+              >
+                {{ runsStore.getJobName(run.jobId) }}
+              </router-link>
+              <router-link
+                v-else
+                to="/pipelines"
+                class="hover:underline text-fg font-medium"
+                @click.stop
+              >
+                {{ runsStore.getPipelineName(run.pipelineId || 0) }}
+              </router-link>
             </td>
 
             <!-- Status -->

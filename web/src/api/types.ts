@@ -67,12 +67,12 @@ export interface CredentialUpdate {
 }
 
 export type RunStatus = 'queued' | 'running' | 'success' | 'failed' | 'cancelled'
-export type StepName = 'checkout' | 'build' | 'push' | 'deploy'
+export type StepName = 'checkout' | 'build' | 'push' | 'deploy' | 'runjob'
 export type StepStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'
 
 export interface Run {
   id: number
-  pipelineId: number
+  pipelineId?: number | null
   jobId?: number | null
   kind?: 'pipeline' | 'job'
   status: RunStatus
@@ -91,8 +91,18 @@ export interface RunStep {
   finishedAt?: string | null
 }
 
+export interface RunTask {
+  position: number
+  label: string
+  status: StepStatus
+  exitCode?: number | null
+  startedAt?: string | null
+  finishedAt?: string | null
+}
+
 export interface RunDetail extends Run {
   steps: RunStep[]
+  tasks?: RunTask[]
 }
 
 export interface LogLine {
@@ -101,6 +111,7 @@ export interface LogLine {
   stream: 'stdout' | 'stderr' | 'system'
   text: string
   at: string
+  taskPosition?: number | null
 }
 
 export interface Pipeline {
@@ -252,4 +263,3 @@ export interface JobPreview {
   errors: Record<string, string[]>
   tasks: JobPreviewTask[]
 }
-

@@ -5,6 +5,7 @@ import {
   Hammer,
   Upload,
   Rocket,
+  Terminal,
   CheckCircle2,
   XCircle,
   Loader2,
@@ -16,6 +17,7 @@ import type { RunStep, StepName, StepStatus } from '../api/types'
 
 const props = defineProps<{
   steps?: RunStep[]
+  kind?: 'pipeline' | 'job'
 }>()
 
 interface StepDefinition {
@@ -24,12 +26,28 @@ interface StepDefinition {
   icon: any
 }
 
-const STEP_DEFINITIONS: StepDefinition[] = [
+const PIPELINE_DEFINITIONS: StepDefinition[] = [
   { name: 'checkout', label: 'Checkout', icon: GitBranch },
   { name: 'build', label: 'Build', icon: Hammer },
   { name: 'push', label: 'Push', icon: Upload },
   { name: 'deploy', label: 'Deploy', icon: Rocket }
 ]
+
+const JOB_DEFINITIONS: StepDefinition[] = [
+  { name: 'checkout', label: 'Checkout', icon: GitBranch },
+  { name: 'build', label: 'Build', icon: Hammer },
+  { name: 'push', label: 'Push', icon: Upload },
+  { name: 'runjob', label: 'Chạy Job', icon: Terminal }
+]
+
+const isJob = computed(() => {
+  if (props.kind === 'job') return true
+  return props.steps?.some((s) => s.name === 'runjob') ?? false
+})
+
+const currentDefinitions = computed(() => {
+  return isJob.value ? JOB_DEFINITIONS : PIPELINE_DEFINITIONS
+})
 
 function formatDuration(startedAt?: string | null, finishedAt?: string | null): string {
   if (!startedAt) return ''
@@ -43,7 +61,7 @@ function formatDuration(startedAt?: string | null, finishedAt?: string | null): 
 }
 
 const mappedSteps = computed(() => {
-  return STEP_DEFINITIONS.map((def) => {
+  return currentDefinitions.value.map((def) => {
     const stepData = props.steps?.find((s) => s.name === def.name)
     const status: StepStatus = stepData?.status || 'pending'
     const duration = formatDuration(stepData?.startedAt, stepData?.finishedAt)

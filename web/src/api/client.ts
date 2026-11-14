@@ -107,7 +107,7 @@ export interface ShipitApi {
   // Runs
   triggerRun(pipelineId: number): Promise<Run>
   cancelRun(id: number): Promise<Run>
-  getRuns(params?: { pipelineId?: number; limit?: number }): Promise<Run[]>
+  getRuns(params?: { pipelineId?: number; jobId?: number; limit?: number }): Promise<Run[]>
   getRun(id: number): Promise<RunDetail>
   getRunLogs(id: number, after?: number): Promise<LogLine[]>
   streamRunLogs(
@@ -314,10 +314,13 @@ export class HttpShipitApi implements ShipitApi {
     })
   }
 
-  async getRuns(params?: { pipelineId?: number; limit?: number }): Promise<Run[]> {
+  async getRuns(params?: { pipelineId?: number; jobId?: number; limit?: number }): Promise<Run[]> {
     const search = new URLSearchParams()
     if (params?.pipelineId !== undefined) {
       search.set('pipelineId', params.pipelineId.toString())
+    }
+    if (params?.jobId !== undefined) {
+      search.set('jobId', params.jobId.toString())
     }
     if (params?.limit !== undefined) {
       search.set('limit', params.limit.toString())

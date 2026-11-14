@@ -21,7 +21,9 @@ describe('RunsView (Danh sách lượt chạy)', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/', name: 'runs', component: RunsView },
-        { path: '/runs/:id', name: 'run-detail', component: { template: '<div>Detail</div>' } }
+        { path: '/runs/:id', name: 'run-detail', component: { template: '<div>Detail</div>' } },
+        { path: '/pipelines', name: 'pipelines', component: { template: '<div>Pipelines</div>' } },
+        { path: '/jobs/:id', name: 'job-detail', component: { template: '<div>Job</div>' } }
       ]
     })
   })
@@ -64,6 +66,33 @@ describe('RunsView (Danh sách lượt chạy)', () => {
     expect(wrapper.text()).toContain('Thất bại')
     expect(wrapper.text()).toContain('Đang chạy')
     expect(wrapper.text()).toContain('Đang chờ')
+  })
+
+  it('renders "Loại" column with Pipeline and Job badges and links to corresponding resources', async () => {
+    const wrapper = mount(RunsView, {
+      global: {
+        plugins: [router],
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' }
+        }
+      }
+    })
+
+    await waitMounted(wrapper)
+
+    // Table headers should include "Loại"
+    const headers = wrapper.findAll('th').map((th) => th.text())
+    expect(headers).toContain('Loại')
+
+    // Table rows should display both 'Pipeline' and 'Job'
+    expect(wrapper.text()).toContain('Pipeline')
+    expect(wrapper.text()).toContain('Job')
+
+    // Links to pipeline and job
+    const links = wrapper.findAll('a')
+    const hrefs = links.map((l) => l.attributes('href'))
+    expect(hrefs.some((h) => h?.includes('/jobs/1'))).toBe(true)
+    expect(hrefs.some((h) => h?.includes('/pipelines'))).toBe(true)
   })
 
   it('displays EmptyState when runs list is empty', async () => {

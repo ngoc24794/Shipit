@@ -111,7 +111,8 @@ describe('RunDetailView (Chi tiết lượt chạy)', () => {
         { name: 'build', status: 'failed', startedAt: '2026-11-09T08:00:20Z', finishedAt: '2026-11-09T08:01:20Z' },
         { name: 'push', status: 'skipped', startedAt: null, finishedAt: null },
         { name: 'deploy', status: 'skipped', startedAt: null, finishedAt: null }
-      ]
+      ],
+      tasks: []
     }
     vi.spyOn(mockApi, 'getRun').mockResolvedValue(failedRun)
 
