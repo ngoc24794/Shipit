@@ -388,7 +388,7 @@ export class MockShipitApi implements ShipitApi {
       imagePullSecrets: ['registry-secret'],
       tasks: [
         {
-          position: 1,
+          position: 0,
           label: 'files',
           args: ['migrate', '--module', 'files'],
           envFromConfigMaps: ['avina-files-config'],
@@ -401,7 +401,7 @@ export class MockShipitApi implements ShipitApi {
           ttlSeconds: 3600
         },
         {
-          position: 2,
+          position: 1,
           label: 'users',
           args: ['migrate', '--module', 'users'],
           envFromConfigMaps: ['avina-users-config'],
@@ -1216,9 +1216,15 @@ export class MockShipitApi implements ShipitApi {
     await delay()
     this.checkAuth()
     const validation = await this.validateJob(input)
+    if (!validation.valid || Object.keys(validation.errors).length > 0) {
+      return {
+        errors: validation.errors,
+        tasks: []
+      }
+    }
     const registry = input.deployRegistryHost || input.registryHost
     const tasks: JobPreviewTask[] = (input.tasks || []).map((t, idx) => {
-      const position = idx + 1
+      const position = idx
       const lines = [
         'apiVersion: batch/v1',
         'kind: Job',
@@ -1327,7 +1333,7 @@ export class MockShipitApi implements ShipitApi {
       serviceAccount: input.serviceAccount || null,
       imagePullSecrets: input.imagePullSecrets || [],
       tasks: (input.tasks || []).map((t, idx) => ({
-        position: idx + 1,
+        position: idx,
         label: t.label,
         args: t.args || [],
         envFromConfigMaps: t.envFromConfigMaps || [],
@@ -1385,7 +1391,7 @@ export class MockShipitApi implements ShipitApi {
       serviceAccount: input.serviceAccount || null,
       imagePullSecrets: input.imagePullSecrets || [],
       tasks: (input.tasks || []).map((t, taskIdx) => ({
-        position: taskIdx + 1,
+        position: taskIdx,
         label: t.label,
         args: t.args || [],
         envFromConfigMaps: t.envFromConfigMaps || [],

@@ -164,6 +164,10 @@ async function loadRunData(id: number) {
     runData.tasks = runData.tasks || []
     run.value = runData
 
+    if (runData.jobId && !runsStore.jobs.some((j) => j.id === runData.jobId)) {
+      runsStore.fetchJobs().catch(() => {})
+    }
+
     // Fetch pipeline info and initial logs in parallel
     const [logsRes, pipelineRes] = await Promise.allSettled([
       api.getRunLogs(id, 0),
