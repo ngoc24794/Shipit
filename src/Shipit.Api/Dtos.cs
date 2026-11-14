@@ -62,7 +62,9 @@ public sealed record PipelineInput(
 
 public sealed record RunDto(
     long Id,
-    long PipelineId,
+    long? PipelineId,
+    long? JobId,
+    string Kind,
     string Status,
     string? Tag,
     string? Image,
@@ -75,7 +77,9 @@ public sealed record RunStepDto(string Name, string Status, DateTime? StartedAt,
 
 public sealed record RunDetailDto(
     long Id,
-    long PipelineId,
+    long? PipelineId,
+    long? JobId,
+    string Kind,
     string Status,
     string? Tag,
     string? Image,
@@ -83,9 +87,87 @@ public sealed record RunDetailDto(
     DateTime CreatedAt,
     DateTime? StartedAt,
     DateTime? FinishedAt,
-    IReadOnlyList<RunStepDto> Steps);
+    IReadOnlyList<RunStepDto> Steps,
+    IReadOnlyList<RunTaskDto> Tasks);
 
-public sealed record LogLineDto(long Seq, string Step, string Stream, string Text, DateTime At);
+public sealed record RunTaskDto(int Position, string Label, string Status, int? ExitCode, DateTime? StartedAt, DateTime? FinishedAt);
+
+public sealed record LogLineDto(long Seq, string Step, string Stream, string Text, DateTime At, int? TaskPosition = null);
+
+// ---- Jobs (docs/api-contract.yaml, tag "jobs"). Names only: no field here can carry a secret value.
+
+/// <summary>An env var for a task: a plain Value, or a reference (SecretName + SecretKey) resolved by Kubernetes.</summary>
+public sealed record JobEnvVarDto(string? Name, string? Value, string? SecretName, string? SecretKey);
+
+public sealed record JobTaskDto(
+    int Position,
+    string Label,
+    IReadOnlyList<string> Args,
+    IReadOnlyList<string> EnvFromConfigMaps,
+    IReadOnlyList<string> EnvFromSecrets,
+    IReadOnlyList<JobEnvVarDto> Env,
+    int TimeoutSeconds,
+    int BackoffLimit,
+    int TtlSeconds);
+
+/// <summary>Task position is the index in the submitted array.</summary>
+public sealed record JobTaskInput(
+    string? Label,
+    string[]? Args,
+    string[]? EnvFromConfigMaps,
+    string[]? EnvFromSecrets,
+    JobEnvVarDto[]? Env,
+    int? TimeoutSeconds,
+    int? BackoffLimit,
+    int? TtlSeconds);
+
+public sealed record JobDto(
+    long Id,
+    string Name,
+    string GitUrl,
+    string GitBranch,
+    long GitCredentialId,
+    long SlaveId,
+    string DockerfilePath,
+    string? BuildContext,
+    string ImageName,
+    string RegistryHost,
+    string? DeployRegistryHost,
+    long? RegistryCredentialId,
+    string Namespace,
+    string ContainerName,
+    string? ServiceAccount,
+    IReadOnlyList<string> ImagePullSecrets,
+    IReadOnlyList<JobTaskDto> Tasks,
+    RunDto? LastRun);
+
+public sealed record JobInput(
+    string? Name,
+    string? GitUrl,
+    string? GitBranch,
+    long? GitCredentialId,
+    long? SlaveId,
+    string? DockerfilePath,
+    string? BuildContext,
+    string? ImageName,
+    string? RegistryHost,
+    string? DeployRegistryHost,
+    long? RegistryCredentialId,
+    string? Namespace,
+    string? ContainerName,
+    string? ServiceAccount,
+    string[]? ImagePullSecrets,
+    JobTaskInput[]? Tasks);
+
+public sealed record JobValidationDto(bool Valid, IReadOnlyDictionary<string, string[]> Errors);
+
+public sealed record JobPreviewTaskDto(int Position, string Label, string Yaml);
+
+public sealed record JobPreviewDto(IReadOnlyDictionary<string, string[]> Errors, IReadOnlyList<JobPreviewTaskDto> Tasks);
+
+public sealed record JobAllowEntryDto(long Id, string Namespace, string Kind, string Name, DateTime CreatedAt);
+
+public sealed record JobAllowEntryInput(string? Namespace, string? Kind, string? Name);
 
 public sealed record ProblemDto(string Title, string? Detail = null, IReadOnlyDictionary<string, string[]>? Errors = null);
 
@@ -121,6 +203,39 @@ internal static class Wire
         }
     }
 
+    public static string KindOf(Run run) => run.JobId is not null ? "job" : "pipeline";
+
+    public static string Of(JobAllowKind kind) => kind switch
+    {
+        JobAllowKind.Namespace => "namespace",
+        JobAllowKind.ConfigMap => "configmap",
+        JobAllowKind.Secret => "secret",
+        JobAllowKind.PullSecret => "pullsecret",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
+
+    public static bool TryParseAllowKind(string? value, out JobAllowKind kind)
+    {
+        switch (value)
+        {
+            case "namespace":
+                kind = JobAllowKind.Namespace;
+                return true;
+            case "configmap":
+                kind = JobAllowKind.ConfigMap;
+                return true;
+            case "secret":
+                kind = JobAllowKind.Secret;
+                return true;
+            case "pullsecret":
+                kind = JobAllowKind.PullSecret;
+                return true;
+            default:
+                kind = default;
+                return false;
+        }
+    }
+
     public static string Of(RunStatus status) => status.ToString().ToLowerInvariant();
 
     public static string Of(StepName step) => step.ToString().ToLowerInvariant();
@@ -143,14 +258,17 @@ internal static class Mapping
         new(c.Id, c.Name, Wire.Of(c.Kind), c.Username, !string.IsNullOrEmpty(c.ProtectedValue), Wire.Utc(c.UpdatedAt));
 
     public static RunDto ToDto(this Run r) => new(
-        r.Id, r.PipelineId, Wire.Of(r.Status), r.Tag, r.Image, r.FailureReason,
+        r.Id, r.PipelineId, r.JobId, Wire.KindOf(r), Wire.Of(r.Status), r.Tag, r.Image, r.FailureReason,
         Wire.Utc(r.CreatedAt), Wire.Utc(r.StartedAt), Wire.Utc(r.FinishedAt));
 
     public static RunDetailDto ToDetailDto(this Run r) => new(
-        r.Id, r.PipelineId, Wire.Of(r.Status), r.Tag, r.Image, r.FailureReason,
+        r.Id, r.PipelineId, r.JobId, Wire.KindOf(r), Wire.Of(r.Status), r.Tag, r.Image, r.FailureReason,
         Wire.Utc(r.CreatedAt), Wire.Utc(r.StartedAt), Wire.Utc(r.FinishedAt),
         r.Steps.OrderBy(s => s.Name)
             .Select(s => new RunStepDto(Wire.Of(s.Name), Wire.Of(s.Status), Wire.Utc(s.StartedAt), Wire.Utc(s.FinishedAt)))
+            .ToList(),
+        r.Tasks.OrderBy(t => t.Position)
+            .Select(t => new RunTaskDto(t.Position, t.Label, Wire.Of(t.Status), t.ExitCode, Wire.Utc(t.StartedAt), Wire.Utc(t.FinishedAt)))
             .ToList());
 
     public static PipelineDto ToDto(this Pipeline p, Run? lastRun) => new(
@@ -159,7 +277,7 @@ internal static class Mapping
         lastRun?.ToDto());
 
     public static LogLineDto ToDto(this RunLog l) =>
-        new(l.Id, Wire.Of(l.Step), Wire.Of(l.Stream), l.Text, Wire.Utc(l.At));
+        new(l.Id, Wire.Of(l.Step), Wire.Of(l.Stream), l.Text, Wire.Utc(l.At), l.TaskPosition);
 
     public static DeployTargetDto ToDto(this DeployTarget t) =>
         new(t.Id, t.Namespace, t.Deployment, Wire.Utc(t.CreatedAt));

@@ -22,6 +22,7 @@ public enum StepName
     Build,
     Push,
     Deploy,
+    RunJob,
 }
 
 public enum StepStatus
@@ -32,4 +33,12 @@ public enum StepStatus
     Failed,
     Skipped,
     Cancelled,
+}
+
+public enum JobAllowKind
+{
+    Namespace,
+    ConfigMap,
+    Secret,
+    PullSecret,
 }

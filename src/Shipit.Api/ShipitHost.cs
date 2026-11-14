@@ -220,6 +220,7 @@ public static class ShipitHost
         app.MapPipelines();
         app.MapRuns();
         app.MapDeployTargets();
+        app.MapJobs();
 
         // Unknown API paths must be a plain 404, never the SPA shell.
         app.Map("/api/{**path}", () => Results.NotFound());

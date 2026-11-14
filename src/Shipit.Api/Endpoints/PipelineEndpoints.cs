@@ -103,12 +103,12 @@ internal static partial class PipelineEndpoints
         }
 
         var latestIds = await db.Runs.AsNoTracking()
-            .Where(r => pipelineIds.Contains(r.PipelineId))
+            .Where(r => r.PipelineId != null && pipelineIds.Contains(r.PipelineId.Value))
             .GroupBy(r => r.PipelineId)
             .Select(g => g.Max(r => r.Id))
             .ToListAsync(ct);
         var runs = await db.Runs.AsNoTracking().Where(r => latestIds.Contains(r.Id)).ToListAsync(ct);
-        return runs.ToDictionary(r => r.PipelineId);
+        return runs.ToDictionary(r => r.PipelineId!.Value);
     }
 
     private static void Apply(Pipeline p, PipelineInput i)

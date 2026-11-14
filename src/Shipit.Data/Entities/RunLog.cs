@@ -9,6 +9,9 @@ public class RunLog
     public Run? Run { get; set; }
     public StepName Step { get; set; }
     public LogStream Stream { get; set; }
+
+    /// <summary>Position of the job task this line belongs to; null for pipeline runs and for non-task lines.</summary>
+    public int? TaskPosition { get; set; }
     public string Text { get; set; } = string.Empty;
     public DateTime At { get; set; } = DateTime.UtcNow;
 }

@@ -25,6 +25,10 @@ internal sealed class FieldErrors
 
 internal static class Problems
 {
+    /// <summary>Placeholder for contract operations implemented later (job endpoints before task J5).</summary>
+    public static IResult NotImplemented(string what) =>
+        Results.Json(new ProblemDto("Not implemented", what), statusCode: StatusCodes.Status501NotImplemented);
+
     public static IResult BadRequest(string title, string? detail = null, IReadOnlyDictionary<string, string[]>? errors = null) =>
         Results.Json(new ProblemDto(title, detail, errors), statusCode: StatusCodes.Status400BadRequest);
 
