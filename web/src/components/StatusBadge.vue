@@ -17,6 +17,7 @@ const props = withDefaults(
   defineProps<{
     status: BadgeStatus
     size?: 'sm' | 'md'
+    label?: string
   }>(),
   {
     size: 'sm'
@@ -96,6 +97,6 @@ const config = computed(() => {
       ]"
       aria-hidden="true"
     />
-    <span>{{ config.label }}</span>
+    <span>{{ label || config.label }}</span>
   </span>
 </template>

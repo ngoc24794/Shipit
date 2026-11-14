@@ -2,10 +2,14 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Run, RunDetail, Pipeline } from '../api/types'
 import { getApi } from '../api'
+import { runJob as apiRunJob } from '../api/runs-job'
 
 export const useRunsStore = defineStore('runs', () => {
   const runs = ref<Run[]>([])
   const pipelines = ref<Pipeline[]>([])
+  const jobs = ref<Array<{ id: number; name: string }>>([
+    { id: 1, name: 'avina-dbmigrator' }
+  ])
   const currentRun = ref<RunDetail | null>(null)
 
   const loading = ref(false)
@@ -24,6 +28,12 @@ export const useRunsStore = defineStore('runs', () => {
     return pipelinesMap.value.get(pipelineId)?.name || `Pipeline #${pipelineId}`
   }
 
+  function getJobName(jobId?: number | null): string {
+    if (!jobId) return 'Job'
+    const j = jobs.value.find((item) => item.id === jobId)
+    return j?.name || `Job #${jobId}`
+  }
+
   async function fetchPipelines(): Promise<Pipeline[]> {
     const api = getApi()
     loadingPipelines.value = true
@@ -38,7 +48,7 @@ export const useRunsStore = defineStore('runs', () => {
     }
   }
 
-  async function fetchRuns(params?: { pipelineId?: number; limit?: number }): Promise<Run[]> {
+  async function fetchRuns(params?: { pipelineId?: number; jobId?: number; limit?: number }): Promise<Run[]> {
     const api = getApi()
     loading.value = true
     error.value = null
@@ -54,7 +64,7 @@ export const useRunsStore = defineStore('runs', () => {
     }
   }
 
-  async function refreshRuns(params?: { pipelineId?: number; limit?: number }): Promise<Run[]> {
+  async function refreshRuns(params?: { pipelineId?: number; jobId?: number; limit?: number }): Promise<Run[]> {
     const api = getApi()
     try {
       const list = await api.getRuns(params)
@@ -75,6 +85,15 @@ export const useRunsStore = defineStore('runs', () => {
   async function triggerRun(pipelineId: number): Promise<Run> {
     const api = getApi()
     const newRun = await api.triggerRun(pipelineId)
+    const exists = runs.value.some((r) => r.id === newRun.id)
+    if (!exists) {
+      runs.value.unshift(newRun)
+    }
+    return newRun
+  }
+
+  async function runJob(jobId: number): Promise<Run> {
+    const newRun = await apiRunJob(jobId)
     const exists = runs.value.some((r) => r.id === newRun.id)
     if (!exists) {
       runs.value.unshift(newRun)
@@ -108,17 +127,20 @@ export const useRunsStore = defineStore('runs', () => {
   return {
     runs,
     pipelines,
+    jobs,
     currentRun,
     loading,
     loadingPipelines,
     error,
     pipelinesMap,
     getPipelineName,
+    getJobName,
     fetchPipelines,
     fetchRuns,
     refreshRuns,
     fetchRun,
     triggerRun,
+    runJob,
     cancelRun
   }
 })

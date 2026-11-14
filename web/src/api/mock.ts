@@ -131,7 +131,9 @@ export class MockShipitApi implements ShipitApi {
   private runs: RunDetail[] = [
     {
       id: 1,
+      kind: 'pipeline',
       pipelineId: 1,
+      jobId: null,
       status: 'success',
       tag: 'a1b2c3d',
       image: '192.168.1.241/shipit-demo:a1b2c3d',
@@ -144,11 +146,14 @@ export class MockShipitApi implements ShipitApi {
         { name: 'build', status: 'success', startedAt: '2026-11-09T07:30:15Z', finishedAt: '2026-11-09T07:31:30Z' },
         { name: 'push', status: 'success', startedAt: '2026-11-09T07:31:30Z', finishedAt: '2026-11-09T07:31:55Z' },
         { name: 'deploy', status: 'success', startedAt: '2026-11-09T07:31:55Z', finishedAt: '2026-11-09T07:32:15Z' }
-      ]
+      ],
+      tasks: []
     },
     {
       id: 2,
+      kind: 'pipeline',
       pipelineId: 2,
+      jobId: null,
       status: 'failed',
       tag: 'e4f5a6b',
       image: null,
@@ -161,11 +166,14 @@ export class MockShipitApi implements ShipitApi {
         { name: 'build', status: 'failed', startedAt: '2026-11-09T08:00:20Z', finishedAt: '2026-11-09T08:01:20Z' },
         { name: 'push', status: 'skipped', startedAt: null, finishedAt: null },
         { name: 'deploy', status: 'skipped', startedAt: null, finishedAt: null }
-      ]
+      ],
+      tasks: []
     },
     {
       id: 3,
+      kind: 'pipeline',
       pipelineId: 1,
+      jobId: null,
       status: 'running',
       tag: '7c8d9e0',
       image: null,
@@ -178,11 +186,14 @@ export class MockShipitApi implements ShipitApi {
         { name: 'build', status: 'running', startedAt: '2026-11-09T08:45:15Z', finishedAt: null },
         { name: 'push', status: 'pending', startedAt: null, finishedAt: null },
         { name: 'deploy', status: 'pending', startedAt: null, finishedAt: null }
-      ]
+      ],
+      tasks: []
     },
     {
       id: 4,
+      kind: 'pipeline',
       pipelineId: 2,
+      jobId: null,
       status: 'queued',
       tag: null,
       image: null,
@@ -195,6 +206,52 @@ export class MockShipitApi implements ShipitApi {
         { name: 'build', status: 'pending', startedAt: null, finishedAt: null },
         { name: 'push', status: 'pending', startedAt: null, finishedAt: null },
         { name: 'deploy', status: 'pending', startedAt: null, finishedAt: null }
+      ],
+      tasks: []
+    },
+    {
+      id: 5,
+      kind: 'job',
+      jobId: 1,
+      pipelineId: null,
+      status: 'failed',
+      tag: 'c3d4e5f',
+      image: '192.168.1.241/avina-dbmigrator:c3d4e5f',
+      failureReason: 'Tác vụ 2 thất bại (exit code 1)',
+      createdAt: '2026-11-09T09:00:00Z',
+      startedAt: '2026-11-09T09:00:05Z',
+      finishedAt: '2026-11-09T09:02:10Z',
+      steps: [
+        { name: 'checkout', status: 'success', startedAt: '2026-11-09T09:00:05Z', finishedAt: '2026-11-09T09:00:15Z' },
+        { name: 'build', status: 'success', startedAt: '2026-11-09T09:00:15Z', finishedAt: '2026-11-09T09:01:00Z' },
+        { name: 'push', status: 'success', startedAt: '2026-11-09T09:01:00Z', finishedAt: '2026-11-09T09:01:20Z' },
+        { name: 'runjob', status: 'failed', startedAt: '2026-11-09T09:01:20Z', finishedAt: '2026-11-09T09:02:10Z' }
+      ],
+      tasks: [
+        {
+          position: 0,
+          label: 'Tạo schema database',
+          status: 'success',
+          exitCode: 0,
+          startedAt: '2026-11-09T09:01:20Z',
+          finishedAt: '2026-11-09T09:01:40Z'
+        },
+        {
+          position: 1,
+          label: 'Chạy migration dữ liệu',
+          status: 'failed',
+          exitCode: 1,
+          startedAt: '2026-11-09T09:01:40Z',
+          finishedAt: '2026-11-09T09:02:10Z'
+        },
+        {
+          position: 2,
+          label: 'Khởi tạo dữ liệu mẫu',
+          status: 'skipped',
+          exitCode: null,
+          startedAt: null,
+          finishedAt: null
+        }
       ]
     }
   ]
@@ -281,6 +338,27 @@ export class MockShipitApi implements ShipitApi {
       { seq: 19, step: 'deploy', stream: 'stdout', text: 'Waiting for rollout to finish: 0 of 1 updated replicas are available...', at: '2026-11-09T07:32:05Z' },
       { seq: 20, step: 'deploy', stream: 'stdout', text: 'deployment "shipit-demo" successfully rolled out', at: '2026-11-09T07:32:14Z' },
       { seq: 21, step: 'deploy', stream: 'system', text: 'Lượt chạy hoàn tất thành công.', at: '2026-11-09T07:32:15Z' }
+    ],
+    5: [
+      { seq: 1, step: 'checkout', stream: 'system', text: 'Bắt đầu bước checkout mã nguồn...', at: '2026-11-09T09:00:05Z', taskPosition: null },
+      { seq: 2, step: 'checkout', stream: 'stdout', text: 'Cloning into \'avina-dbmigrator\'...', at: '2026-11-09T09:00:08Z', taskPosition: null },
+      { seq: 3, step: 'checkout', stream: 'stdout', text: 'HEAD is now at c3d4e5f feat: add migration scripts', at: '2026-11-09T09:00:14Z', taskPosition: null },
+      { seq: 4, step: 'checkout', stream: 'system', text: 'Checkout hoàn tất thành công.', at: '2026-11-09T09:00:15Z', taskPosition: null },
+      { seq: 5, step: 'build', stream: 'system', text: 'Bắt đầu build Docker image...', at: '2026-11-09T09:00:15Z', taskPosition: null },
+      { seq: 6, step: 'build', stream: 'stdout', text: 'Successfully built 7f8a9b0c', at: '2026-11-09T09:00:59Z', taskPosition: null },
+      { seq: 7, step: 'build', stream: 'system', text: 'Build image 192.168.1.241/avina-dbmigrator:c3d4e5f thành công.', at: '2026-11-09T09:01:00Z', taskPosition: null },
+      { seq: 8, step: 'push', stream: 'system', text: 'Đăng nhập và đẩy image lên registry...', at: '2026-11-09T09:01:00Z', taskPosition: null },
+      { seq: 9, step: 'push', stream: 'stdout', text: 'c3d4e5f: Pushed', at: '2026-11-09T09:01:19Z', taskPosition: null },
+      { seq: 10, step: 'push', stream: 'system', text: 'Đẩy image lên registry thành công.', at: '2026-11-09T09:01:20Z', taskPosition: null },
+      { seq: 11, step: 'runjob', stream: 'system', text: 'Khởi tạo cụm và chuẩn bị chạy tác vụ Job...', at: '2026-11-09T09:01:20Z', taskPosition: null },
+      { seq: 12, step: 'runjob', stream: 'system', text: 'Bắt đầu tác vụ 1: Tạo schema database', at: '2026-11-09T09:01:20Z', taskPosition: 0 },
+      { seq: 13, step: 'runjob', stream: 'stdout', text: 'Applying schema migrations...', at: '2026-11-09T09:01:25Z', taskPosition: 0 },
+      { seq: 14, step: 'runjob', stream: 'stdout', text: 'Schema migrations applied successfully (exit code 0)', at: '2026-11-09T09:01:39Z', taskPosition: 0 },
+      { seq: 15, step: 'runjob', stream: 'system', text: 'Tác vụ 1 hoàn tất thành công.', at: '2026-11-09T09:01:40Z', taskPosition: 0 },
+      { seq: 16, step: 'runjob', stream: 'system', text: 'Bắt đầu tác vụ 2: Chạy migration dữ liệu', at: '2026-11-09T09:01:40Z', taskPosition: 1 },
+      { seq: 17, step: 'runjob', stream: 'stdout', text: 'Running data migration 002_user_tenants...', at: '2026-11-09T09:01:50Z', taskPosition: 1 },
+      { seq: 18, step: 'runjob', stream: 'stderr', text: 'Error: column "tenant_id" does not exist in table "organizations" (exit code 1)', at: '2026-11-09T09:02:08Z', taskPosition: 1 },
+      { seq: 19, step: 'runjob', stream: 'system', text: 'Tác vụ 2 thất bại với exit code 1', at: '2026-11-09T09:02:10Z', taskPosition: 1 }
     ]
   }
 
@@ -691,7 +769,9 @@ export class MockShipitApi implements ShipitApi {
 
     const newRun: RunDetail = {
       id: Date.now(),
+      kind: 'pipeline',
       pipelineId,
+      jobId: null,
       status: 'queued',
       tag: null,
       image: null,
@@ -704,10 +784,48 @@ export class MockShipitApi implements ShipitApi {
         { name: 'build', status: 'pending', startedAt: null, finishedAt: null },
         { name: 'push', status: 'pending', startedAt: null, finishedAt: null },
         { name: 'deploy', status: 'pending', startedAt: null, finishedAt: null }
-      ]
+      ],
+      tasks: []
     }
     this.runs.unshift(newRun)
     pipeline.lastRun = newRun
+    return newRun
+  }
+
+  async runJob(jobId: number): Promise<Run> {
+    await delay()
+    this.checkAuth()
+
+    const activeRun = this.runs.find(
+      (r) => r.jobId === jobId && (r.status === 'running' || r.status === 'queued')
+    )
+    if (activeRun) {
+      throw new ApiError(409, 'Job này đang có một lượt chạy chưa hoàn tất')
+    }
+
+    const newRun: RunDetail = {
+      id: Date.now(),
+      kind: 'job',
+      jobId,
+      pipelineId: null,
+      status: 'queued',
+      tag: null,
+      image: null,
+      failureReason: null,
+      createdAt: new Date().toISOString(),
+      startedAt: null,
+      finishedAt: null,
+      steps: [
+        { name: 'checkout', status: 'pending', startedAt: null, finishedAt: null },
+        { name: 'build', status: 'pending', startedAt: null, finishedAt: null },
+        { name: 'push', status: 'pending', startedAt: null, finishedAt: null },
+        { name: 'runjob', status: 'pending', startedAt: null, finishedAt: null }
+      ],
+      tasks: [
+        { position: 0, label: 'Khởi tạo', status: 'pending', exitCode: null, startedAt: null, finishedAt: null }
+      ]
+    }
+    this.runs.unshift(newRun)
     return newRun
   }
 
@@ -741,6 +859,16 @@ export class MockShipitApi implements ShipitApi {
           step.status = 'skipped'
         }
       }
+      if (run.tasks) {
+        for (const task of run.tasks) {
+          if (task.status === 'running') {
+            task.status = 'cancelled'
+            task.finishedAt = now
+          } else if (task.status === 'pending') {
+            task.status = 'skipped'
+          }
+        }
+      }
       const pipeline = this.pipelines.find((p) => p.id === run.pipelineId)
       if (pipeline && pipeline.lastRun?.id === run.id) {
         pipeline.lastRun = { ...pipeline.lastRun, ...run }
@@ -763,6 +891,16 @@ export class MockShipitApi implements ShipitApi {
               step.status = 'skipped'
             }
           }
+          if (run.tasks) {
+            for (const task of run.tasks) {
+              if (task.status === 'running') {
+                task.status = 'cancelled'
+                task.finishedAt = stopTime
+              } else if (task.status === 'pending') {
+                task.status = 'skipped'
+              }
+            }
+          }
           const pipeline = this.pipelines.find((p) => p.id === run.pipelineId)
           if (pipeline && pipeline.lastRun?.id === run.id) {
             pipeline.lastRun = { ...pipeline.lastRun, ...run }
@@ -775,12 +913,15 @@ export class MockShipitApi implements ShipitApi {
     return { ...run }
   }
 
-  async getRuns(params?: { pipelineId?: number; limit?: number }): Promise<Run[]> {
+  async getRuns(params?: { pipelineId?: number; jobId?: number; limit?: number }): Promise<Run[]> {
     await delay()
     this.checkAuth()
     let list = [...this.runs]
     if (params?.pipelineId !== undefined) {
       list = list.filter((r) => r.pipelineId === params.pipelineId)
+    }
+    if (params?.jobId !== undefined) {
+      list = list.filter((r) => r.jobId === params.jobId)
     }
     list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     if (params?.limit) {
