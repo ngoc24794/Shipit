@@ -71,11 +71,18 @@ public sealed class EngineTestEnv : IDisposable
     public static DeployAllowList AllowDemo() =>
         new([new DeployAllowListEntry("devops", ["shipit-demo"])]);
 
-    public PipelineRunner Runner(ISshExecutor ssh, IK8sDeployer k8s) =>
-        new(Factory, ssh, k8s, Protector, Options, TimeProvider.System, NullLogger<PipelineRunner>.Instance);
+    public static JobAllowList AllowJobDefault() =>
+        new(
+            allowedNamespaces: ["devops", "avina-workspace"],
+            allowedConfigMaps: [("devops", "app-config")],
+            allowedSecrets: [("devops", "app-secret")],
+            allowedPullSecrets: [("devops", "regcred")]);
 
-    public RunCoordinator Coordinator(PipelineRunner runner) =>
-        new(Factory, runner, Options, TimeProvider.System, NullLogger<RunCoordinator>.Instance);
+    public PipelineRunner Runner(ISshExecutor ssh, IK8sDeployer? k8s = null, IK8sJobRunner? jobRunner = null, IJobAllowList? allowList = null) =>
+        new(Factory, ssh, k8s ?? new FakeK8sDeployer(AllowDemo()), Protector, Options, TimeProvider.System, NullLogger<PipelineRunner>.Instance, jobRunner, allowList);
+
+    public RunCoordinator Coordinator(PipelineRunner runner, IK8sJobRunner? jobRunner = null) =>
+        new(Factory, runner, Options, TimeProvider.System, NullLogger<RunCoordinator>.Instance, jobRunner);
 
     /// <summary>Adds a queued run with four pending steps and returns its id.</summary>
     public async Task<long> QueueRunAsync(RunStatus status = RunStatus.Queued, StepStatus stepStatus = StepStatus.Pending)
@@ -133,6 +140,60 @@ public sealed class EngineTestEnv : IDisposable
     {
         await using var db = await Factory.CreateDbContextAsync();
         return await db.RunLogs.AsNoTracking().Where(l => l.RunId == runId).OrderBy(l => l.Id).ToListAsync();
+    }
+
+    public async Task<long> CreateJobAsync(
+        string name = "demo-job",
+        string ns = "devops",
+        string container = "app",
+        string imageName = "shipit-demo-job",
+        string? deployRegistryHost = null,
+        string imagePullSecretsJson = "[\"regcred\"]",
+        IEnumerable<JobTask>? tasks = null)
+    {
+        await using var db = await Factory.CreateDbContextAsync();
+        var pipeline = await db.Pipelines.FirstAsync(p => p.Id == PipelineId);
+        var job = new Job
+        {
+            Name = name,
+            GitUrl = pipeline.GitUrl,
+            GitBranch = pipeline.GitBranch,
+            GitCredentialId = pipeline.GitCredentialId,
+            SlaveId = pipeline.SlaveId,
+            DockerfilePath = pipeline.DockerfilePath,
+            BuildContext = pipeline.BuildContext,
+            ImageName = imageName,
+            RegistryHost = pipeline.RegistryHost,
+            DeployRegistryHost = deployRegistryHost,
+            RegistryCredentialId = pipeline.RegistryCredentialId,
+            Namespace = ns,
+            ContainerName = container,
+            ImagePullSecretsJson = imagePullSecretsJson,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+        };
+        db.Jobs.Add(job);
+        await db.SaveChangesAsync();
+
+        var jobTasks = tasks?.ToList() ?? new List<JobTask>
+        {
+            new() { JobId = job.Id, Position = 1, Label = "task-1", ArgsJson = "[\"echo\", \"1\"]", TimeoutSeconds = 60, BackoffLimit = 0, TtlSeconds = 3600 },
+            new() { JobId = job.Id, Position = 2, Label = "task-2", ArgsJson = "[\"echo\", \"2\"]", TimeoutSeconds = 60, BackoffLimit = 0, TtlSeconds = 3600 },
+        };
+
+        foreach (var t in jobTasks)
+        {
+            t.JobId = job.Id;
+            db.JobTasks.Add(t);
+        }
+        await db.SaveChangesAsync();
+        return job.Id;
+    }
+
+    public async Task<List<RunTask>> GetRunTasksAsync(long runId)
+    {
+        await using var db = await Factory.CreateDbContextAsync();
+        return await db.RunTasks.AsNoTracking().Where(t => t.RunId == runId).OrderBy(t => t.Position).ToListAsync();
     }
 
     public static StepStatus StepStatusOf(Run run, StepName name) => run.Steps.Single(s => s.Name == name).Status;
