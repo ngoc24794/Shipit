@@ -119,6 +119,176 @@ namespace Shipit.Data.Migrations
                     b.ToTable("DeployTargets");
                 });
 
+            modelBuilder.Entity("Shipit.Data.Entities.Job", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BuildContext")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContainerName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("app");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeployRegistryHost")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DockerfilePath")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("Dockerfile");
+
+                    b.Property<string>("GitBranch")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("main");
+
+                    b.Property<long>("GitCredentialId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("GitUrl")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ImageName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ImagePullSecretsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Namespace")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long?>("RegistryCredentialId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RegistryHost")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ServiceAccount")
+                        .HasColumnType("text");
+
+                    b.Property<long>("SlaveId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GitCredentialId");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("RegistryCredentialId");
+
+                    b.HasIndex("SlaveId");
+
+                    b.ToTable("Jobs");
+                });
+
+            modelBuilder.Entity("Shipit.Data.Entities.JobAllowEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Namespace")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Namespace", "Kind", "Name")
+                        .IsUnique();
+
+                    b.ToTable("JobAllowEntries");
+                });
+
+            modelBuilder.Entity("Shipit.Data.Entities.JobTask", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ArgsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("BackoffLimit")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EnvFromConfigMapsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("EnvFromSecretsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("EnvJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("JobId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TimeoutSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TtlSeconds")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobId", "Position")
+                        .IsUnique();
+
+                    b.ToTable("JobTasks");
+                });
+
             modelBuilder.Entity("Shipit.Data.Entities.Pipeline", b =>
                 {
                     b.Property<long>("Id")
@@ -222,7 +392,10 @@ namespace Shipit.Data.Migrations
                     b.Property<string>("Image")
                         .HasColumnType("text");
 
-                    b.Property<long>("PipelineId")
+                    b.Property<long?>("JobId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("PipelineId")
                         .HasColumnType("bigint");
 
                     b.Property<DateTime?>("StartedAt")
@@ -237,11 +410,19 @@ namespace Shipit.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("JobId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Runs_JobId_Active")
+                        .HasFilter("\"Status\" IN ('Queued', 'Running')");
+
                     b.HasIndex("PipelineId")
                         .IsUnique()
                         .HasFilter("\"Status\" IN ('Queued', 'Running')");
 
-                    b.ToTable("Runs");
+                    b.ToTable("Runs", t =>
+                        {
+                            t.HasCheckConstraint("CK_Runs_PipelineXorJob", "(\"PipelineId\" IS NOT NULL AND \"JobId\" IS NULL) OR (\"PipelineId\" IS NULL AND \"JobId\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Shipit.Data.Entities.RunLog", b =>
@@ -265,6 +446,9 @@ namespace Shipit.Data.Migrations
                     b.Property<string>("Stream")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int?>("TaskPosition")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Text")
                         .IsRequired()
@@ -308,6 +492,48 @@ namespace Shipit.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("RunSteps");
+                });
+
+            modelBuilder.Entity("Shipit.Data.Entities.RunTask", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int?>("ExitCode")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("K8sJobName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("RunId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "Position")
+                        .IsUnique();
+
+                    b.ToTable("RunTasks");
                 });
 
             modelBuilder.Entity("Shipit.Data.Entities.Slave", b =>
@@ -354,6 +580,43 @@ namespace Shipit.Data.Migrations
                     b.ToTable("Slaves");
                 });
 
+            modelBuilder.Entity("Shipit.Data.Entities.Job", b =>
+                {
+                    b.HasOne("Shipit.Data.Entities.Credential", "GitCredential")
+                        .WithMany()
+                        .HasForeignKey("GitCredentialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Shipit.Data.Entities.Credential", "RegistryCredential")
+                        .WithMany()
+                        .HasForeignKey("RegistryCredentialId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Shipit.Data.Entities.Slave", "Slave")
+                        .WithMany()
+                        .HasForeignKey("SlaveId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("GitCredential");
+
+                    b.Navigation("RegistryCredential");
+
+                    b.Navigation("Slave");
+                });
+
+            modelBuilder.Entity("Shipit.Data.Entities.JobTask", b =>
+                {
+                    b.HasOne("Shipit.Data.Entities.Job", "Job")
+                        .WithMany("Tasks")
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Job");
+                });
+
             modelBuilder.Entity("Shipit.Data.Entities.Pipeline", b =>
                 {
                     b.HasOne("Shipit.Data.Entities.Credential", "GitCredential")
@@ -382,11 +645,17 @@ namespace Shipit.Data.Migrations
 
             modelBuilder.Entity("Shipit.Data.Entities.Run", b =>
                 {
+                    b.HasOne("Shipit.Data.Entities.Job", "Job")
+                        .WithMany("Runs")
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("Shipit.Data.Entities.Pipeline", "Pipeline")
                         .WithMany("Runs")
                         .HasForeignKey("PipelineId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Job");
 
                     b.Navigation("Pipeline");
                 });
@@ -406,6 +675,17 @@ namespace Shipit.Data.Migrations
                 {
                     b.HasOne("Shipit.Data.Entities.Run", "Run")
                         .WithMany("Steps")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("Shipit.Data.Entities.RunTask", b =>
+                {
+                    b.HasOne("Shipit.Data.Entities.Run", "Run")
+                        .WithMany("Tasks")
                         .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -433,6 +713,13 @@ namespace Shipit.Data.Migrations
                     b.Navigation("Slaves");
                 });
 
+            modelBuilder.Entity("Shipit.Data.Entities.Job", b =>
+                {
+                    b.Navigation("Runs");
+
+                    b.Navigation("Tasks");
+                });
+
             modelBuilder.Entity("Shipit.Data.Entities.Pipeline", b =>
                 {
                     b.Navigation("Runs");
@@ -443,6 +730,8 @@ namespace Shipit.Data.Migrations
                     b.Navigation("Logs");
 
                     b.Navigation("Steps");
+
+                    b.Navigation("Tasks");
                 });
 
             modelBuilder.Entity("Shipit.Data.Entities.Slave", b =>
