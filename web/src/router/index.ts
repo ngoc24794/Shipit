@@ -27,6 +27,34 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Pipeline' }
   },
   {
+    path: '/jobs',
+    name: 'jobs',
+    component: () => import('../views/jobs/JobsView.vue'),
+    meta: { title: 'Job' }
+  },
+  {
+    path: '/jobs/new',
+    name: 'job-new',
+    component: () => import('../views/jobs/JobFormView.vue'),
+    meta: { title: 'Tạo Job' }
+  },
+  {
+    path: '/jobs/:id',
+    name: 'job-edit',
+    component: () => import('../views/jobs/JobFormView.vue'),
+    meta: { title: 'Cấu hình Job' }
+  },
+  {
+    path: '/settings/job-allow',
+    name: 'job-allow',
+    component: () => import('../views/jobs/JobAllowListView.vue'),
+    meta: { title: 'Allowlist Job' }
+  },
+  {
+    path: '/job-allow',
+    redirect: '/settings/job-allow'
+  },
+  {
     path: '/deploy-targets',
     name: 'deploy-targets',
     component: () => import('../views/config/DeployTargetsView.vue'),

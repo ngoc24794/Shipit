@@ -16,7 +16,14 @@ import type {
   Run,
   RunDetail,
   LogLine,
-  RunStatus
+  RunStatus,
+  Job,
+  JobInput,
+  JobValidation,
+  JobPreview,
+  JobPreviewTask,
+  JobAllowEntry,
+  JobAllowEntryInput
 } from './types'
 import { ApiError } from './client'
 
@@ -255,6 +262,101 @@ export class MockShipitApi implements ShipitApi {
         startedAt: '2026-11-09T08:00:05Z',
         finishedAt: '2026-11-09T08:01:20Z'
       }
+    }
+  ]
+
+  private jobAllowEntries: JobAllowEntry[] = [
+    {
+      id: 1,
+      namespace: 'avina-workspace',
+      kind: 'namespace',
+      name: 'avina-workspace',
+      createdAt: '2026-11-14T08:00:00Z'
+    },
+    {
+      id: 2,
+      namespace: 'avina-workspace',
+      kind: 'configmap',
+      name: 'avina-files-config',
+      createdAt: '2026-11-14T08:00:00Z'
+    },
+    {
+      id: 3,
+      namespace: 'avina-workspace',
+      kind: 'configmap',
+      name: 'avina-users-config',
+      createdAt: '2026-11-14T08:00:00Z'
+    },
+    {
+      id: 4,
+      namespace: 'avina-workspace',
+      kind: 'secret',
+      name: 'avina-files-secret',
+      createdAt: '2026-11-14T08:00:00Z'
+    },
+    {
+      id: 5,
+      namespace: 'avina-workspace',
+      kind: 'secret',
+      name: 'avina-users-secret',
+      createdAt: '2026-11-14T08:00:00Z'
+    },
+    {
+      id: 6,
+      namespace: 'avina-workspace',
+      kind: 'pullsecret',
+      name: 'registry-secret',
+      createdAt: '2026-11-14T08:00:00Z'
+    }
+  ]
+
+  private jobs: Job[] = [
+    {
+      id: 1,
+      name: 'avina-dbmigrator',
+      gitUrl: 'http://git.example/AvinaWorkspace',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      dockerfilePath: 'docker/Dockerfile.dbmigrator',
+      buildContext: '.',
+      imageName: 'avina-dbmigrator',
+      registryHost: '192.168.1.241',
+      deployRegistryHost: null,
+      registryCredentialId: null,
+      namespace: 'avina-workspace',
+      containerName: 'dbmigrator',
+      serviceAccount: null,
+      imagePullSecrets: ['registry-secret'],
+      tasks: [
+        {
+          position: 1,
+          label: 'files',
+          args: ['migrate', '--module', 'files'],
+          envFromConfigMaps: ['avina-files-config'],
+          envFromSecrets: ['avina-files-secret'],
+          env: [
+            { name: 'ASPNETCORE_ENVIRONMENT', value: 'Staging' }
+          ],
+          timeoutSeconds: 1800,
+          backoffLimit: 0,
+          ttlSeconds: 3600
+        },
+        {
+          position: 2,
+          label: 'users',
+          args: ['migrate', '--module', 'users'],
+          envFromConfigMaps: ['avina-users-config'],
+          envFromSecrets: ['avina-users-secret'],
+          env: [
+            { name: 'ASPNETCORE_ENVIRONMENT', value: 'Staging' }
+          ],
+          timeoutSeconds: 1800,
+          backoffLimit: 0,
+          ttlSeconds: 3600
+        }
+      ],
+      lastRun: null
     }
   ]
 
@@ -843,5 +945,526 @@ export class MockShipitApi implements ShipitApi {
       cancelled = true
       if (intervalId) clearInterval(intervalId)
     }
+  }
+
+  // --- Jobs ---
+
+  async getJobs(): Promise<Job[]> {
+    await delay()
+    this.checkAuth()
+    return JSON.parse(JSON.stringify(this.jobs))
+  }
+
+  async getJob(id: number): Promise<Job> {
+    await delay()
+    this.checkAuth()
+    const job = this.jobs.find((j) => j.id === id)
+    if (!job) throw new ApiError(404, 'Không tìm thấy Job')
+    return JSON.parse(JSON.stringify(job))
+  }
+
+  async validateJob(input: JobInput): Promise<JobValidation> {
+    await delay()
+    this.checkAuth()
+    const errors: Record<string, string[]> = {}
+
+    const name = (input.name || '').trim()
+    if (!name) {
+      errors.name = ['Vui lòng nhập tên Job']
+    } else if (name.length > 253 || !/^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$/.test(name)) {
+      errors.name = ['Tên Job phải tuân theo chuẩn DNS-1123 subdomain (1-253 ký tự, chữ thường, số, dấu gạch ngang hoặc chấm)']
+    }
+
+    if (!input.gitUrl || !input.gitUrl.trim()) {
+      errors.gitUrl = ['Vui lòng nhập địa chỉ Git URL']
+    }
+
+    if (!input.gitCredentialId) {
+      errors.gitCredentialId = ['Vui lòng chọn thông tin xác thực Git']
+    } else {
+      const cred = this.credentials.find((c) => c.id === input.gitCredentialId && c.kind === 'git_token')
+      if (!cred) {
+        errors.gitCredentialId = ['Thông tin xác thực Git không hợp lệ']
+      }
+    }
+
+    if (!input.slaveId) {
+      errors.slaveId = ['Vui lòng chọn máy build']
+    } else {
+      const slave = this.slaves.find((s) => s.id === input.slaveId)
+      if (!slave) {
+        errors.slaveId = ['Máy build không tồn tại']
+      }
+    }
+
+    if (!input.imageName || !input.imageName.trim()) {
+      errors.imageName = ['Vui lòng nhập tên Image']
+    }
+
+    if (!input.registryHost || !input.registryHost.trim()) {
+      errors.registryHost = ['Vui lòng nhập Host registry']
+    }
+
+    const ns = (input.namespace || '').trim()
+    if (!ns) {
+      errors.namespace = ['Vui lòng chọn Namespace']
+    } else {
+      const allowedNs = this.jobAllowEntries.some((e) => e.kind === 'namespace' && e.name === ns)
+      if (!allowedNs) {
+        errors.namespace = [`Namespace '${ns}' không nằm trong danh sách được phép`]
+      }
+    }
+
+    if (!input.containerName || !input.containerName.trim()) {
+      errors.containerName = ['Vui lòng nhập tên container']
+    }
+
+    if (input.buildContext) {
+      const buildContextErr = validateBuildContext(input.buildContext)
+      if (buildContextErr) {
+        errors.buildContext = [buildContextErr]
+      }
+    }
+
+    if (input.deployRegistryHost) {
+      const deployRegErr = validateDeployRegistryHost(input.deployRegistryHost)
+      if (deployRegErr) {
+        errors.deployRegistryHost = [deployRegErr]
+      }
+    }
+
+    if (input.imagePullSecrets && input.imagePullSecrets.length > 0) {
+      for (const secret of input.imagePullSecrets) {
+        const allowed = this.jobAllowEntries.some(
+          (e) => e.kind === 'pullsecret' && e.namespace === ns && e.name === secret
+        )
+        if (!allowed) {
+          errors.imagePullSecrets = [`ImagePullSecret '${secret}' không nằm trong allowlist của namespace '${ns}'`]
+        }
+      }
+    }
+
+    if (!input.tasks || input.tasks.length === 0) {
+      errors.tasks = ['Job phải có ít nhất một tác vụ']
+    } else {
+      input.tasks.forEach((t, i) => {
+        if (!t.label || !t.label.trim()) {
+          errors[`tasks[${i}].label`] = ['Vui lòng nhập nhãn tác vụ']
+        }
+        if (t.timeoutSeconds === undefined || t.timeoutSeconds === null || Number(t.timeoutSeconds) <= 0) {
+          errors[`tasks[${i}].timeoutSeconds`] = ['Thời gian timeout bắt buộc và phải lớn hơn 0']
+        }
+        if (t.envFromConfigMaps && t.envFromConfigMaps.length > 0) {
+          for (const cm of t.envFromConfigMaps) {
+            const allowed = this.jobAllowEntries.some(
+              (e) => e.kind === 'configmap' && e.namespace === ns && e.name === cm
+            )
+            if (!allowed) {
+              errors[`tasks[${i}].envFromConfigMaps`] = [`ConfigMap '${cm}' không nằm trong allowlist của namespace '${ns}'`]
+            }
+          }
+        }
+        if (t.envFromSecrets && t.envFromSecrets.length > 0) {
+          for (const sec of t.envFromSecrets) {
+            const allowed = this.jobAllowEntries.some(
+              (e) => e.kind === 'secret' && e.namespace === ns && e.name === sec
+            )
+            if (!allowed) {
+              errors[`tasks[${i}].envFromSecrets`] = [`Secret '${sec}' không nằm trong allowlist của namespace '${ns}'`]
+            }
+          }
+        }
+        if (t.env && t.env.length > 0) {
+          t.env.forEach((env, envIdx) => {
+            if (!env.name || !env.name.trim()) {
+              errors[`tasks[${i}].env[${envIdx}].name`] = ['Tên biến môi trường không được để trống']
+            }
+            if (env.secretName) {
+              const allowed = this.jobAllowEntries.some(
+                (e) => e.kind === 'secret' && e.namespace === ns && e.name === env.secretName
+              )
+              if (!allowed) {
+                errors[`tasks[${i}].env[${envIdx}].secretName`] = [
+                  `Secret '${env.secretName}' không nằm trong allowlist của namespace '${ns}'`
+                ]
+              }
+              if (!env.secretKey || !env.secretKey.trim()) {
+                errors[`tasks[${i}].env[${envIdx}].secretKey`] = ['Secret key không được để trống khi lấy từ Secret']
+              }
+            }
+          })
+        }
+      })
+    }
+
+    return {
+      valid: Object.keys(errors).length === 0,
+      errors
+    }
+  }
+
+  async previewJob(input: JobInput): Promise<JobPreview> {
+    await delay()
+    this.checkAuth()
+    const validation = await this.validateJob(input)
+    const registry = input.deployRegistryHost || input.registryHost
+    const tasks: JobPreviewTask[] = (input.tasks || []).map((t, idx) => {
+      const position = idx + 1
+      const lines = [
+        'apiVersion: batch/v1',
+        'kind: Job',
+        'metadata:',
+        `  name: ${input.name || 'job'}-${t.label || `task-${position}`}`,
+        `  namespace: ${input.namespace || 'default'}`,
+        '  labels:',
+        `    shipit/job-name: ${input.name || 'job'}`,
+        `    shipit/task: ${t.label || `task-${position}`}`,
+        'spec:',
+        `  backoffLimit: ${t.backoffLimit ?? 0}`,
+        `  activeDeadlineSeconds: ${t.timeoutSeconds ?? 1800}`,
+        `  ttlSecondsAfterFinished: ${t.ttlSeconds ?? 3600}`,
+        '  template:',
+        '    metadata:',
+        '      labels:',
+        `        shipit/job-name: ${input.name || 'job'}`,
+        `        shipit/task: ${t.label || `task-${position}`}`,
+        '    spec:',
+        '      restartPolicy: Never',
+        '      securityContext:',
+        '        runAsNonRoot: true',
+        '        runAsUser: 1654',
+        ...(input.serviceAccount ? [`      serviceAccountName: ${input.serviceAccount}`] : []),
+        ...(input.imagePullSecrets && input.imagePullSecrets.length > 0
+          ? [
+              '      imagePullSecrets:',
+              ...input.imagePullSecrets.map((s) => `        - name: ${s}`)
+            ]
+          : []),
+        '      containers:',
+        `        - name: ${input.containerName || 'container'}`,
+        `          image: ${registry ? `${registry}/` : ''}${input.imageName || 'image'}:<tag>`,
+        ...(t.args && t.args.length > 0
+          ? [
+              '          args:',
+              ...t.args.map((a) => `            - ${JSON.stringify(a)}`)
+            ]
+          : []),
+        ...((t.envFromConfigMaps && t.envFromConfigMaps.length > 0) || (t.envFromSecrets && t.envFromSecrets.length > 0)
+          ? [
+              '          envFrom:',
+              ...(t.envFromConfigMaps || []).map((cm) => `            - configMapRef:\n                name: ${cm}`),
+              ...(t.envFromSecrets || []).map((sec) => `            - secretRef:\n                name: ${sec}`)
+            ]
+          : []),
+        ...(t.env && t.env.length > 0
+          ? [
+              '          env:',
+              ...t.env.map((e) => {
+                if (e.secretName && e.secretKey) {
+                  return `            - name: ${e.name}\n              valueFrom:\n                secretKeyRef:\n                  name: ${e.secretName}\n                  key: ${e.secretKey}`
+                }
+                return `            - name: ${e.name}\n              value: ${JSON.stringify(e.value ?? '')}`
+              })
+            ]
+          : [])
+      ]
+      return {
+        position,
+        label: t.label || `task-${position}`,
+        yaml: lines.join('\n')
+      }
+    })
+    return {
+      errors: validation.errors,
+      tasks
+    }
+  }
+
+  async createJob(input: JobInput): Promise<Job> {
+    await delay()
+    this.checkAuth()
+
+    const validation = await this.validateJob(input)
+    if (!validation.valid) {
+      throw new ApiError(400, 'Dữ liệu Job không hợp lệ', {
+        title: 'Validation failed',
+        errors: validation.errors
+      })
+    }
+
+    if (this.jobs.some((j) => j.name === input.name)) {
+      throw new ApiError(409, `Job '${input.name}' đã tồn tại`, {
+        title: 'Job already exists',
+        detail: `Job '${input.name}' already exists.`,
+        errors: { name: ['Tên Job đã tồn tại'] }
+      })
+    }
+
+    const newJob: Job = {
+      id: this.jobs.length > 0 ? Math.max(...this.jobs.map((j) => j.id)) + 1 : 1,
+      name: input.name,
+      gitUrl: input.gitUrl,
+      gitBranch: input.gitBranch || 'main',
+      gitCredentialId: input.gitCredentialId,
+      slaveId: input.slaveId,
+      dockerfilePath: input.dockerfilePath || 'Dockerfile',
+      buildContext: normalizeBuildContext(input.buildContext),
+      imageName: input.imageName,
+      registryHost: input.registryHost,
+      deployRegistryHost: normalizeDeployRegistryHost(input.deployRegistryHost),
+      registryCredentialId: input.registryCredentialId ?? null,
+      namespace: input.namespace,
+      containerName: input.containerName,
+      serviceAccount: input.serviceAccount || null,
+      imagePullSecrets: input.imagePullSecrets || [],
+      tasks: (input.tasks || []).map((t, idx) => ({
+        position: idx + 1,
+        label: t.label,
+        args: t.args || [],
+        envFromConfigMaps: t.envFromConfigMaps || [],
+        envFromSecrets: t.envFromSecrets || [],
+        env: t.env || [],
+        timeoutSeconds: t.timeoutSeconds ?? 1800,
+        backoffLimit: t.backoffLimit ?? 0,
+        ttlSeconds: t.ttlSeconds ?? 3600
+      })),
+      lastRun: null
+    }
+
+    this.jobs.push(newJob)
+    return JSON.parse(JSON.stringify(newJob))
+  }
+
+  async updateJob(id: number, input: JobInput): Promise<Job> {
+    await delay()
+    this.checkAuth()
+    const idx = this.jobs.findIndex((j) => j.id === id)
+    if (idx === -1) throw new ApiError(404, 'Không tìm thấy Job')
+
+    const validation = await this.validateJob(input)
+    if (!validation.valid) {
+      throw new ApiError(400, 'Dữ liệu Job không hợp lệ', {
+        title: 'Validation failed',
+        errors: validation.errors
+      })
+    }
+
+    if (this.jobs.some((j) => j.id !== id && j.name === input.name)) {
+      throw new ApiError(409, `Job '${input.name}' đã tồn tại`, {
+        title: 'Job already exists',
+        detail: `Job '${input.name}' already exists.`,
+        errors: { name: ['Tên Job đã tồn tại'] }
+      })
+    }
+
+    const current = this.jobs[idx]
+    const updated: Job = {
+      ...current,
+      name: input.name,
+      gitUrl: input.gitUrl,
+      gitBranch: input.gitBranch || 'main',
+      gitCredentialId: input.gitCredentialId,
+      slaveId: input.slaveId,
+      dockerfilePath: input.dockerfilePath || 'Dockerfile',
+      buildContext: normalizeBuildContext(input.buildContext),
+      imageName: input.imageName,
+      registryHost: input.registryHost,
+      deployRegistryHost: normalizeDeployRegistryHost(input.deployRegistryHost),
+      registryCredentialId: input.registryCredentialId ?? null,
+      namespace: input.namespace,
+      containerName: input.containerName,
+      serviceAccount: input.serviceAccount || null,
+      imagePullSecrets: input.imagePullSecrets || [],
+      tasks: (input.tasks || []).map((t, taskIdx) => ({
+        position: taskIdx + 1,
+        label: t.label,
+        args: t.args || [],
+        envFromConfigMaps: t.envFromConfigMaps || [],
+        envFromSecrets: t.envFromSecrets || [],
+        env: t.env || [],
+        timeoutSeconds: t.timeoutSeconds ?? 1800,
+        backoffLimit: t.backoffLimit ?? 0,
+        ttlSeconds: t.ttlSeconds ?? 3600
+      }))
+    }
+
+    this.jobs[idx] = updated
+    return JSON.parse(JSON.stringify(updated))
+  }
+
+  async deleteJob(id: number): Promise<void> {
+    await delay()
+    this.checkAuth()
+    const job = this.jobs.find((j) => j.id === id)
+    if (!job) throw new ApiError(404, 'Không tìm thấy Job')
+
+    const activeRun = this.runs.find(
+      (r) => r.jobId === id && (r.status === 'running' || r.status === 'queued')
+    )
+    if (activeRun) {
+      throw new ApiError(409, 'Không thể xoá Job khi đang có lượt chạy hoạt động', {
+        title: 'Job has active run',
+        detail: 'Cannot delete job while it has an active run.'
+      })
+    }
+
+    this.jobs = this.jobs.filter((j) => j.id !== id)
+  }
+
+  async triggerJobRun(id: number): Promise<Run> {
+    await delay()
+    this.checkAuth()
+    const job = this.jobs.find((j) => j.id === id)
+    if (!job) throw new ApiError(404, 'Không tìm thấy Job')
+
+    const activeRun = this.runs.find(
+      (r) => r.jobId === id && (r.status === 'running' || r.status === 'queued')
+    )
+    if (activeRun) {
+      throw new ApiError(409, 'Job đang có lượt chạy hoạt động', {
+        title: 'Job already has active run',
+        detail: 'Job already has an active run.'
+      })
+    }
+
+    const nextId = this.runs.length > 0 ? Math.max(...this.runs.map((r) => r.id)) + 1 : 1
+    const newRun: RunDetail = {
+      id: nextId,
+      pipelineId: 0,
+      jobId: id,
+      kind: 'job',
+      status: 'queued',
+      tag: null,
+      image: null,
+      failureReason: null,
+      createdAt: new Date().toISOString(),
+      startedAt: null,
+      finishedAt: null,
+      steps: [
+        { name: 'checkout', status: 'pending', startedAt: null, finishedAt: null },
+        { name: 'build', status: 'pending', startedAt: null, finishedAt: null },
+        { name: 'push', status: 'pending', startedAt: null, finishedAt: null },
+        { name: 'deploy', status: 'pending', startedAt: null, finishedAt: null }
+      ]
+    }
+
+    this.runs.push(newRun)
+    job.lastRun = {
+      id: newRun.id,
+      pipelineId: 0,
+      jobId: id,
+      kind: 'job',
+      status: 'queued',
+      tag: null,
+      image: null,
+      failureReason: null,
+      createdAt: newRun.createdAt,
+      startedAt: null,
+      finishedAt: null
+    }
+
+    return JSON.parse(JSON.stringify(newRun))
+  }
+
+  // --- Job Allow Entries ---
+
+  async getJobAllowEntries(): Promise<JobAllowEntry[]> {
+    await delay()
+    this.checkAuth()
+    return [...this.jobAllowEntries].sort((a, b) => {
+      const cmpNs = a.namespace.localeCompare(b.namespace)
+      if (cmpNs !== 0) return cmpNs
+      const cmpKind = a.kind.localeCompare(b.kind)
+      if (cmpKind !== 0) return cmpKind
+      return a.name.localeCompare(b.name)
+    })
+  }
+
+  async createJobAllowEntry(input: JobAllowEntryInput): Promise<JobAllowEntry> {
+    await delay()
+    this.checkAuth()
+    const ns = (input.namespace || '').trim()
+    const kind = input.kind
+    const name = (input.name || '').trim()
+
+    const errors: Record<string, string[]> = {}
+    if (!ns) {
+      errors.namespace = ['Vui lòng nhập Namespace']
+    } else if (ns.length > 63 || !/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(ns)) {
+      errors.namespace = ['Namespace phải tuân theo chuẩn DNS-1123 label (1-63 ký tự)']
+    }
+
+    if (!kind) {
+      errors.kind = ['Vui lòng chọn loại cho phép']
+    }
+
+    if (!name) {
+      errors.name = ['Vui lòng nhập tên']
+    } else if (name.length > 253) {
+      errors.name = ['Tên tối đa 253 ký tự']
+    }
+
+    if (Object.keys(errors).length > 0) {
+      throw new ApiError(400, 'Dữ liệu allowlist không hợp lệ', {
+        title: 'Validation failed',
+        errors
+      })
+    }
+
+    const duplicate = this.jobAllowEntries.some(
+      (e) => e.namespace === ns && e.kind === kind && e.name === name
+    )
+    if (duplicate) {
+      throw new ApiError(409, `Mục allowlist '${kind}:${name}' trong namespace '${ns}' đã tồn tại`, {
+        title: 'Job allow entry already exists',
+        detail: `Job allow entry '${ns}/${kind}/${name}' already exists.`
+      })
+    }
+
+    const newEntry: JobAllowEntry = {
+      id: this.jobAllowEntries.length > 0 ? Math.max(...this.jobAllowEntries.map((e) => e.id)) + 1 : 1,
+      namespace: ns,
+      kind,
+      name,
+      createdAt: new Date().toISOString()
+    }
+
+    this.jobAllowEntries.push(newEntry)
+    return JSON.parse(JSON.stringify(newEntry))
+  }
+
+  async deleteJobAllowEntry(id: number): Promise<void> {
+    await delay()
+    this.checkAuth()
+    const entry = this.jobAllowEntries.find((e) => e.id === id)
+    if (!entry) throw new ApiError(404, 'Không tìm thấy mục allowlist')
+
+    // Check if in use by any Job
+    const usingJobs: string[] = []
+    for (const job of this.jobs) {
+      if (entry.kind === 'namespace' && job.namespace === entry.name) {
+        usingJobs.push(job.name)
+      } else if (entry.kind === 'pullsecret' && job.namespace === entry.namespace && job.imagePullSecrets.includes(entry.name)) {
+        usingJobs.push(job.name)
+      } else if (entry.kind === 'configmap' && job.namespace === entry.namespace && job.tasks.some((t) => t.envFromConfigMaps.includes(entry.name))) {
+        usingJobs.push(job.name)
+      } else if (entry.kind === 'secret' && job.namespace === entry.namespace) {
+        const inEnvFrom = job.tasks.some((t) => t.envFromSecrets.includes(entry.name))
+        const inEnv = job.tasks.some((t) => t.env.some((e) => e.secretName === entry.name))
+        if (inEnvFrom || inEnv) {
+          usingJobs.push(job.name)
+        }
+      }
+    }
+
+    if (usingJobs.length > 0) {
+      const uniqueNames = [...new Set(usingJobs)].map((n) => `'${n}'`).join(', ')
+      throw new ApiError(409, `Không thể xoá mục allowlist đang được Job sử dụng: ${uniqueNames}`, {
+        title: 'Mục allowlist đang được sử dụng',
+        detail: `Không thể xoá mục allowlist '${entry.name}' vì đang được Job sử dụng: ${uniqueNames}.`
+      })
+    }
+
+    this.jobAllowEntries = this.jobAllowEntries.filter((e) => e.id !== id)
   }
 }
