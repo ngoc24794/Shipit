@@ -65,11 +65,19 @@ public interface IK8sJobRunner
 /// <summary>What a Job may reference. Names only; the lookups are case-sensitive and exact.</summary>
 public interface IJobAllowList
 {
-    bool IsNamespaceAllowed(string ns);
+    Task<bool> IsNamespaceAllowedAsync(string ns, CancellationToken cancellationToken = default);
 
-    bool IsConfigMapAllowed(string ns, string name);
+    Task<bool> IsConfigMapAllowedAsync(string ns, string name, CancellationToken cancellationToken = default);
 
-    bool IsSecretAllowed(string ns, string name);
+    Task<bool> IsSecretAllowedAsync(string ns, string name, CancellationToken cancellationToken = default);
 
-    bool IsPullSecretAllowed(string ns, string name);
+    Task<bool> IsPullSecretAllowedAsync(string ns, string name, CancellationToken cancellationToken = default);
+
+    bool IsNamespaceAllowed(string ns) => IsNamespaceAllowedAsync(ns).GetAwaiter().GetResult();
+
+    bool IsConfigMapAllowed(string ns, string name) => IsConfigMapAllowedAsync(ns, name).GetAwaiter().GetResult();
+
+    bool IsSecretAllowed(string ns, string name) => IsSecretAllowedAsync(ns, name).GetAwaiter().GetResult();
+
+    bool IsPullSecretAllowed(string ns, string name) => IsPullSecretAllowedAsync(ns, name).GetAwaiter().GetResult();
 }
