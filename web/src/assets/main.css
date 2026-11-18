@@ -64,11 +64,41 @@
   border-color: var(--border);
 }
 
+html,
+body,
+#app {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   background-color: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
-  min-height: 100vh;
+}
+
+/* Thin, token-colored internal scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted-fg);
 }
 
 /* Focus visibility requirement: outline 2px var(--ring) + offset 2px */

@@ -10,7 +10,9 @@ import {
   Layers,
   Calendar,
   AlertTriangle,
-  CircleStop
+  CircleStop,
+  Copy,
+  Check
 } from 'lucide-vue-next'
 import AppLayout from '../../layouts/AppLayout.vue'
 import AppButton from '../../components/AppButton.vue'
@@ -31,6 +33,21 @@ const router = useRouter()
 const api = useApi()
 const runsStore = useRunsStore()
 const toast = useToast()
+const copiedField = ref<'tag' | 'image' | null>(null)
+
+async function copyInfoValue(field: 'tag' | 'image', value?: string | null) {
+  if (!value) return
+  try {
+    await navigator.clipboard.writeText(value)
+    copiedField.value = field
+    toast.success('Đã sao chép vào bộ nhớ tạm')
+    setTimeout(() => {
+      if (copiedField.value === field) copiedField.value = null
+    }, 2000)
+  } catch {
+    toast.error('Không thể sao chép vào bộ nhớ tạm')
+  }
+}
 
 const MAX_LOG_LINES = 5000
 
@@ -417,23 +434,23 @@ onBeforeUnmount(() => {
       <div v-else-if="run" class="space-y-6">
         <!-- Header Banner -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border">
-          <div class="space-y-1">
+          <div class="space-y-1 min-w-0">
             <div class="flex items-center gap-3 flex-wrap">
-              <h1 class="text-2xl font-semibold text-fg tracking-tight">
+              <h1 class="text-2xl font-semibold text-fg tracking-tight truncate">
                 {{ displayName }}
               </h1>
-              <span class="font-mono text-xl text-muted-fg font-medium">
+              <span class="font-mono text-xl text-muted-fg font-medium whitespace-nowrap">
                 #{{ run.id }}
               </span>
               <StatusBadge :status="run.status" size="md" />
             </div>
-            <p class="text-xs text-muted-fg flex items-center gap-1.5">
-              <Calendar class="w-3.5 h-3.5" aria-hidden="true" />
+            <p class="text-xs text-muted-fg flex items-center gap-1.5 whitespace-nowrap">
+              <Calendar class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               <span>Tạo lúc: {{ formatDateTime(run.createdAt) }}</span>
             </p>
           </div>
 
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
             <AppButton
               v-if="isRunActive || isCancelling"
               variant="secondary"
@@ -514,63 +531,88 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Info Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <!-- Tag / SHA -->
-          <div class="p-3.5 rounded-[8px] bg-card border border-border flex items-start gap-3">
+          <div class="p-3.5 rounded-[8px] bg-card border border-border flex items-start gap-3 min-w-0">
             <div class="p-2 rounded bg-muted text-muted-fg shrink-0">
               <GitCommit class="w-4 h-4" aria-hidden="true" />
             </div>
             <div class="min-w-0 flex-1">
-              <div class="text-xs text-muted-fg font-medium">Tag (Git SHA)</div>
-              <div class="mt-1 font-mono text-sm text-fg truncate">
+              <div class="text-xs text-muted-fg font-medium whitespace-nowrap">Tag (Git SHA)</div>
+              <div class="mt-1 flex items-center gap-1.5 min-w-0">
                 <span
                   v-if="run.tag"
-                  class="px-1.5 py-0.5 rounded bg-muted border border-border/60 text-xs"
+                  class="px-1.5 py-0.5 rounded bg-muted border border-border/60 font-mono text-xs text-fg truncate"
+                  :title="run.tag"
                 >
                   {{ run.tag }}
                 </span>
                 <span v-else class="text-muted-fg font-sans text-xs">Chưa có</span>
+                <button
+                  v-if="run.tag"
+                  type="button"
+                  aria-label="Sao chép Tag (Git SHA)"
+                  title="Sao chép"
+                  class="p-1 rounded text-muted-fg hover:text-fg hover:bg-muted transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-ring"
+                  @click="copyInfoValue('tag', run.tag)"
+                >
+                  <Check v-if="copiedField === 'tag'" class="w-3.5 h-3.5 text-success" aria-hidden="true" />
+                  <Copy v-else class="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
               </div>
             </div>
           </div>
 
           <!-- Image -->
-          <div class="p-3.5 rounded-[8px] bg-card border border-border flex items-start gap-3">
+          <div class="p-3.5 rounded-[8px] bg-card border border-border flex items-start gap-3 min-w-0">
             <div class="p-2 rounded bg-muted text-muted-fg shrink-0">
               <Layers class="w-4 h-4" aria-hidden="true" />
             </div>
             <div class="min-w-0 flex-1">
-              <div class="text-xs text-muted-fg font-medium">Container Image</div>
-              <div
-                class="mt-1 font-mono text-xs text-fg break-all line-clamp-2"
-                :title="run.image || ''"
-              >
-                {{ run.image || 'Chưa tạo' }}
+              <div class="text-xs text-muted-fg font-medium whitespace-nowrap">Container Image</div>
+              <div class="mt-1 flex items-center gap-1.5 min-w-0">
+                <span
+                  class="font-mono text-xs text-fg truncate"
+                  :title="run.image || ''"
+                >
+                  {{ run.image || 'Chưa tạo' }}
+                </span>
+                <button
+                  v-if="run.image"
+                  type="button"
+                  aria-label="Sao chép Container Image"
+                  title="Sao chép"
+                  class="p-1 rounded text-muted-fg hover:text-fg hover:bg-muted transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-ring"
+                  @click="copyInfoValue('image', run.image)"
+                >
+                  <Check v-if="copiedField === 'image'" class="w-3.5 h-3.5 text-success" aria-hidden="true" />
+                  <Copy v-else class="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
               </div>
             </div>
           </div>
 
           <!-- Started At -->
-          <div class="p-3.5 rounded-[8px] bg-card border border-border flex items-start gap-3">
+          <div class="p-3.5 rounded-[8px] bg-card border border-border flex items-start gap-3 min-w-0">
             <div class="p-2 rounded bg-muted text-muted-fg shrink-0">
               <Calendar class="w-4 h-4" aria-hidden="true" />
             </div>
             <div class="min-w-0 flex-1">
-              <div class="text-xs text-muted-fg font-medium">Bắt đầu lúc</div>
-              <div class="mt-1 text-xs text-fg font-medium tabular-nums">
+              <div class="text-xs text-muted-fg font-medium whitespace-nowrap">Bắt đầu lúc</div>
+              <div class="mt-1 text-xs text-fg font-medium tabular-nums truncate" :title="formatDateTime(run.startedAt)">
                 {{ formatDateTime(run.startedAt) }}
               </div>
             </div>
           </div>
 
           <!-- Duration -->
-          <div class="p-3.5 rounded-[8px] bg-card border border-border flex items-start gap-3">
+          <div class="p-3.5 rounded-[8px] bg-card border border-border flex items-start gap-3 min-w-0">
             <div class="p-2 rounded bg-muted text-muted-fg shrink-0">
               <Clock class="w-4 h-4" aria-hidden="true" />
             </div>
             <div class="min-w-0 flex-1">
-              <div class="text-xs text-muted-fg font-medium">Thời lượng</div>
-              <div class="mt-1 font-mono text-sm font-semibold text-fg tabular-nums">
+              <div class="text-xs text-muted-fg font-medium whitespace-nowrap">Thời lượng</div>
+              <div class="mt-1 font-mono text-sm font-semibold text-fg tabular-nums truncate">
                 {{ formatDuration(run.startedAt, run.finishedAt, currentTime) }}
               </div>
             </div>

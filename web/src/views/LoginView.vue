@@ -53,7 +53,7 @@ async function onSubmit() {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col justify-center items-center p-4 bg-bg text-fg">
+  <div class="h-dvh overflow-y-auto flex flex-col justify-center items-center p-4 bg-bg text-fg">
     <AppToast />
 
     <!-- Top theme switcher -->

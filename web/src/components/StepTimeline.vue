@@ -137,7 +137,7 @@ function getStatusBadge(status: StepStatus) {
         <!-- Step Info -->
         <div class="flex flex-col md:items-center text-left md:text-center min-w-0">
           <div class="flex items-center gap-1.5 font-medium text-sm text-fg">
-            <span>{{ step.label }}</span>
+            <span class="whitespace-nowrap">{{ step.label }}</span>
             <component
               :is="getStatusBadge(step.status).icon"
               :class="['w-3.5 h-3.5', getStatusBadge(step.status).class]"

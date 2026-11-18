@@ -3,7 +3,7 @@
 </script>
 
 <template>
-  <div class="w-full overflow-x-auto rounded-[8px] border border-border bg-card">
+  <div class="w-full max-h-[calc(100dvh-230px)] overflow-auto rounded-[8px] border border-border bg-card">
     <table class="w-full text-left text-sm tabular-nums border-collapse">
       <thead class="sticky top-0 z-10 bg-muted/80 backdrop-blur-xs text-xs font-semibold text-muted-fg border-b border-border">
         <slot name="header" />

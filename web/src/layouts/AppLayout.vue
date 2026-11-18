@@ -59,11 +59,11 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col md:flex-row bg-bg text-fg">
+  <div class="h-dvh overflow-hidden flex flex-col md:flex-row bg-bg text-fg">
     <AppToast />
 
     <!-- Mobile Top Header Bar (<768px) -->
-    <header class="md:hidden flex items-center justify-between h-12 px-4 bg-card border-b border-border sticky top-0 z-30">
+    <header class="md:hidden shrink-0 flex items-center justify-between h-12 px-4 bg-card border-b border-border z-30">
       <div class="flex items-center gap-2">
         <button
           type="button"
@@ -92,11 +92,11 @@ async function handleLogout() {
       </div>
     </header>
 
-    <!-- Sidebar (Desktop: 232px fixed/sticky, Mobile: slide-down/overlay) -->
+    <!-- Sidebar (Desktop: 232px fixed height, Mobile: slide-down/overlay) -->
     <aside
       :class="[
         'w-[232px] flex-shrink-0 bg-card border-r border-border flex flex-col transition-all z-20',
-        'md:sticky md:top-0 md:h-screen',
+        'md:h-full',
         isMobileMenuOpen ? 'fixed inset-y-0 left-0 shadow-2xl pt-12 md:pt-0' : 'hidden md:flex'
       ]"
     >
@@ -151,9 +151,9 @@ async function handleLogout() {
     />
 
     <!-- Main Content Layout Area -->
-    <div class="flex-1 flex flex-col min-w-0">
+    <div class="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
       <!-- Desktop Header (48px) -->
-      <header class="hidden md:flex items-center justify-end h-12 px-6 bg-card border-b border-border sticky top-0 z-10">
+      <header class="hidden md:flex shrink-0 items-center justify-end h-12 px-6 bg-card border-b border-border z-10">
         <div class="flex items-center gap-4">
           <!-- Theme Toggle -->
           <button
@@ -188,9 +188,11 @@ async function handleLogout() {
         </div>
       </header>
 
-      <!-- Page Content -->
-      <main class="flex-1 max-w-[1440px] w-full mx-auto p-4 sm:p-6">
-        <slot />
+      <!-- Page Content (only scrolling region) -->
+      <main class="flex-1 min-h-0 overflow-y-auto">
+        <div class="max-w-[1440px] w-full mx-auto p-4 sm:p-6">
+          <slot />
+        </div>
       </main>
     </div>
   </div>

@@ -1,53 +1,113 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import SlavesView from '../../src/views/config/SlavesView.vue'
+import SlaveFormView from '../../src/views/config/SlaveFormView.vue'
 import { useConfigSlavesStore } from '../../src/stores/configSlaves'
 import { useConfigCredentialsStore } from '../../src/stores/configCredentials'
+import { useAuthStore } from '../../src/stores/auth'
 import { MockShipitApi } from '../../src/api/mock'
 import { setApi } from '../../src/api'
 import { router } from '../../src/router'
 
-describe('Slaves View & Store', () => {
+describe('Slaves View, Form & Store', () => {
   let mockApi: MockShipitApi
+  let pinia: ReturnType<typeof createPinia>
 
   beforeEach(() => {
-    setActivePinia(createPinia())
+    pinia = createPinia()
+    setActivePinia(pinia)
     mockApi = new MockShipitApi()
     setApi(mockApi)
+
+    const authStore = useAuthStore()
+    authStore.user = { username: 'admin' }
+    authStore.initialized = true
   })
 
-  it('filters SSH credential select to strictly kind=ssh_key (select chỉ có ssh_key)', async () => {
+  it('navigates from SlavesView to /slaves/new and /slaves/:id/edit', async () => {
+    await router.push('/slaves')
+    await router.isReady()
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(SlavesView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    const addButton = wrapper.findAll('button').find((b) => b.text().includes('Thêm máy build'))
+    expect(addButton).toBeDefined()
+    await addButton!.trigger('click')
+    expect(pushSpy).toHaveBeenCalledWith('/slaves/new')
+
+    const editButton = wrapper.find('button[aria-label="Sửa máy build"]')
+    expect(editButton.exists()).toBe(true)
+    await editButton.trigger('click')
+    expect(pushSpy).toHaveBeenCalledWith('/slaves/1/edit')
+  })
+
+  it('filters SSH credential select to strictly kind=ssh_key on SlaveFormView', async () => {
     const credStore = useConfigCredentialsStore()
     await credStore.fetchCredentials()
 
-    // Mock API has 3 credentials: 1 ssh_key, 1 git_token, 1 registry
     expect(credStore.credentials.length).toBe(3)
     const sshCreds = credStore.credentials.filter((c) => c.kind === 'ssh_key')
     expect(sshCreds.length).toBe(1)
 
-    const wrapper = mount(SlavesView, {
+    await router.push('/slaves/new')
+    await router.isReady()
+
+    const wrapper = mount(SlaveFormView, {
       global: {
-        plugins: [createPinia(), router]
+        plugins: [pinia, router]
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
 
-    // Open add slave dialog
-    const addButton = wrapper.findAll('button').find((b) => b.text().includes('Thêm máy build'))
-    expect(addButton).toBeDefined()
-    await addButton!.trigger('click')
+    const sshSelect = wrapper.find('select')
+    expect(sshSelect.exists()).toBe(true)
 
-    // Find the select for SSH credentials in document.body
-    const selects = document.body.querySelectorAll('select')
-    expect(selects.length).toBeGreaterThan(0)
-    const sshSelect = selects[0]
-
-    const options = Array.from(sshSelect.options).filter((o) => o.value !== '')
-    // Must contain exactly 1 option (the ssh_key)
+    const options = Array.from((sshSelect.element as HTMLSelectElement).options).filter((o) => o.value !== '')
     expect(options.length).toBe(1)
     expect(options[0].textContent?.trim()).toBe('devops-ssh-key')
+  })
+
+  it('loads slave by :id on edit page and shows not-found for unknown id', async () => {
+    await router.push('/slaves/1/edit')
+    await router.isReady()
+
+    const wrapper = mount(SlaveFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Sửa máy build')
+    const nameInput = wrapper.find('input[placeholder="Ví dụ: slave-staging-01"]')
+    expect((nameInput.element as HTMLInputElement).value.length).toBeGreaterThan(0)
+
+    await router.push('/slaves/99999/edit')
+    await router.isReady()
+
+    const notFoundWrapper = mount(SlaveFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    await flushPromises()
+
+    expect(notFoundWrapper.text()).toContain('Không tìm thấy máy build')
   })
 
   it('tests connection to a slave and displays result (kiểm tra kết nối hiện kết quả)', async () => {
@@ -58,30 +118,26 @@ describe('Slaves View & Store', () => {
     expect(store.slaves.length).toBeGreaterThan(0)
     const slaveId = store.slaves[0].id
 
-    // Test connection via store
     const result = await store.testSlave(slaveId)
     expect(testSpy).toHaveBeenCalledWith(slaveId)
     expect(result.ok).toBe(true)
     expect(result.message).toContain('thành công')
     expect(store.testResults[slaveId]).toEqual(result)
 
-    // Test connection in View UI
     const wrapper = mount(SlavesView, {
       global: {
-        plugins: [createPinia(), router]
+        plugins: [pinia, router]
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 60))
 
-    // Check that button "Kiểm tra kết nối" exists
     const testBtn = wrapper.findAll('button').find((b) => b.text().includes('Kiểm tra kết nối'))
     expect(testBtn).toBeDefined()
 
     await testBtn!.trigger('click')
     await new Promise((resolve) => setTimeout(resolve, 150))
 
-    // Status on the row should be updated with success message
     expect(wrapper.text()).toContain('thành công')
   })
 
@@ -116,7 +172,6 @@ describe('Slaves View & Store', () => {
     const store = useConfigSlavesStore()
     await store.fetchSlaves()
 
-    // Slave id 1 is used by pipeline in mockApi
     await expect(store.deleteSlave(1)).rejects.toThrow()
     expect(store.error).toBe('Không thể xoá máy build đang được pipeline sử dụng')
   })

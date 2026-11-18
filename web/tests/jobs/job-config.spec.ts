@@ -1,192 +1,222 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import JobFormView from '../../src/views/jobs/JobFormView.vue'
-import { useJobsStore } from '../../src/stores/jobs'
 import { useJobsAllowStore } from '../../src/stores/jobsAllow'
-import { useConfigCredentialsStore } from '../../src/stores/configCredentials'
-import { useConfigSlavesStore } from '../../src/stores/configSlaves'
+import { useAuthStore } from '../../src/stores/auth'
 import { MockShipitApi } from '../../src/api/mock'
 import { setApi } from '../../src/api'
 import { router } from '../../src/router'
 import { ApiError } from '../../src/api/client'
 import type { JobInput } from '../../src/api/types'
 
-describe('Job Form View & Store', () => {
+describe('Job Form View & Store (Step-by-step Wizard)', () => {
   let mockApi: MockShipitApi
+  let pinia: ReturnType<typeof createPinia>
 
   beforeEach(async () => {
     document.body.innerHTML = ''
-    setActivePinia(createPinia())
+    pinia = createPinia()
+    setActivePinia(pinia)
     mockApi = new MockShipitApi()
     setApi(mockApi)
+    const authStore = useAuthStore()
+    authStore.user = { username: 'admin' }
+    authStore.initialized = true
     await router.push('/jobs/new')
     await router.isReady()
+  })
+
+  it('blocks Tiếp tục when required fields are missing and marks step as error', async () => {
+    const wrapper = mount(JobFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    const nextBtn = wrapper.findAll('button').find((b) => b.text().includes('Tiếp tục'))
+    expect(nextBtn).toBeDefined()
+    await nextBtn!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).toContain('Vui lòng nhập tên Job')
+    expect(wrapper.text()).toContain('Vui lòng nhập địa chỉ Git URL')
+    expect(wrapper.find('button[data-step-id="source"]').attributes('data-step-status')).toBe('current')
+    // Still on step 1
+    expect(wrapper.text()).toContain('1. Nguồn mã')
+  })
+
+  it('restores step from ?step=3 query parameter', async () => {
+    await router.push('/jobs/new?step=3')
+    await router.isReady()
+
+    const wrapper = mount(JobFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('3. Nơi chạy')
+    expect(wrapper.text()).toContain('avina-workspace')
   })
 
   it('populates dropdowns and ensures envFrom only contains names in allowlist', async () => {
     const allowStore = useJobsAllowStore()
     await allowStore.fetchEntries()
 
+    await router.push('/jobs/new?step=3')
+    await router.isReady()
+
     const wrapper = mount(JobFormView, {
       global: {
-        plugins: [createPinia(), router]
+        plugins: [pinia, router]
       }
     })
 
     await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
 
-    // Check namespace select options: should only contain namespaces from allowlist ('avina-workspace')
-    const namespaceSelect = wrapper.find('select[id*="field"]')
     expect(wrapper.text()).toContain('avina-workspace')
 
-    // Check ConfigMap and Secret allowlist options in task cards
+    // Move to step 4 (Tác vụ)
+    await router.replace('/jobs/new?step=4')
+    await wrapper.vm.$nextTick()
+
     const selects = wrapper.findAll('select')
     const selectTexts = selects.map((s) => s.text())
 
-    // ConfigMap options must include avina-files-config and avina-users-config
     expect(selectTexts.some((t) => t.includes('avina-files-config'))).toBe(true)
     expect(selectTexts.some((t) => t.includes('avina-users-config'))).toBe(true)
-
-    // Secret options must include avina-files-secret and avina-users-secret
     expect(selectTexts.some((t) => t.includes('avina-files-secret'))).toBe(true)
     expect(selectTexts.some((t) => t.includes('avina-users-secret'))).toBe(true)
-
-    // And must NOT include arbitrary secrets or unallowed names
     expect(selectTexts.some((t) => t.includes('root-secret') || t.includes('unallowed-secret'))).toBe(false)
   })
 
   it('guarantees NO input exists for entering secret value (không có ô nhập giá trị secret)', async () => {
+    await router.push('/jobs/new?step=4')
+    await router.isReady()
+
     const wrapper = mount(JobFormView, {
       global: {
-        plugins: [createPinia(), router]
+        plugins: [pinia, router]
       }
     })
 
     await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
 
-    // Add env var to the task
     const addEnvBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm biến môi trường'))
     expect(addEnvBtn).toBeDefined()
     await addEnvBtn!.trigger('click')
 
-    // Switch source to "Lấy từ Secret"
     const sourceSelect = wrapper.findAll('select').find((s) => s.text().includes('Giá trị trực tiếp') && s.text().includes('Lấy từ Secret'))
     expect(sourceSelect).toBeDefined()
     await sourceSelect!.setValue('secret')
 
-    // Look at all input elements rendered in the DOM
     const inputs = wrapper.findAll('input')
     const placeholders = inputs.map((i) => i.attributes('placeholder') || '')
     const ariaLabels = inputs.map((i) => i.attributes('aria-label') || '')
 
-    // Check placeholders and labels: should have "Key", but NO "Giá trị secret" or "Mật khẩu"
     expect(placeholders.some((p) => p.toLowerCase().includes('key'))).toBe(true)
     expect(placeholders.some((p) => p.toLowerCase().includes('mật khẩu') || p.toLowerCase().includes('giá trị secret'))).toBe(false)
     expect(ariaLabels.some((a) => a.toLowerCase().includes('giá trị secret'))).toBe(false)
   })
 
   it('enforces required timeout validation (timeout bắt buộc và > 0)', async () => {
+    await router.push('/jobs/new?step=4')
+    await router.isReady()
+
     const wrapper = mount(JobFormView, {
       global: {
-        plugins: [createPinia(), router]
+        plugins: [pinia, router]
       }
     })
 
     await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
 
-    // Fill form name and basic inputs
-    const nameInput = wrapper.findAll('input').find((i) => i.attributes('placeholder')?.includes('VD: avina-dbmigrator'))
-    await nameInput!.setValue('test-job')
-
-    // Clear timeout input on first task
     const timeoutInput = wrapper.findAll('input').find((i) => i.attributes('placeholder') === '1800')
     expect(timeoutInput).toBeDefined()
     await timeoutInput!.setValue('')
 
-    // Click submit
-    const submitBtn = wrapper.findAll('button').find((b) => b.text().includes('Tạo Job'))
-    await submitBtn!.trigger('click')
+    const nextBtn = wrapper.findAll('button').find((b) => b.text().includes('Tiếp tục'))
+    await nextBtn!.trigger('click')
     await wrapper.vm.$nextTick()
 
-    // Assert timeout validation error
     expect(wrapper.text()).toContain('Thời gian timeout bắt buộc và phải lớn hơn 0')
   })
 
-  it('creates sample DbMigrator Job calling proper JobInput payload with 2 tasks', async () => {
+  it('walks through all 5 steps and creates sample DbMigrator Job with 2 tasks', async () => {
     const createSpy = vi.spyOn(mockApi, 'createJob')
 
     const wrapper = mount(JobFormView, {
       global: {
-        plugins: [createPinia(), router]
+        plugins: [pinia, router]
       }
     })
 
     await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
 
-    // Set Section 1 inputs
-    const inputs = wrapper.findAll('input')
-    const nameInput = inputs.find((i) => i.attributes('placeholder')?.includes('VD: avina-dbmigrator'))
-    await nameInput!.setValue('avina-dbmigrator')
-
-    const gitUrlInput = inputs.find((i) => i.attributes('placeholder')?.includes('http://git.example/AvinaWorkspace'))
-    await gitUrlInput!.setValue('http://git.example/AvinaWorkspace')
-
-    const branchInput = inputs.find((i) => i.attributes('placeholder') === 'main')
-    await branchInput!.setValue('main')
-
-    const dockerfileInput = inputs.find((i) => i.attributes('placeholder')?.includes('docker/Dockerfile.dbmigrator'))
-    await dockerfileInput!.setValue('docker/Dockerfile.dbmigrator')
-
-    const contextInput = inputs.find((i) => i.attributes('placeholder') === '.')
-    await contextInput!.setValue('.')
-
-    const imageNameInput = inputs.find((i) => i.attributes('placeholder') === 'avina-dbmigrator')
-    await imageNameInput!.setValue('avina-dbmigrator')
-
-    const registryHostInput = inputs.find((i) => i.attributes('placeholder') === '192.168.1.241')
-    await registryHostInput!.setValue('192.168.1.241')
-
-    // Set Section 2 inputs
-    const containerNameInput = inputs.find((i) => i.attributes('placeholder')?.includes('VD: dbmigrator'))
-    await containerNameInput!.setValue('dbmigrator')
-
-    // Selects
-    const selects = wrapper.findAll('select')
-    const gitCredSelect = selects.find((s) => s.text().includes('gitlab-token'))
+    // Step 1: Nguồn mã
+    await wrapper.find('input[placeholder*="VD: avina-dbmigrator"]').setValue('avina-dbmigrator')
+    await wrapper.find('input[placeholder*="http://git.example/AvinaWorkspace"]').setValue('http://git.example/AvinaWorkspace')
+    await wrapper.find('input[placeholder="main"]').setValue('main')
+    const gitCredSelect = wrapper.findAll('select').find((s) => s.text().includes('gitlab-token'))
     if (gitCredSelect) await gitCredSelect.setValue('2')
 
-    const slaveSelect = selects.find((s) => s.text().includes('slave-staging-01'))
+    await wrapper.findAll('button').find((b) => b.text().includes('Tiếp tục'))!.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('2. Build image')
+
+    // Step 2: Build image
+    const slaveSelect = wrapper.findAll('select').find((s) => s.text().includes('slave-staging-01'))
     if (slaveSelect) await slaveSelect.setValue('1')
+    await wrapper.find('input[placeholder*="docker/Dockerfile.dbmigrator"]').setValue('docker/Dockerfile.dbmigrator')
+    await wrapper.find('input[placeholder="avina-dbmigrator"]').setValue('avina-dbmigrator')
+    await wrapper.find('input[placeholder="192.168.1.241"]').setValue('192.168.1.241')
+    await wrapper.find('input[placeholder="."]').setValue('.')
 
-    const nsSelect = selects.find((s) => s.text().includes('avina-workspace'))
+    await wrapper.findAll('button').find((b) => b.text().includes('Tiếp tục'))!.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('3. Nơi chạy')
+
+    // Step 3: Nơi chạy
+    const nsSelect = wrapper.findAll('select').find((s) => s.text().includes('avina-workspace'))
     if (nsSelect) await nsSelect.setValue('avina-workspace')
-
-    // Add ImagePullSecret: registry-secret
-    const pullSelect = selects.find((s) => s.text().includes('Chọn pullSecret từ allowlist'))
+    await wrapper.find('input[placeholder*="VD: dbmigrator"]').setValue('dbmigrator')
+    const pullSelect = wrapper.findAll('select').find((s) => s.text().includes('Chọn pullSecret từ allowlist'))
     if (pullSelect) {
       await pullSelect.setValue('registry-secret')
       await pullSelect.trigger('change')
     }
 
-    // Configure Task 1: label "files"
-    const task1Label = wrapper.findAll('input').find((i) => i.attributes('placeholder') === 'VD: migrate-db')
-    await task1Label!.setValue('files')
-
-    // Add Task 2
-    const addTaskBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm tác vụ'))
-    await addTaskBtn!.trigger('click')
+    await wrapper.findAll('button').find((b) => b.text().includes('Tiếp tục'))!.trigger('click')
     await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('4. Tác vụ')
 
-    // Configure Task 2: label "users"
-    const taskLabels = wrapper.findAll('input').filter((i) => i.attributes('placeholder') === 'VD: migrate-db')
-    expect(taskLabels.length).toBe(2)
-    await taskLabels[1].setValue('users')
+    // Step 4: Tác vụ (one task edited at a time)
+    await wrapper.find('input[placeholder="VD: migrate-db"]').setValue('files')
+    await wrapper.findAll('button').find((b) => b.text().includes('Thêm tác vụ'))!.trigger('click')
+    await wrapper.vm.$nextTick()
+    await wrapper.find('input[placeholder="VD: migrate-db"]').setValue('users')
 
-    // Submit form
+    await wrapper.findAll('button').find((b) => b.text().includes('Tiếp tục'))!.trigger('click')
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+    expect(wrapper.text()).toContain('Kiểm tra & Xem trước YAML')
+
+    // Step 5: Save
     const submitBtn = wrapper.findAll('button').find((b) => b.text().includes('Tạo Job'))
+    expect(submitBtn).toBeDefined()
     await submitBtn!.trigger('click')
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 60))
 
     expect(createSpy).toHaveBeenCalled()
     const payload = createSpy.mock.calls[0][0] as JobInput
@@ -200,62 +230,33 @@ describe('Job Form View & Store', () => {
     expect(payload.tasks[1].label).toBe('users')
   })
 
-  it('updates position when reordering tasks using keyboard buttons', async () => {
+  it('updates position when reordering tasks and duplicates a task on Step 4', async () => {
+    await router.push('/jobs/new?step=4')
+    await router.isReady()
+
     const wrapper = mount(JobFormView, {
       global: {
-        plugins: [createPinia(), router]
+        plugins: [pinia, router]
       }
     })
 
     await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
 
-    // Name Task 1: 'first-task'
-    const labelInputs = wrapper.findAll('input').filter((i) => i.attributes('placeholder') === 'VD: migrate-db')
-    await labelInputs[0].setValue('first-task')
-
-    // Add Task 2: 'second-task'
-    const addTaskBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm tác vụ'))
-    await addTaskBtn!.trigger('click')
+    await wrapper.find('input[placeholder="VD: migrate-db"]').setValue('first-task')
+    await wrapper.find('button[aria-label="Nhân bản tác vụ"]').trigger('click')
     await wrapper.vm.$nextTick()
 
-    const labelInputsAfter = wrapper.findAll('input').filter((i) => i.attributes('placeholder') === 'VD: migrate-db')
-    await labelInputsAfter[1].setValue('second-task')
-
-    // Click move down button on task 1
-    const moveDownBtn = wrapper.find('button[aria-label="Di chuyển tác vụ xuống"]')
-    expect(moveDownBtn.exists()).toBe(true)
-    await moveDownBtn.trigger('click')
+    expect((wrapper.find('input[placeholder="VD: migrate-db"]').element as HTMLInputElement).value).toBe('first-task-copy')
+    await wrapper.find('button[aria-label="Di chuyển tác vụ lên"]').trigger('click')
     await wrapper.vm.$nextTick()
 
-    // After moving task 1 down, the order in form.tasks should be swapped: 'second-task', then 'first-task'
-    const currentLabels = wrapper.findAll('input').filter((i) => i.attributes('placeholder') === 'VD: migrate-db')
-    expect((currentLabels[0].element as HTMLInputElement).value).toBe('second-task')
-    expect((currentLabels[1].element as HTMLInputElement).value).toBe('first-task')
+    const vm = wrapper.vm as any
+    expect(vm.form.tasks[0].label).toBe('first-task-copy')
+    expect(vm.form.tasks[1].label).toBe('first-task')
   })
 
-  it('duplicates a task properly when clicking "Nhân bản"', async () => {
-    const wrapper = mount(JobFormView, {
-      global: {
-        plugins: [createPinia(), router]
-      }
-    })
-
-    await new Promise((resolve) => setTimeout(resolve, 60))
-
-    const labelInput = wrapper.find('input[placeholder="VD: migrate-db"]')
-    await labelInput.setValue('original-task')
-
-    const dupBtn = wrapper.find('button[aria-label="Nhân bản tác vụ"]')
-    expect(dupBtn.exists()).toBe(true)
-    await dupBtn.trigger('click')
-    await wrapper.vm.$nextTick()
-
-    const labelInputs = wrapper.findAll('input').filter((i) => i.attributes('placeholder') === 'VD: migrate-db')
-    expect(labelInputs.length).toBe(2)
-    expect((labelInputs[1].element as HTMLInputElement).value).toBe('original-task-copy')
-  })
-
-  it('maps 400 validation error from API directly onto fields', async () => {
+  it('maps 400 validation error from API directly onto fields and marks error steps', async () => {
     vi.spyOn(mockApi, 'createJob').mockRejectedValueOnce(
       new ApiError(400, 'Validation failed', {
         title: 'Validation failed',
@@ -266,42 +267,34 @@ describe('Job Form View & Store', () => {
       })
     )
 
+    await router.push('/jobs/new?step=5')
+    await router.isReady()
+
     const wrapper = mount(JobFormView, {
       global: {
-        plugins: [createPinia(), router]
+        plugins: [pinia, router]
       }
     })
 
     await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
 
-    // Fill valid client inputs to pass client validation
-    const inputs = wrapper.findAll('input')
-    const nameInput = inputs.find((i) => i.attributes('placeholder')?.includes('VD: avina-dbmigrator'))
-    await nameInput!.setValue('test-job')
-    const gitUrlInput = inputs.find((i) => i.attributes('placeholder')?.includes('http://git.example/AvinaWorkspace'))
-    await gitUrlInput!.setValue('http://git.example/test')
-    const imageNameInput = inputs.find((i) => i.attributes('placeholder') === 'avina-dbmigrator')
-    await imageNameInput!.setValue('test-image')
-    const registryHostInput = inputs.find((i) => i.attributes('placeholder') === '192.168.1.241')
-    await registryHostInput!.setValue('192.168.1.241')
-    const containerNameInput = inputs.find((i) => i.attributes('placeholder')?.includes('VD: dbmigrator'))
-    await containerNameInput!.setValue('test-container')
+    const vm = wrapper.vm as any
+    vm.form.name = 'test-job'
+    vm.form.gitUrl = 'http://git.example/test'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.imageName = 'test-image'
+    vm.form.registryHost = '192.168.1.241'
+    vm.form.namespace = 'avina-workspace'
+    vm.form.containerName = 'test-container'
 
-    const selects = wrapper.findAll('select')
-    const gitCredSelect = selects.find((s) => s.text().includes('gitlab-token'))
-    if (gitCredSelect) await gitCredSelect.setValue('2')
-    const slaveSelect = selects.find((s) => s.text().includes('slave-staging-01'))
-    if (slaveSelect) await slaveSelect.setValue('1')
-    const nsSelect = selects.find((s) => s.text().includes('avina-workspace'))
-    if (nsSelect) await nsSelect.setValue('avina-workspace')
-
-    // Submit
     const submitBtn = wrapper.findAll('button').find((b) => b.text().includes('Tạo Job'))
     await submitBtn!.trigger('click')
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 60))
 
-    // Verify mapped 400 error text appears in DOM
     expect(wrapper.text()).toContain('Tên Job không hợp lệ từ máy chủ')
     expect(wrapper.text()).toContain('Git URL không thể kết nối')
+    expect(wrapper.find('button[data-step-id="source"]').attributes('data-step-status')).toBe('error')
   })
 })
