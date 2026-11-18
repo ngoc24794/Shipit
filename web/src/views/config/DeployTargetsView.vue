@@ -131,10 +131,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <component :is="props.embedded ? 'div' : AppLayout">
-    <div class="space-y-6">
+  <component :is="props.embedded ? 'div' : AppLayout" :class="props.embedded ? 'flex-1 min-h-0 flex flex-col' : undefined">
+    <div class="flex-1 min-h-0 flex flex-col gap-4">
       <!-- Header -->
-      <div v-if="!props.embedded">
+      <div v-if="!props.embedded" class="shrink-0">
         <h1 class="text-2xl font-semibold text-fg tracking-tight">Deployment được phép</h1>
         <p class="text-sm text-muted-fg mt-1">
           Danh sách namespace và Deployment mà Shipit được phép cập nhật image.
@@ -143,7 +143,7 @@ onMounted(() => {
 
       <!-- Help text fixed banner -->
       <div
-        class="p-4 rounded-[8px] bg-muted/60 border border-border text-sm text-muted-fg leading-relaxed flex items-start gap-3"
+        class="shrink-0 p-4 rounded-[8px] bg-muted/60 border border-border text-sm text-muted-fg leading-relaxed flex items-start gap-3"
       >
         <ShieldCheck class="w-5 h-5 text-primary flex-shrink-0 mt-0.5" aria-hidden="true" />
         <span>
@@ -152,7 +152,7 @@ onMounted(() => {
       </div>
 
       <!-- Quick Add Form -->
-      <div class="bg-card border border-border rounded-[8px] p-4 shadow-sm">
+      <div class="shrink-0 bg-card border border-border rounded-[8px] p-4 shadow-sm">
         <h3 class="text-sm font-semibold text-fg mb-3">Thêm deployment nhanh</h3>
         <form @submit.prevent="handleAdd" class="grid grid-cols-12 gap-3 items-start">
           <div class="col-span-5">
@@ -234,7 +234,7 @@ onMounted(() => {
       />
 
       <!-- Table of Deploy Targets -->
-      <div v-else class="bg-card border border-border rounded-[8px] overflow-hidden shadow-sm">
+      <div v-else class="flex-1 min-h-0 flex flex-col">
         <AppTable>
           <template #header>
             <tr>

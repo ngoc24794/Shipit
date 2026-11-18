@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { mount as baseMount, type VueWrapper } from '@vue/test-utils'
+import { mount as baseMount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import JobsView from '../../src/views/jobs/JobsView.vue'
 import { useJobsStore } from '../../src/stores/jobs'
 import { useToast } from '../../src/composables/useToast'
@@ -70,7 +70,8 @@ describe('JobsView (Danh sách Job)', () => {
     const runBtn = wrapper.findAll('button').find((b) => b.text().includes('Chạy ngay'))
     expect(runBtn).toBeDefined()
     await runBtn!.trigger('click')
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    await flushPromises()
 
     expect(runSpy).toHaveBeenCalledWith(1)
     expect(pushSpy).toHaveBeenCalledWith(expect.stringContaining('/runs/'))

@@ -89,9 +89,9 @@ async function handleDelete() {
 
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="flex-1 min-h-0 flex flex-col gap-5">
       <!-- Page Header -->
-      <div class="flex flex-row items-center justify-between gap-4 flex-nowrap">
+      <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap">
         <div class="min-w-0">
           <h1 class="text-2xl font-bold tracking-tight text-fg flex items-center gap-2.5 whitespace-nowrap">
             <Boxes class="w-6 h-6 text-primary shrink-0" aria-hidden="true" />

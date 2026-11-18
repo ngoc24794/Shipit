@@ -161,9 +161,9 @@ function navigateToRun(id: number) {
 
 <template>
   <AppLayout>
-    <div class="space-y-6 w-full">
+    <div class="flex-1 min-h-0 flex flex-col gap-5 w-full">
       <!-- Header -->
-      <div class="flex flex-row items-center justify-between gap-4 flex-nowrap">
+      <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap">
         <div class="min-w-0">
           <h1 class="text-2xl font-semibold text-fg tracking-tight truncate">Lượt chạy</h1>
           <p class="text-sm text-muted-fg mt-0.5 truncate">
@@ -184,7 +184,7 @@ function navigateToRun(id: number) {
       </div>
 
       <!-- Filters & Actions Bar -->
-      <div class="flex flex-row items-center justify-between gap-3 flex-nowrap bg-card p-3 rounded-[8px] border border-border">
+      <div class="shrink-0 flex flex-row items-center justify-between gap-3 flex-nowrap bg-card p-3 rounded-[8px] border border-border">
         <div class="flex items-center gap-2 max-w-xs w-full">
           <Filter class="w-4 h-4 text-muted-fg shrink-0" aria-hidden="true" />
           <AppSelect
@@ -239,7 +239,7 @@ function navigateToRun(id: number) {
       </EmptyState>
 
       <!-- Runs Table -->
-      <div v-else class="w-full">
+      <div v-else class="w-full flex-1 min-h-0 flex flex-col">
         <AppTable>
           <template #header>
             <tr>

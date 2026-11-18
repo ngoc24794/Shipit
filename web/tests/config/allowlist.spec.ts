@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 import AllowlistView from '../../src/views/config/AllowlistView.vue'
@@ -58,14 +58,15 @@ describe('AllowlistView (Merged Allowlist Tabs)', () => {
     await flushPromises()
 
     await wrapper.find('#tab-job').trigger('click')
-    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     expect(router.currentRoute.value.query.tab).toBe('job')
     expect(wrapper.find('#tab-job').attributes('aria-selected')).toBe('true')
     expect(wrapper.find('#panel-job').exists()).toBe(true)
     expect(wrapper.find('#panel-deployment').exists()).toBe(false)
-    expect(wrapper.text()).toContain('avina-files-config')
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('avina-files-config')
+    })
     expect(wrapper.findAll('h1')).toHaveLength(1)
 
     await wrapper.find('#tab-deployment').trigger('click')
