@@ -7,9 +7,7 @@ import { runJob as apiRunJob } from '../api/runs-job'
 export const useRunsStore = defineStore('runs', () => {
   const runs = ref<Run[]>([])
   const pipelines = ref<Pipeline[]>([])
-  const jobs = ref<Array<{ id: number; name: string }>>([
-    { id: 1, name: 'avina-dbmigrator' }
-  ])
+  const jobs = ref<Array<{ id: number; name: string }>>([])
   const currentRun = ref<RunDetail | null>(null)
 
   const loading = ref(false)
