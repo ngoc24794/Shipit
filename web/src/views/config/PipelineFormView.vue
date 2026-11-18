@@ -70,8 +70,8 @@ function parseStepQuery(q: unknown): number {
 }
 
 const currentStep = ref(parseStepQuery(route.query.step))
-const highestVisitedStep = ref(currentStep.value)
-const completedSteps = ref<Set<number>>(new Set())
+const visitedSteps = ref<Set<number>>(new Set([currentStep.value]))
+const hasAttemptedSave = ref(false)
 const stepErrorFlags = ref<Set<number>>(new Set())
 
 watch(
@@ -80,9 +80,7 @@ watch(
     const parsed = parseStepQuery(val)
     if (parsed !== currentStep.value) {
       currentStep.value = parsed
-      if (parsed > highestVisitedStep.value) {
-        highestVisitedStep.value = parsed
-      }
+      visitedSteps.value = new Set([...visitedSteps.value, parsed])
     }
   }
 )
@@ -90,18 +88,15 @@ watch(
 function goToStep(index: number) {
   if (index < 0 || index >= STEP_DEFS.length) return
   currentStep.value = index
-  if (index > highestVisitedStep.value) {
-    highestVisitedStep.value = index
-  }
+  visitedSteps.value = new Set([...visitedSteps.value, index])
   router.replace({
     path: route.path,
     query: { ...route.query, step: String(index + 1) }
   })
 }
 
-function canNavigateTo(index: number): boolean {
-  if (isEditing.value) return true
-  return index <= highestVisitedStep.value
+function canNavigateTo(_index: number): boolean {
+  return true
 }
 
 const form = ref<{
@@ -270,16 +265,12 @@ function validateStep(stepIndex: number): boolean {
   formErrors.value = errors
   const hasError = (STEP_FIELDS[stepIndex] || []).some((f) => Boolean(errors[f]))
   const nextErrors = new Set(stepErrorFlags.value)
-  const nextCompleted = new Set(completedSteps.value)
   if (hasError) {
     nextErrors.add(stepIndex)
-    nextCompleted.delete(stepIndex)
   } else {
     nextErrors.delete(stepIndex)
-    nextCompleted.add(stepIndex)
   }
   stepErrorFlags.value = nextErrors
-  completedSteps.value = nextCompleted
   return !hasError
 }
 
@@ -292,7 +283,6 @@ function validateForm(): boolean {
 }
 
 function handleNext() {
-  if (!validateStep(currentStep.value)) return
   goToStep(currentStep.value + 1)
 }
 
@@ -304,8 +294,8 @@ const wizardSteps = computed<WizardStep[]>(() => {
   return STEP_DEFS.map((s, idx) => {
     let status: WizardStep['status'] = 'pending'
     if (idx === currentStep.value) status = 'current'
-    else if (stepErrorFlags.value.has(idx)) status = 'error'
-    else if (completedSteps.value.has(idx)) status = 'complete'
+    else if (hasAttemptedSave.value && stepErrorFlags.value.has(idx)) status = 'error'
+    else if (visitedSteps.value.has(idx)) status = 'visited'
     return { id: s.id, label: s.label, status }
   })
 })
@@ -334,6 +324,7 @@ function findLabel(options: Array<{ label: string; value: string | number }>, va
 }
 
 async function handleSave() {
+  hasAttemptedSave.value = true
   if (!validateForm()) return
 
   actionLoading.value = true
@@ -449,8 +440,6 @@ onMounted(async () => {
         deployDeployment: pipeline.deployDeployment,
         deployContainer: pipeline.deployContainer
       }
-      highestVisitedStep.value = STEP_DEFS.length - 1
-      completedSteps.value = new Set([0, 1, 2, 3])
     } else {
       form.value.gitCredentialId = gitCredentials.value[0]?.id ?? ''
       form.value.slaveId = slaveStore.slaves[0]?.id ?? ''

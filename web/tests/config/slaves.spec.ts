@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount as baseMount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import SlavesView from '../../src/views/config/SlavesView.vue'
 import SlaveFormView from '../../src/views/config/SlaveFormView.vue'
 import { useConfigSlavesStore } from '../../src/stores/configSlaves'
@@ -13,12 +13,27 @@ import { router } from '../../src/router'
 describe('Slaves View, Form & Store', () => {
   let mockApi: MockShipitApi
   let pinia: ReturnType<typeof createPinia>
+  const mountedWrappers: VueWrapper[] = []
 
-  beforeEach(() => {
+  const mount: typeof baseMount = ((component: any, options?: any) => {
+    const w = baseMount(component, options)
+    mountedWrappers.push(w)
+    return w
+  }) as typeof baseMount
+
+  afterEach(() => {
+    while (mountedWrappers.length > 0) {
+      mountedWrappers.pop()?.unmount()
+    }
+    vi.restoreAllMocks()
+  })
+
+  beforeEach(async () => {
     pinia = createPinia()
     setActivePinia(pinia)
     mockApi = new MockShipitApi()
     setApi(mockApi)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     const authStore = useAuthStore()
     authStore.user = { username: 'admin' }

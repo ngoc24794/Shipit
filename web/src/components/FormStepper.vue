@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Check, AlertCircle } from 'lucide-vue-next'
+import { AlertCircle } from 'lucide-vue-next'
 
-export type WizardStepStatus = 'pending' | 'current' | 'complete' | 'error'
+export type WizardStepStatus = 'pending' | 'visited' | 'current' | 'error'
 
 export interface WizardStep {
   id: string
@@ -79,11 +79,11 @@ function handleKeydown(event: KeyboardEvent, index: number) {
 
 <template>
   <nav aria-label="Các bước biểu mẫu" class="w-full overflow-x-auto py-1">
-    <ol class="flex items-center gap-2 min-w-max">
+    <ol class="flex flex-nowrap items-center gap-2 min-w-max">
       <li
         v-for="(step, idx) in steps"
         :key="step.id"
-        class="flex items-center gap-2"
+        class="flex items-center gap-2 shrink-0"
       >
         <button
           ref="buttonRefs"
@@ -100,9 +100,9 @@ function handleKeydown(event: KeyboardEvent, index: number) {
               ? 'border-primary bg-primary/10 text-primary font-semibold'
               : step.status === 'error'
                 ? 'border-danger/50 bg-danger/5 text-danger font-medium hover:bg-danger/10'
-                : step.status === 'complete'
+                : step.status === 'visited'
                   ? 'border-border bg-card text-fg hover:bg-muted'
-                  : 'border-transparent bg-muted/60 text-muted-fg hover:text-fg'
+                  : 'border-transparent bg-muted/60 text-muted-fg hover:text-fg hover:bg-muted'
           ]"
           @click="handleClick(idx)"
           @keydown="handleKeydown($event, idx)"
@@ -114,13 +114,12 @@ function handleKeydown(event: KeyboardEvent, index: number) {
                 ? 'bg-primary text-on-primary'
                 : step.status === 'error'
                   ? 'bg-danger text-white'
-                  : step.status === 'complete'
-                    ? 'bg-success text-white'
+                  : step.status === 'visited'
+                    ? 'bg-muted text-fg border border-border'
                     : 'bg-muted-fg/20 text-muted-fg'
             ]"
           >
             <AlertCircle v-if="step.status === 'error' && idx !== currentStep" class="w-3.5 h-3.5" aria-hidden="true" />
-            <Check v-else-if="step.status === 'complete' && idx !== currentStep" class="w-3.5 h-3.5" aria-hidden="true" />
             <span v-else>{{ idx + 1 }}</span>
           </span>
           <span>{{ step.label }}</span>

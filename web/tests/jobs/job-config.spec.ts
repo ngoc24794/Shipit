@@ -27,7 +27,7 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     await router.isReady()
   })
 
-  it('blocks Tiếp tục when required fields are missing and marks step as error', async () => {
+  it('allows free step navigation without validating until Save on final step', async () => {
     const wrapper = mount(JobFormView, {
       global: {
         plugins: [pinia, router]
@@ -37,16 +37,33 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     await new Promise((resolve) => setTimeout(resolve, 60))
     await flushPromises()
 
-    const nextBtn = wrapper.findAll('button').find((b) => b.text().includes('Tiếp tục'))
-    expect(nextBtn).toBeDefined()
-    await nextBtn!.trigger('click')
+    // Enter partial value on step 1 and move freely to step 2 without filling required fields
+    await wrapper.find('input[placeholder*="VD: avina-dbmigrator"]').setValue('partial-job')
+    await wrapper.findAll('button').find((b) => b.text().includes('Tiếp tục'))!.trigger('click')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.text()).toContain('Vui lòng nhập tên Job')
+    expect(wrapper.text()).toContain('2. Build image')
+    expect(wrapper.text()).not.toContain('Vui lòng nhập địa chỉ Git URL')
+    expect(wrapper.find('button[data-step-id="source"]').attributes('data-step-status')).toBe('visited')
+
+    // Jump directly to Step 5 (Review) via stepper click
+    await wrapper.find('button[data-step-id="review"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('Kiểm tra & Xem trước YAML')
+
+    // Step 1 value is preserved
+    await wrapper.find('button[data-step-id="source"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect((wrapper.find('input[placeholder*="VD: avina-dbmigrator"]').element as HTMLInputElement).value).toBe('partial-job')
+
+    // Jump back to Step 5 and click Tạo Job -> validates all steps and marks error steps
+    await wrapper.find('button[data-step-id="review"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    await wrapper.findAll('button').find((b) => b.text().includes('Tạo Job'))!.trigger('click')
+    await wrapper.vm.$nextTick()
+
     expect(wrapper.text()).toContain('Vui lòng nhập địa chỉ Git URL')
-    expect(wrapper.find('button[data-step-id="source"]').attributes('data-step-status')).toBe('current')
-    // Still on step 1
-    expect(wrapper.text()).toContain('1. Nguồn mã')
+    expect(wrapper.find('button[data-step-id="source"]').attributes('data-step-status')).toBe('error')
   })
 
   it('restores step from ?step=3 query parameter', async () => {
@@ -145,8 +162,10 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     expect(timeoutInput).toBeDefined()
     await timeoutInput!.setValue('')
 
-    const nextBtn = wrapper.findAll('button').find((b) => b.text().includes('Tiếp tục'))
-    await nextBtn!.trigger('click')
+    // Move to Step 5 and click Save to trigger full validation
+    await wrapper.find('button[data-step-id="review"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    await wrapper.findAll('button').find((b) => b.text().includes('Tạo Job'))!.trigger('click')
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).toContain('Thời gian timeout bắt buộc và phải lớn hơn 0')

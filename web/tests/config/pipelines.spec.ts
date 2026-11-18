@@ -765,4 +765,37 @@ describe('Pipelines View, Form & Store', () => {
     expect(wrapper.text()).toContain('Host registry khi deploy')
     expect(wrapper.text()).toContain('Tuỳ chọn. Dùng khi cụm k8s gọi registry bằng tên khác với máy build')
   })
+
+  it('allows free step navigation and validates only on Save, jumping to error step from Review', async () => {
+    await router.push('/pipelines/new')
+    await router.isReady()
+
+    const wrapper = mount(PipelineFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    await flushPromises()
+
+    // Jump freely to Step 5 without filling Step 1-4
+    await wrapper.find('button[data-step-id="review"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('button[data-step-id="source"]').attributes('data-step-status')).toBe('visited')
+
+    // Attempt Save -> validates all steps and marks error steps
+    await wrapper.findAll('button').find((b) => b.text().includes('Tạo pipeline'))!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('button[data-step-id="source"]').attributes('data-step-status')).toBe('error')
+    expect(wrapper.text()).toContain('Vui lòng nhập tên pipeline')
+
+    // Click error jump link to go back to Step 1
+    const jumpBtn = wrapper.findAll('button').find((b) => b.text().includes('Nguồn mã:'))
+    expect(jumpBtn).toBeDefined()
+    await jumpBtn!.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('1. Nguồn mã')
+  })
 })
