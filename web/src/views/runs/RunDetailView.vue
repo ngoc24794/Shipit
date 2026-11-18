@@ -610,7 +610,7 @@ onBeforeUnmount(() => {
     <!-- Confirm Cancel Dialog -->
     <ConfirmDialog
       v-model="showCancelDialog"
-      :title="`Dừng lần chạy #${run?.id}?`"
+      :title="`Dừng lượt chạy #${run?.id}?`"
       message="Các bước đang chạy sẽ bị ngắt và Shipit sẽ dọn dẹp máy build. Deployment đã được cập nhật trước đó sẽ không bị hoàn tác."
       confirm-text="Dừng"
       cancel-text="Huỷ"

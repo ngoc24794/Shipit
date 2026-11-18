@@ -427,7 +427,7 @@ describe('RunDetailView (Chi tiết lượt chạy)', () => {
     const dialog = wrapper.findComponent(ConfirmDialog)
     expect(dialog.exists()).toBe(true)
     expect(dialog.props('modelValue')).toBe(true)
-    expect(dialog.props('title')).toContain('Dừng lần chạy #3?')
+    expect(dialog.props('title')).toContain('Dừng lượt chạy #3?')
     expect(dialog.props('message')).toContain('Các bước đang chạy sẽ bị ngắt và Shipit sẽ dọn dẹp máy build.')
 
     // Cancel dialog

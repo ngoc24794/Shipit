@@ -184,8 +184,7 @@ async function handleDelete() {
           <span>Allowlist Job</span>
         </h1>
         <p class="text-sm text-muted-fg mt-1">
-          Cấu hình các namespace, ConfigMap, Secret và ImagePullSecret được phép sử dụng trong Job.
-          Hệ thống chỉ lưu và sử dụng tên tham chiếu, không bao giờ lưu hoặc hiển thị giá trị bí mật.
+          Danh sách namespace, ConfigMap, Secret và ImagePullSecret mà Job được phép dùng. Shipit chỉ lưu tên tham chiếu, không lưu giá trị bí mật.
         </p>
       </div>
 
@@ -276,7 +275,7 @@ async function handleDelete() {
       <EmptyState
         v-else-if="store.entries.length === 0"
         title="Chưa có mục nào trong allowlist"
-        description="Thêm namespace, ConfigMap hoặc Secret đầu tiên để cho phép Job tham chiếu và chạy."
+        description="Thêm namespace, ConfigMap hoặc Secret để Job có thể tham chiếu."
       >
         <template #icon>
           <ShieldAlert class="w-10 h-10 text-muted-fg" aria-hidden="true" />
@@ -299,7 +298,7 @@ async function handleDelete() {
               Ngày tạo
             </th>
             <th scope="col" class="text-right py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg">
-              Hành động
+              Thao tác
             </th>
           </tr>
         </template>
@@ -358,7 +357,7 @@ async function handleDelete() {
       <ConfirmDialog
         v-model="isConfirmOpen"
         title="Xoá mục khỏi allowlist"
-        :message="`Bạn có chắc chắn muốn xoá mục &quot;${deletingEntry?.kind}:${deletingEntry?.name}&quot; khỏi allowlist không?`"
+        :message="`Xoá mục &quot;${deletingEntry?.kind}:${deletingEntry?.name}&quot; khỏi allowlist?`"
         confirm-text="Xoá mục"
         cancel-text="Huỷ"
         :loading="deleteLoading"

@@ -137,7 +137,7 @@ onMounted(() => {
       <div v-if="!props.embedded">
         <h1 class="text-2xl font-semibold text-fg tracking-tight">Deployment được phép</h1>
         <p class="text-sm text-muted-fg mt-1">
-          Quản lý danh sách namespace và deployment mà Shipit được phép triển khai cập nhật container image.
+          Danh sách namespace và Deployment mà Shipit được phép cập nhật image.
         </p>
       </div>
 
@@ -229,7 +229,7 @@ onMounted(() => {
       <EmptyState
         v-else-if="!store.loading && store.deployTargets.length === 0"
         title="Chưa có deployment được phép"
-        description="Thêm namespace và deployment ở biểu mẫu phía trên để bắt đầu cấu hình pipeline."
+        description="Thêm namespace và deployment ở biểu mẫu trên."
         :icon="ShieldCheck"
       />
 
@@ -287,7 +287,7 @@ onMounted(() => {
       <ConfirmDialog
         v-model="isConfirmOpen"
         title="Xoá deployment được phép"
-        :message="`Bạn có chắc chắn muốn xoá deployment '${deletingTarget?.namespace}/${deletingTarget?.deployment}' khỏi danh sách được phép không?`"
+        :message="`Xoá deployment &quot;${deletingTarget?.namespace}/${deletingTarget?.deployment}&quot; khỏi danh sách được phép?`"
         confirm-text="Xoá deployment"
         :loading="deleteLoading"
         :danger="true"

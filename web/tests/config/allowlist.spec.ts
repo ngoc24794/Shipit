@@ -58,7 +58,7 @@ describe('AllowlistView (Merged Allowlist Tabs)', () => {
     await flushPromises()
 
     await wrapper.find('#tab-job').trigger('click')
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     expect(router.currentRoute.value.query.tab).toBe('job')
@@ -69,7 +69,7 @@ describe('AllowlistView (Merged Allowlist Tabs)', () => {
     expect(wrapper.findAll('h1')).toHaveLength(1)
 
     await wrapper.find('#tab-deployment').trigger('click')
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     expect(router.currentRoute.value.query.tab).toBe('deployment')

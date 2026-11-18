@@ -566,7 +566,7 @@ async function handleSave() {
 
             <!-- Git Credential (kind === 'git_token') -->
             <AppField
-              label="Credential Git"
+              label="Token Git"
               :required="true"
               description="Token truy cập Git (chỉ lọc credential loại Git Token)"
               :error="formErrors.gitCredentialId?.[0]"
@@ -576,7 +576,7 @@ async function handleSave() {
                   :id="id"
                   v-model="form.gitCredentialId"
                   :options="gitCredentialOptions"
-                  placeholder="-- Chọn Credential Git --"
+                  placeholder="Chọn Token Git"
                   :disabled="saveLoading"
                   :error="error"
                   :aria-describedby="ariaDescribedby"
@@ -596,7 +596,7 @@ async function handleSave() {
                   :id="id"
                   v-model="form.slaveId"
                   :options="slaveOptions"
-                  placeholder="-- Chọn máy build --"
+                  placeholder="Chọn máy build"
                   :disabled="saveLoading"
                   :error="error"
                   :aria-describedby="ariaDescribedby"
@@ -742,7 +742,7 @@ async function handleSave() {
                   :id="id"
                   v-model="form.namespace"
                   :options="namespaceOptions"
-                  placeholder="-- Chọn Namespace từ allowlist --"
+                  placeholder="Chọn Namespace"
                   :disabled="saveLoading"
                   :error="error"
                   :aria-describedby="ariaDescribedby"

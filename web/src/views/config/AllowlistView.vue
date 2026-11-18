@@ -34,7 +34,7 @@ function selectTab(tab: AllowlistTab) {
           <span>Allowlist</span>
         </h1>
         <p class="text-sm text-muted-fg mt-1">
-          Quản lý danh sách Deployment được phép cập nhật và tài nguyên Kubernetes được phép tham chiếu trong Job.
+          Danh sách Deployment được phép cập nhật và tài nguyên Kubernetes Job được phép dùng.
         </p>
       </div>
 

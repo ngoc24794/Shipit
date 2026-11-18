@@ -420,7 +420,7 @@ onMounted(() => {
         <div>
           <h1 class="text-2xl font-semibold text-fg tracking-tight">Cấu hình Pipeline</h1>
           <p class="text-sm text-muted-fg mt-1">
-            Quản lý các pipeline CI/CD: tự động kéo mã nguồn, đóng gói Docker image và deploy lên Kubernetes.
+            Danh sách pipeline build từ Git và deploy lên Kubernetes.
           </p>
         </div>
         <AppButton @click="openAddDialog">
@@ -454,7 +454,7 @@ onMounted(() => {
       <EmptyState
         v-else-if="!store.loading && store.pipelines.length === 0"
         title="Chưa có pipeline"
-        description="Tạo pipeline đầu tiên để tự động hoá quy trình build và triển khai ứng dụng."
+        description="Chưa có pipeline nào được cấu hình."
         :icon="Workflow"
       >
         <template #action>
@@ -642,7 +642,7 @@ onMounted(() => {
                 :id="id"
                 v-model="form.gitCredentialId"
                 :options="gitCredentialOptions"
-                placeholder="-- Chọn Token Git --"
+                placeholder="Chọn Token Git"
                 :disabled="gitCredentials.length === 0"
                 :error="error"
                 :aria-describedby="ariaDescribedby"
@@ -659,7 +659,7 @@ onMounted(() => {
           </div>
 
           <AppField
-            label="Máy build (Slave)"
+            label="Máy build"
             required
             :error="formErrors.slaveId"
           >
@@ -668,7 +668,7 @@ onMounted(() => {
                 :id="id"
                 v-model="form.slaveId"
                 :options="slaveOptions"
-                placeholder="-- Chọn máy build --"
+                placeholder="Chọn máy build"
                 :disabled="slaveStore.slaves.length === 0"
                 :error="error"
                 :aria-describedby="ariaDescribedby"

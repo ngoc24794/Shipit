@@ -167,7 +167,7 @@ function navigateToRun(id: number) {
         <div>
           <h1 class="text-2xl font-semibold text-fg tracking-tight">Lượt chạy</h1>
           <p class="text-sm text-muted-fg mt-0.5">
-            Lịch sử và tiến trình các lượt chạy CI/CD trong hệ thống
+            Lịch sử và trạng thái các lượt chạy pipeline và job.
           </p>
         </div>
 
@@ -228,7 +228,7 @@ function navigateToRun(id: number) {
       <EmptyState
         v-else-if="runsStore.runs.length === 0"
         title="Chưa có lượt chạy nào"
-        description="Chưa có lượt chạy nào được thực hiện hoặc không khớp với bộ lọc đã chọn."
+        description="Chưa có lượt chạy nào hoặc không có kết quả khớp bộ lọc."
         :icon="PlayCircle"
       >
         <template #action>
@@ -352,7 +352,7 @@ function navigateToRun(id: number) {
           <AppField
             label="Chọn Pipeline"
             required
-            description="Lượt chạy sẽ được xếp hàng và thực hiện ngay khi slave sẵn sàng"
+            description="Lượt chạy được xếp hàng và chạy khi máy build sẵn sàng."
             :error="triggerError"
           >
             <template #default="{ id, error, ariaDescribedby }">
@@ -360,7 +360,7 @@ function navigateToRun(id: number) {
                 :id="id"
                 v-model="triggerPipelineId"
                 :options="triggerPipelineOptions"
-                placeholder="-- Chọn một pipeline --"
+                placeholder="Chọn pipeline"
                 :error="error"
                 :aria-describedby="ariaDescribedby"
               />

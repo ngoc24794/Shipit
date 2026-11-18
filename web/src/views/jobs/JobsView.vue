@@ -98,7 +98,7 @@ async function handleDelete() {
             <span>Job</span>
           </h1>
           <p class="text-sm text-muted-fg mt-1">
-            Quản lý các công cụ và tác vụ chạy một lần trên cụm Kubernetes
+            Danh sách job chạy tác vụ một lần trên Kubernetes.
           </p>
         </div>
 
@@ -120,7 +120,7 @@ async function handleDelete() {
       <EmptyState
         v-else-if="store.jobs.length === 0"
         title="Chưa có Job nào"
-        description="Tạo Job đầu tiên để cấu hình và chạy các tác vụ Kubernetes theo yêu cầu."
+        description="Chưa có Job nào được cấu hình."
         action-label="Thêm Job"
         @action="navigateToNew"
       >
@@ -145,10 +145,10 @@ async function handleDelete() {
               Số tác vụ
             </th>
             <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg whitespace-nowrap">
-              Lần chạy gần nhất
+              Lượt chạy gần nhất
             </th>
             <th scope="col" class="text-right py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg whitespace-nowrap">
-              Hành động
+              Thao tác
             </th>
           </tr>
         </template>
@@ -250,7 +250,7 @@ async function handleDelete() {
       <ConfirmDialog
         v-model="isConfirmOpen"
         title="Xoá Job"
-        :message="`Bạn có chắc chắn muốn xoá Job &quot;${deletingJob?.name}&quot; không? Thao tác này không thể hoàn tác.`"
+        :message="`Xoá Job &quot;${deletingJob?.name}&quot;? Thao tác này không thể hoàn tác.`"
         confirm-text="Xoá Job"
         cancel-text="Huỷ"
         :loading="deleteLoading"
