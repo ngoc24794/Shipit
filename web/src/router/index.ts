@@ -27,6 +27,18 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Pipeline' }
   },
   {
+    path: '/pipelines/new',
+    name: 'pipeline-new',
+    component: () => import('../views/config/PipelineFormView.vue'),
+    meta: { title: 'Thêm pipeline' }
+  },
+  {
+    path: '/pipelines/:id/edit',
+    name: 'pipeline-edit',
+    component: () => import('../views/config/PipelineFormView.vue'),
+    meta: { title: 'Sửa pipeline' }
+  },
+  {
     path: '/jobs',
     name: 'jobs',
     component: () => import('../views/jobs/JobsView.vue'),
@@ -69,10 +81,34 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Máy build' }
   },
   {
+    path: '/slaves/new',
+    name: 'slave-new',
+    component: () => import('../views/config/SlaveFormView.vue'),
+    meta: { title: 'Thêm máy build' }
+  },
+  {
+    path: '/slaves/:id/edit',
+    name: 'slave-edit',
+    component: () => import('../views/config/SlaveFormView.vue'),
+    meta: { title: 'Sửa máy build' }
+  },
+  {
     path: '/credentials',
     name: 'credentials',
     component: () => import('../views/config/CredentialsView.vue'),
     meta: { title: 'Thông tin xác thực' }
+  },
+  {
+    path: '/credentials/new',
+    name: 'credential-new',
+    component: () => import('../views/config/CredentialFormView.vue'),
+    meta: { title: 'Thêm thông tin xác thực' }
+  },
+  {
+    path: '/credentials/:id/edit',
+    name: 'credential-edit',
+    component: () => import('../views/config/CredentialFormView.vue'),
+    meta: { title: 'Sửa thông tin xác thực' }
   },
   {
     path: '/:pathMatch(.*)*',
