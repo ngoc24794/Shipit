@@ -132,22 +132,22 @@ async function handleDelete() {
       <AppTable v-else>
         <template #header>
           <tr>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg whitespace-nowrap">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
               Tên
             </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg whitespace-nowrap">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
               Kho mã / Nhánh
             </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg whitespace-nowrap">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
               Namespace
             </th>
-            <th scope="col" class="text-center py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg whitespace-nowrap">
+            <th scope="col" class="text-center py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
               Số tác vụ
             </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg whitespace-nowrap">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
               Lượt chạy gần nhất
             </th>
-            <th scope="col" class="text-right py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg whitespace-nowrap">
+            <th scope="col" class="text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
               Thao tác
             </th>
           </tr>
@@ -207,21 +207,23 @@ async function handleDelete() {
           <td class="py-3 px-4 text-right whitespace-nowrap">
             <div class="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
               <AppButton
-                variant="ghost"
+                variant="primary"
                 size="sm"
+                class="whitespace-nowrap shrink-0"
                 :loading="triggeringJobId === job.id"
                 :disabled="triggeringJobId !== null || deleteLoading"
                 aria-label="Chạy ngay"
                 title="Chạy ngay"
                 @click="handleTriggerRun(job)"
               >
-                <Play class="w-3.5 h-3.5 text-primary" aria-hidden="true" />
-                <span class="hidden sm:inline">Chạy ngay</span>
+                <Play class="w-3.5 h-3.5 fill-current" aria-hidden="true" />
+                <span>Chạy ngay</span>
               </AppButton>
 
               <AppButton
                 variant="ghost"
                 size="sm"
+                class="whitespace-nowrap shrink-0"
                 aria-label="Sửa Job"
                 title="Chỉnh sửa cấu hình Job"
                 @click="navigateToEdit(job.id)"
@@ -235,10 +237,10 @@ async function handleDelete() {
                 size="sm"
                 aria-label="Xoá Job"
                 title="Xoá Job"
-                class="hover:text-danger"
+                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger whitespace-nowrap shrink-0"
                 @click="openDeleteConfirm(job)"
               >
-                <Trash2 class="w-3.5 h-3.5 text-danger" aria-hidden="true" />
+                <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
                 <span class="hidden sm:inline">Xoá</span>
               </AppButton>
             </div>

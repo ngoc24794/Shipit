@@ -480,14 +480,14 @@ onMounted(() => {
         </template>
 
         <tr v-for="pipeline in store.pipelines" :key="pipeline.id">
-          <td class="!px-3 font-medium text-fg whitespace-nowrap">
-            <div class="flex items-center gap-2 max-w-[130px]">
+          <td class="!px-3 font-medium text-fg min-w-[160px]">
+            <div class="flex items-center gap-2">
               <Workflow class="w-4 h-4 text-muted-fg flex-shrink-0" aria-hidden="true" />
-              <span class="truncate" :title="pipeline.name">{{ pipeline.name }}</span>
+              <span class="break-words">{{ pipeline.name }}</span>
             </div>
           </td>
           <td
-            class="!px-3 font-mono text-xs text-muted-fg max-w-[160px]"
+            class="!px-3 font-mono text-xs text-muted-fg max-w-[135px]"
             :title="`${pipeline.gitUrl}@${pipeline.gitBranch || 'main'}`"
           >
             <div class="truncate">
@@ -496,19 +496,19 @@ onMounted(() => {
             </div>
           </td>
           <td
-            class="!px-3 text-xs text-fg whitespace-nowrap max-w-[90px] truncate"
+            class="!px-3 text-xs text-fg whitespace-nowrap max-w-[85px] truncate"
             :title="getSlaveName(pipeline.slaveId)"
           >
             {{ getSlaveName(pipeline.slaveId) }}
           </td>
           <td
-            class="!px-3 font-mono text-xs text-fg max-w-[135px] truncate"
+            class="!px-3 font-mono text-xs text-fg max-w-[120px] truncate"
             :title="`${pipeline.registryHost}/${pipeline.imageName}`"
           >
             {{ pipeline.registryHost }}/{{ pipeline.imageName }}
           </td>
           <td
-            class="!px-3 font-mono text-xs text-muted-fg max-w-[110px] truncate"
+            class="!px-3 font-mono text-xs text-muted-fg max-w-[95px] truncate"
             :title="`${pipeline.deployNamespace}/${pipeline.deployDeployment}`"
           >
             <span class="text-fg">{{ pipeline.deployNamespace }}</span>/{{ pipeline.deployDeployment }}
@@ -548,7 +548,7 @@ onMounted(() => {
               <AppButton
                 variant="ghost"
                 size="sm"
-                class="text-danger hover:text-danger hover:bg-danger/10 whitespace-nowrap shrink-0"
+                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger whitespace-nowrap shrink-0"
                 aria-label="Xoá pipeline"
                 @click="promptDelete(pipeline)"
               >

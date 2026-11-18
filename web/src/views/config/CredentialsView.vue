@@ -293,7 +293,7 @@ onMounted(() => {
             {{ cred.username || '—' }}
           </td>
           <td>
-            <span class="inline-flex items-center gap-1.5 text-xs text-primary font-medium">
+            <span class="inline-flex items-center gap-1.5 text-xs text-success font-medium">
               <CheckCircle2 class="w-3.5 h-3.5" aria-hidden="true" />
               <span>Đã lưu giá trị</span>
             </span>
@@ -315,7 +315,7 @@ onMounted(() => {
               <AppButton
                 variant="ghost"
                 size="sm"
-                class="text-danger hover:text-danger hover:bg-danger/10"
+                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
                 aria-label="Xoá thông tin xác thực"
                 @click="promptDelete(cred)"
               >

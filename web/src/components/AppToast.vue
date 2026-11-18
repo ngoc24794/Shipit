@@ -16,7 +16,7 @@ const { toasts, remove } = useToast()
       :key="toast.id"
       :class="[
         'pointer-events-auto flex items-start gap-3 p-3.5 rounded-[8px] border shadow-lg transition-all animate-in slide-in-from-bottom-2 duration-150',
-        toast.type === 'success' ? 'bg-card text-fg border-primary/40' : '',
+        toast.type === 'success' ? 'bg-card text-fg border-success/40' : '',
         toast.type === 'error' ? 'bg-card text-fg border-danger/40' : '',
         toast.type === 'info' ? 'bg-card text-fg border-info/40' : ''
       ]"
@@ -24,7 +24,7 @@ const { toasts, remove } = useToast()
       <div class="flex-shrink-0 mt-0.5">
         <CheckCircle2
           v-if="toast.type === 'success'"
-          class="w-5 h-5 text-primary"
+          class="w-5 h-5 text-success"
           aria-hidden="true"
         />
         <AlertCircle

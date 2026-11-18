@@ -9,6 +9,7 @@
   --color-border: var(--border);
   --color-primary: var(--primary);
   --color-on-primary: var(--on-primary);
+  --color-success: var(--success);
   --color-info: var(--info);
   --color-warn: var(--warn);
   --color-danger: var(--danger);
@@ -17,6 +18,10 @@
 
   --font-sans: 'Fira Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Fira Code', ui-monospace, Consolas, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 }
 
 :root {
@@ -26,8 +31,9 @@
   --fg: #0F172A;
   --muted-fg: #475569;
   --border: #CBD5E1;
-  --primary: #15803D;
+  --primary: #2563EB;
   --on-primary: #FFFFFF;
+  --success: #15803D;
   --info: #0369A1;
   --warn: #B45309;
   --danger: #DC2626;
@@ -42,13 +48,14 @@
   --muted: #272F42;
   --fg: #F8FAFC;
   --muted-fg: #94A3B8;
-  --border: rgba(71, 85, 105, 0.5);
-  --primary: #22C55E;
+  --border: rgba(71, 85, 105, 0.55);
+  --primary: #60A5FA;
   --on-primary: #0F172A;
+  --success: #22C55E;
   --info: #38BDF8;
   --warn: #FBBF24;
-  --danger: #EF4444;
-  --ring: #FFFFFF;
+  --danger: #F87171;
+  --ring: #93C5FD;
   --log-bg: #090D16;
   color-scheme: dark;
 }

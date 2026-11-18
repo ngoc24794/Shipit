@@ -161,7 +161,7 @@ function navigateToRun(id: number) {
 
 <template>
   <AppLayout>
-    <div class="space-y-6 max-w-[1280px] mx-auto w-full">
+    <div class="space-y-6 w-full">
       <!-- Header -->
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -208,10 +208,9 @@ function navigateToRun(id: number) {
         </div>
       </div>
 
-      <!-- Loading State -->
-      <div v-if="runsStore.loading && runsStore.runs.length === 0" class="py-12 flex justify-center items-center text-muted-fg">
-        <RotateCw class="w-6 h-6 animate-spin mr-2" aria-hidden="true" />
-        <span>Đang tải danh sách lượt chạy...</span>
+      <!-- Loading State (Skeleton) -->
+      <div v-if="runsStore.loading && runsStore.runs.length === 0" class="rounded-[8px] border border-border bg-card p-4 space-y-3" aria-busy="true" aria-label="Đang tải danh sách lượt chạy">
+        <div v-for="i in 5" :key="i" class="h-9 rounded bg-muted/70 animate-pulse" />
       </div>
 
       <!-- Error State -->

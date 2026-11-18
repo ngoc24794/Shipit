@@ -238,16 +238,16 @@ onMounted(() => {
         <AppTable>
           <template #header>
             <tr>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg uppercase tracking-wider">
+              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg">
                 Namespace
               </th>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg uppercase tracking-wider">
+              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg">
                 Deployment
               </th>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg uppercase tracking-wider">
+              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg">
                 Ngày thêm
               </th>
-              <th scope="col" class="py-3 px-4 text-right text-xs font-semibold text-muted-fg uppercase tracking-wider">
+              <th scope="col" class="py-3 px-4 text-right text-xs font-semibold text-muted-fg">
                 Thao tác
               </th>
             </tr>
@@ -272,10 +272,11 @@ onMounted(() => {
                 <AppButton
                   variant="ghost"
                   size="sm"
+                  class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
                   :aria-label="`Xoá deployment ${target.namespace}/${target.deployment}`"
                   @click="openDeleteConfirm(target)"
                 >
-                  <Trash2 class="w-4 h-4 text-danger" aria-hidden="true" />
+                  <Trash2 class="w-4 h-4" aria-hidden="true" />
                 </AppButton>
               </td>
             </tr>

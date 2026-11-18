@@ -7,7 +7,9 @@ import {
   ArrowLeft,
   CheckCircle2,
   FileCode,
-  Save
+  Save,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-vue-next'
 import AppLayout from '../../layouts/AppLayout.vue'
 import AppButton from '../../components/AppButton.vue'
@@ -44,6 +46,7 @@ const pageLoading = ref(true)
 const saveLoading = ref(false)
 const validateLoading = ref(false)
 const previewLoading = ref(false)
+const showAdvanced = ref(false)
 
 const form = ref<{
   name: string
@@ -493,17 +496,17 @@ async function handleSave() {
         Đang tải dữ liệu...
       </div>
 
-      <form v-else class="space-y-8" @submit.prevent="handleSave">
+      <form v-else class="space-y-6" @submit.prevent="handleSave">
         <!-- ================================================================= -->
-        <!-- (1) Thông tin chung và nguồn mã                                   -->
+        <!-- (1) Nguồn mã                                                      -->
         <!-- ================================================================= -->
-        <section class="p-6 rounded-[8px] border border-border bg-card space-y-6">
+        <section class="p-6 rounded-[8px] border border-border bg-card space-y-5">
           <div class="border-b border-border pb-3">
             <h2 class="text-base font-semibold text-fg">
-              1. Thông tin chung và nguồn mã
+              1. Nguồn mã
             </h2>
             <p class="text-xs text-muted-fg mt-0.5">
-              Cấu hình tên Job, kho Git, máy build và thông số Docker image
+              Tên Job và thông tin kho mã nguồn Git
             </p>
           </div>
 
@@ -583,7 +586,23 @@ async function handleSave() {
                 />
               </template>
             </AppField>
+          </div>
+        </section>
 
+        <!-- ================================================================= -->
+        <!-- (2) Build image                                                   -->
+        <!-- ================================================================= -->
+        <section class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+          <div class="border-b border-border pb-3">
+            <h2 class="text-base font-semibold text-fg">
+              2. Build image
+            </h2>
+            <p class="text-xs text-muted-fg mt-0.5">
+              Máy build, Dockerfile và registry lưu Docker image
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <!-- Slave -->
             <AppField
               label="Máy build"
@@ -615,24 +634,6 @@ async function handleSave() {
                   :id="id"
                   v-model="form.dockerfilePath"
                   placeholder="docker/Dockerfile.dbmigrator"
-                  :disabled="saveLoading"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-
-            <!-- Build Context -->
-            <AppField
-              label="Build context"
-              description="Thư mục context khi build (. là gốc repository)"
-              :error="formErrors.buildContext?.[0]"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.buildContext"
-                  placeholder="."
                   :disabled="saveLoading"
                   :error="error"
                   :aria-describedby="ariaDescribedby"
@@ -695,34 +696,16 @@ async function handleSave() {
                 />
               </template>
             </AppField>
-
-            <!-- Deploy Registry Host (Optional) -->
-            <AppField
-              label="Deploy registry host"
-              description="Host registry đặt vào k8s Job spec (tuỳ chọn, để trống dùng Registry host)"
-              :error="formErrors.deployRegistryHost?.[0]"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.deployRegistryHost"
-                  placeholder="VD: registry.local:5000"
-                  :disabled="saveLoading"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
           </div>
         </section>
 
         <!-- ================================================================= -->
-        <!-- (2) Nơi chạy                                                      -->
+        <!-- (3) Nơi chạy                                                      -->
         <!-- ================================================================= -->
-        <section class="p-6 rounded-[8px] border border-border bg-card space-y-6">
+        <section class="p-6 rounded-[8px] border border-border bg-card space-y-5">
           <div class="border-b border-border pb-3">
             <h2 class="text-base font-semibold text-fg">
-              2. Nơi chạy
+              3. Nơi chạy
             </h2>
             <p class="text-xs text-muted-fg mt-0.5">
               Cấu hình namespace Kubernetes, container và pull secret (chỉ từ allowlist)
@@ -769,6 +752,87 @@ async function handleSave() {
               </template>
             </AppField>
 
+            <!-- Image Pull Secrets (from allowlist kind 'pullsecret' of that namespace) -->
+            <div class="md:col-span-2">
+              <AppField
+                label="ImagePullSecrets"
+                description="Secret kéo ảnh từ registry (chỉ liệt kê từ allowlist của namespace đã chọn)"
+                :error="formErrors.imagePullSecrets?.[0]"
+              >
+                <template #default="{ id, error, ariaDescribedby }">
+                  <AllowlistMultiSelect
+                    :id="id"
+                    v-model="form.imagePullSecrets"
+                    :options="currentPullSecretOptions"
+                    placeholder="Chọn pullSecret từ allowlist..."
+                    empty-text="Chưa có pullSecret nào trong allowlist của namespace này"
+                    :disabled="saveLoading || !form.namespace"
+                    :error="error"
+                    :aria-describedby="ariaDescribedby"
+                  />
+                </template>
+              </AppField>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- Tuỳ chọn nâng cao (mặc định gập)                                  -->
+        <!-- ================================================================= -->
+        <section class="rounded-[8px] border border-border bg-card overflow-hidden">
+          <button
+            type="button"
+            :aria-expanded="showAdvanced"
+            class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-muted/40 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+            @click="showAdvanced = !showAdvanced"
+          >
+            <div>
+              <h2 class="text-sm font-semibold text-fg">Tuỳ chọn nâng cao</h2>
+              <p class="text-xs text-muted-fg mt-0.5">
+                Build context, Deploy registry host và ServiceAccount
+              </p>
+            </div>
+            <ChevronDown v-if="showAdvanced" class="w-4 h-4 text-muted-fg shrink-0" aria-hidden="true" />
+            <ChevronRight v-else class="w-4 h-4 text-muted-fg shrink-0" aria-hidden="true" />
+          </button>
+
+          <div v-show="showAdvanced" class="px-6 pb-6 pt-2 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Build Context -->
+            <AppField
+              label="Build context"
+              description="Thư mục context khi build (. là gốc repository)"
+              :error="formErrors.buildContext?.[0]"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.buildContext"
+                  placeholder="."
+                  :disabled="saveLoading"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+
+            <!-- Deploy Registry Host (Optional) -->
+            <AppField
+              label="Deploy registry host"
+              description="Host registry đặt vào k8s Job spec (tuỳ chọn, để trống dùng Registry host)"
+              :error="formErrors.deployRegistryHost?.[0]"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.deployRegistryHost"
+                  placeholder="VD: registry.local:5000"
+                  :disabled="saveLoading"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+
             <!-- Service Account (Optional) -->
             <AppField
               label="Service Account"
@@ -786,37 +850,17 @@ async function handleSave() {
                 />
               </template>
             </AppField>
-
-            <!-- Image Pull Secrets (from allowlist kind 'pullsecret' of that namespace) -->
-            <AppField
-              label="ImagePullSecrets"
-              description="Secret kéo ảnh từ registry (chỉ liệt kê từ allowlist của namespace đã chọn)"
-              :error="formErrors.imagePullSecrets?.[0]"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AllowlistMultiSelect
-                  :id="id"
-                  v-model="form.imagePullSecrets"
-                  :options="currentPullSecretOptions"
-                  placeholder="Chọn pullSecret từ allowlist..."
-                  empty-text="Chưa có pullSecret nào trong allowlist của namespace này"
-                  :disabled="saveLoading || !form.namespace"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
           </div>
         </section>
 
         <!-- ================================================================= -->
-        <!-- (3) Tác vụ                                                        -->
+        <!-- (4) Tác vụ                                                        -->
         <!-- ================================================================= -->
         <section class="p-6 rounded-[8px] border border-border bg-card space-y-6">
           <div class="flex items-center justify-between border-b border-border pb-3">
             <div>
               <h2 class="text-base font-semibold text-fg">
-                3. Tác vụ
+                4. Tác vụ
               </h2>
               <p class="text-xs text-muted-fg mt-0.5">
                 Danh sách tác vụ chạy tuần tự. Kéo thả hoặc dùng nút lên/xuống để đổi thứ tự.
@@ -885,7 +929,7 @@ async function handleSave() {
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-3">
             <div>
               <h2 class="text-base font-semibold text-fg">
-                4. Xem trước và kiểm tra
+                5. Xem trước và kiểm tra
               </h2>
               <p class="text-xs text-muted-fg mt-0.5">
                 Kiểm tra tính hợp lệ của cấu hình và xem trước manifest Kubernetes Job YAML

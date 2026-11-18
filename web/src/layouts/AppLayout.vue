@@ -103,7 +103,7 @@ async function handleLogout() {
       <!-- Brand Logo Header (Desktop) -->
       <div class="hidden md:flex items-center justify-between h-12 px-5 border-b border-border">
         <router-link to="/" class="flex items-center gap-2 font-bold tracking-wider text-primary text-base select-none">
-          <div class="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
+          <div class="w-2.5 h-2.5 rounded-full bg-primary" />
           <span>SHIPIT</span>
         </router-link>
       </div>
@@ -135,8 +135,8 @@ async function handleLogout() {
       <!-- Sidebar Footer (System Info) -->
       <div class="p-3 border-t border-border text-xs text-muted-fg flex items-center justify-between">
         <span>Shipit v0.1</span>
-        <span class="inline-flex items-center gap-1.5 text-primary">
-          <span class="w-1.5 h-1.5 rounded-full bg-primary" />
+        <span class="inline-flex items-center gap-1.5 text-success">
+          <span class="w-1.5 h-1.5 rounded-full bg-success" />
           <span>Sẵn sàng</span>
         </span>
       </div>
@@ -189,7 +189,7 @@ async function handleLogout() {
       </header>
 
       <!-- Page Content -->
-      <main class="flex-1 max-w-[1280px] w-full mx-auto p-4 sm:p-6">
+      <main class="flex-1 max-w-[1440px] w-full mx-auto p-4 sm:p-6">
         <slot />
       </main>
     </div>

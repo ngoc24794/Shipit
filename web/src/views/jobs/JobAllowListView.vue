@@ -285,19 +285,19 @@ async function handleDelete() {
       <AppTable v-else>
         <template #header>
           <tr>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
               Namespace
             </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
               Loại
             </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
               Tên tài nguyên
             </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
               Ngày tạo
             </th>
-            <th scope="col" class="text-right py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg">
+            <th scope="col" class="text-right py-3 px-4 text-xs font-semibold text-muted-fg">
               Thao tác
             </th>
           </tr>
@@ -342,11 +342,11 @@ async function handleDelete() {
               size="sm"
               aria-label="Xoá mục khỏi allowlist"
               title="Xoá mục"
-              class="hover:text-danger"
+              class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
               :disabled="deleteLoading"
               @click="openDeleteConfirm(entry)"
             >
-              <Trash2 class="w-3.5 h-3.5 text-danger" aria-hidden="true" />
+              <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
               <span class="hidden sm:inline">Xoá</span>
             </AppButton>
           </td>

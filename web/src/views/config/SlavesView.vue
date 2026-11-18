@@ -304,7 +304,7 @@ onMounted(() => {
             <div v-if="store.testResults[slave.id]" class="flex items-center gap-1.5">
               <CheckCircle2
                 v-if="store.testResults[slave.id].ok"
-                class="w-4 h-4 text-primary flex-shrink-0"
+                class="w-4 h-4 text-success flex-shrink-0"
                 aria-hidden="true"
               />
               <XCircle
@@ -315,7 +315,7 @@ onMounted(() => {
               <span
                 :class="[
                   'truncate max-w-[200px]',
-                  store.testResults[slave.id].ok ? 'text-primary' : 'text-danger'
+                  store.testResults[slave.id].ok ? 'text-success' : 'text-danger'
                 ]"
                 :title="store.testResults[slave.id].message"
               >
@@ -349,7 +349,7 @@ onMounted(() => {
               <AppButton
                 variant="ghost"
                 size="sm"
-                class="text-danger hover:text-danger hover:bg-danger/10"
+                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
                 aria-label="Xoá máy build"
                 @click="promptDelete(slave)"
               >

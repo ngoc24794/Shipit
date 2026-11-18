@@ -78,7 +78,7 @@ const mappedSteps = computed(() => {
 function getStatusBadge(status: StepStatus) {
   switch (status) {
     case 'success':
-      return { icon: CheckCircle2, class: 'text-primary' }
+      return { icon: CheckCircle2, class: 'text-success' }
     case 'failed':
       return { icon: XCircle, class: 'text-danger' }
     case 'cancelled':
@@ -110,7 +110,11 @@ function getStatusBadge(status: StepStatus) {
           aria-hidden="true"
           class="hidden md:block absolute top-5 left-[50%] w-full h-0.5 -z-0 transition-colors"
           :class="[
-            step.status === 'success' ? 'bg-primary' : 'bg-border'
+            step.status === 'failed' || mappedSteps[index + 1]?.status === 'failed'
+              ? 'bg-danger/40'
+              : step.status === 'success'
+                ? 'bg-success'
+                : 'bg-border'
           ]"
         />
 
@@ -119,7 +123,7 @@ function getStatusBadge(status: StepStatus) {
           :class="[
             'relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all',
             'bg-card',
-            step.status === 'success' ? 'border-primary text-primary shadow-xs' : '',
+            step.status === 'success' ? 'border-success text-success shadow-xs' : '',
             step.status === 'failed' ? 'border-danger text-danger' : '',
             step.status === 'running' ? 'border-info text-info ring-4 ring-info/10' : '',
             step.status === 'cancelled' ? 'border-warn text-warn' : '',
