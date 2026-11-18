@@ -482,4 +482,263 @@ describe('Pipelines View, Form & Store', () => {
       })
     )
   })
+
+  it('creates pipeline selecting a registry credential sending valid credential id', async () => {
+    const createSpy = vi.spyOn(mockApi, 'createPipeline')
+
+    await router.push('/pipelines/new')
+    await router.isReady()
+
+    const wrapper = mount(PipelineFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    vm.form.name = 'pipeline-with-auth'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.imageName = 'my-image'
+    vm.form.registryHost = 'registry.example.com'
+    vm.form.registryCredentialId = 3
+    vm.form.deployNamespace = 'production'
+    vm.form.deployDeployment = 'my-deploy'
+    vm.form.deployContainer = 'app'
+
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'pipeline-with-auth',
+        registryCredentialId: 3
+      })
+    )
+  })
+
+  it('creates pipeline leaving buildContext empty sends null, and "docker" sends "docker"', async () => {
+    const createSpy = vi.spyOn(mockApi, 'createPipeline')
+
+    await router.push('/pipelines/new')
+    await router.isReady()
+
+    const wrapper = mount(PipelineFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    vm.form.name = 'pipeline-empty-context'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.buildContext = ''
+    vm.form.imageName = 'empty-ctx-app'
+    vm.form.registryHost = 'registry.example.com'
+    vm.form.registryCredentialId = null
+    vm.form.deployNamespace = 'default'
+    vm.form.deployDeployment = 'empty-ctx-deploy'
+    vm.form.deployContainer = 'app'
+
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'pipeline-empty-context',
+        buildContext: null
+      })
+    )
+
+    createSpy.mockClear()
+    vm.form.name = 'pipeline-docker-ctx'
+    vm.form.buildContext = 'docker'
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'pipeline-docker-ctx',
+        buildContext: 'docker'
+      })
+    )
+  })
+
+  it('edits pipeline with buildContext ".", displays ".", and clearing it saves as null', async () => {
+    const existing = await mockApi.createPipeline({
+      name: 'edit-context-pipeline',
+      gitUrl: 'https://git.example.com/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      dockerfilePath: 'Dockerfile',
+      buildContext: '.',
+      imageName: 'test-app',
+      registryHost: 'registry.example.com',
+      deployRegistryHost: null,
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'test-deploy',
+      deployContainer: 'app'
+    })
+
+    const updateSpy = vi.spyOn(mockApi, 'updatePipeline')
+
+    await router.push(`/pipelines/${existing.id}/edit`)
+    await router.isReady()
+
+    const wrapper = mount(PipelineFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    expect(vm.form.buildContext).toBe('.')
+
+    const contextInput = wrapper.find('input[placeholder=". (gốc repo)"]')
+    expect(contextInput.exists()).toBe(true)
+    expect((contextInput.element as HTMLInputElement).value).toBe('.')
+
+    await contextInput.setValue('')
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      existing.id,
+      expect.objectContaining({
+        buildContext: null
+      })
+    )
+  })
+
+  it('creates pipeline entering deployRegistryHost "registry.local:5000" sends that value', async () => {
+    const createSpy = vi.spyOn(mockApi, 'createPipeline')
+
+    await router.push('/pipelines/new')
+    await router.isReady()
+
+    const wrapper = mount(PipelineFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    vm.form.name = 'pipeline-custom-deploy-host'
+    vm.form.gitUrl = 'https://git.example.com/repo.git'
+    vm.form.gitBranch = 'main'
+    vm.form.gitCredentialId = 2
+    vm.form.slaveId = 1
+    vm.form.dockerfilePath = 'Dockerfile'
+    vm.form.imageName = 'my-image'
+    vm.form.registryHost = '192.168.1.241'
+    vm.form.deployRegistryHost = 'registry.local:5000'
+    vm.form.registryCredentialId = null
+    vm.form.deployNamespace = 'default'
+    vm.form.deployDeployment = 'my-deploy'
+    vm.form.deployContainer = 'app'
+
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'pipeline-custom-deploy-host',
+        deployRegistryHost: 'registry.local:5000'
+      })
+    )
+  })
+
+  it('edits pipeline with deployRegistryHost "registry.local:5000", displays correctly, and clearing saves as null', async () => {
+    const existing = await mockApi.createPipeline({
+      name: 'edit-deploy-host-pipeline',
+      gitUrl: 'https://git.example.com/repo.git',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      dockerfilePath: 'Dockerfile',
+      buildContext: null,
+      imageName: 'test-app',
+      registryHost: '192.168.1.241',
+      deployRegistryHost: 'registry.local:5000',
+      registryCredentialId: null,
+      deployNamespace: 'default',
+      deployDeployment: 'test-deploy',
+      deployContainer: 'app'
+    })
+
+    const updateSpy = vi.spyOn(mockApi, 'updatePipeline')
+
+    await router.push(`/pipelines/${existing.id}/edit`)
+    await router.isReady()
+
+    const wrapper = mount(PipelineFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    expect(vm.form.deployRegistryHost).toBe('registry.local:5000')
+
+    const hostInput = wrapper.find('input[placeholder="giống Máy chủ Registry"]')
+    expect(hostInput.exists()).toBe(true)
+    expect((hostInput.element as HTMLInputElement).value).toBe('registry.local:5000')
+
+    await hostInput.setValue('')
+    await vm.handleSave()
+    await wrapper.vm.$nextTick()
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      existing.id,
+      expect.objectContaining({
+        deployRegistryHost: null
+      })
+    )
+  })
+
+  it('renders buildContext and deployRegistryHost fields with labels, descriptions, and placeholders', async () => {
+    await router.push('/pipelines/new')
+    await router.isReady()
+
+    const wrapper = mount(PipelineFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    expect(wrapper.find('input[placeholder=". (gốc repo)"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Thư mục context build')
+    expect(wrapper.text()).toContain('Tuỳ chọn. Đường dẫn trong repo dùng làm context khi build.')
+
+    expect(wrapper.find('input[placeholder="giống Máy chủ Registry"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Host registry khi deploy')
+    expect(wrapper.text()).toContain('Tuỳ chọn. Dùng khi cụm k8s gọi registry bằng tên khác với máy build')
+  })
 })
