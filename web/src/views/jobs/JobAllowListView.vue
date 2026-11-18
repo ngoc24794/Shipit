@@ -19,6 +19,10 @@ import { useToast } from '../../composables/useToast'
 import type { JobAllowEntry, JobAllowKind } from '../../api/types'
 import { ApiError } from '../../api/client'
 
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), {
+  embedded: false
+})
+
 const store = useJobsAllowStore()
 const toast = useToast()
 
@@ -171,10 +175,10 @@ async function handleDelete() {
 </script>
 
 <template>
-  <AppLayout>
+  <component :is="props.embedded ? 'div' : AppLayout">
     <div class="space-y-6">
       <!-- Page Header -->
-      <div>
+      <div v-if="!props.embedded">
         <h1 class="text-2xl font-bold tracking-tight text-fg flex items-center gap-2.5">
           <ListChecks class="w-6 h-6 text-primary" aria-hidden="true" />
           <span>Allowlist Job</span>
@@ -362,5 +366,5 @@ async function handleDelete() {
         @confirm="handleDelete"
       />
     </div>
-  </AppLayout>
+  </component>
 </template>

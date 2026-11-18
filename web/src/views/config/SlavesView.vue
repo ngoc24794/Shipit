@@ -222,7 +222,7 @@ onMounted(() => {
       <!-- Header -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 class="text-xl font-semibold text-fg">Máy build (Slave)</h2>
+          <h1 class="text-2xl font-semibold text-fg tracking-tight">Máy build (Slave)</h1>
           <p class="text-sm text-muted-fg mt-1">
             Cấu hình các máy chủ thực hiện tác vụ build Docker image và kết nối triển khai.
           </p>

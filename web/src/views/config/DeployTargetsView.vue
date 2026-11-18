@@ -18,6 +18,10 @@ import { useToast } from '../../composables/useToast'
 import type { DeployTarget } from '../../api/types'
 import { ApiError } from '../../api/client'
 
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), {
+  embedded: false
+})
+
 const store = useConfigDeployTargetsStore()
 const toast = useToast()
 
@@ -127,11 +131,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppLayout>
+  <component :is="props.embedded ? 'div' : AppLayout">
     <div class="space-y-6">
       <!-- Header -->
-      <div>
-        <h2 class="text-xl font-semibold text-fg">Deployment được phép</h2>
+      <div v-if="!props.embedded">
+        <h1 class="text-2xl font-semibold text-fg tracking-tight">Deployment được phép</h1>
         <p class="text-sm text-muted-fg mt-1">
           Quản lý danh sách namespace và deployment mà Shipit được phép triển khai cập nhật container image.
         </p>
@@ -291,5 +295,5 @@ onMounted(() => {
         @cancel="isConfirmOpen = false"
       />
     </div>
-  </AppLayout>
+  </component>
 </template>

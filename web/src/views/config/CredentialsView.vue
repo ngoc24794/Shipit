@@ -217,7 +217,7 @@ onMounted(() => {
       <!-- Header -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 class="text-xl font-semibold text-fg">Thông tin xác thực</h2>
+          <h1 class="text-2xl font-semibold text-fg tracking-tight">Thông tin xác thực</h1>
           <p class="text-sm text-muted-fg mt-1">
             Quản lý khoá SSH, git token và thông tin đăng nhập registry phục vụ build và deploy.
           </p>

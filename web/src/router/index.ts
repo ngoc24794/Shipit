@@ -45,20 +45,22 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Cấu hình Job' }
   },
   {
+    path: '/settings/allowlist',
+    name: 'allowlist',
+    component: () => import('../views/config/AllowlistView.vue'),
+    meta: { title: 'Allowlist' }
+  },
+  {
     path: '/settings/job-allow',
-    name: 'job-allow',
-    component: () => import('../views/jobs/JobAllowListView.vue'),
-    meta: { title: 'Allowlist Job' }
+    redirect: { path: '/settings/allowlist', query: { tab: 'job' } }
   },
   {
     path: '/job-allow',
-    redirect: '/settings/job-allow'
+    redirect: { path: '/settings/allowlist', query: { tab: 'job' } }
   },
   {
     path: '/deploy-targets',
-    name: 'deploy-targets',
-    component: () => import('../views/config/DeployTargetsView.vue'),
-    meta: { title: 'Deployment được phép' }
+    redirect: { path: '/settings/allowlist', query: { tab: 'deployment' } }
   },
   {
     path: '/slaves',

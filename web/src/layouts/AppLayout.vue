@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Play,
   Workflow,
   Boxes,
   ShieldCheck,
-  ListChecks,
   Server,
   KeyRound,
   Sun,
@@ -27,19 +26,24 @@ const { theme, toggleTheme } = useTheme()
 
 const isMobileMenuOpen = ref(false)
 
-const navItems = [
-  { name: 'Lượt chạy', path: '/', icon: Play },
-  { name: 'Pipeline', path: '/pipelines', icon: Workflow },
-  { name: 'Job', path: '/jobs', icon: Boxes },
-  { name: 'Deployment được phép', path: '/deploy-targets', icon: ShieldCheck },
-  { name: 'Allowlist Job', path: '/settings/job-allow', icon: ListChecks },
-  { name: 'Máy build', path: '/slaves', icon: Server },
-  { name: 'Thông tin xác thực', path: '/credentials', icon: KeyRound }
+const navGroups = [
+  {
+    label: 'Vận hành',
+    items: [
+      { name: 'Lượt chạy', path: '/', icon: Play },
+      { name: 'Pipeline', path: '/pipelines', icon: Workflow },
+      { name: 'Job', path: '/jobs', icon: Boxes }
+    ]
+  },
+  {
+    label: 'Thiết lập',
+    items: [
+      { name: 'Máy build', path: '/slaves', icon: Server },
+      { name: 'Thông tin xác thực', path: '/credentials', icon: KeyRound },
+      { name: 'Allowlist', path: '/settings/allowlist', icon: ShieldCheck }
+    ]
+  }
 ]
-
-const pageTitle = computed(() => {
-  return (route.meta?.title as string) || 'Shipit'
-})
 
 function isActive(path: string) {
   if (path === '/') {
@@ -105,22 +109,27 @@ async function handleLogout() {
       </div>
 
       <!-- Navigation links -->
-      <nav class="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-        <router-link
-          v-for="item in navItems"
-          :key="item.path"
-          :to="item.path"
-          :class="[
-            'flex items-center gap-3 px-3 py-2 rounded-[6px] text-sm font-medium transition-colors select-none cursor-pointer',
-            isActive(item.path)
-              ? 'bg-primary/10 text-primary border-l-2 border-primary font-semibold'
-              : 'text-muted-fg hover:text-fg hover:bg-muted'
-          ]"
-          @click="isMobileMenuOpen = false"
-        >
-          <component :is="item.icon" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-          <span>{{ item.name }}</span>
-        </router-link>
+      <nav aria-label="Điều hướng chính" class="flex-1 py-4 px-3 space-y-5 overflow-y-auto">
+        <div v-for="group in navGroups" :key="group.label" class="space-y-1">
+          <div class="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-fg/80 select-none">
+            {{ group.label }}
+          </div>
+          <router-link
+            v-for="item in group.items"
+            :key="item.path"
+            :to="item.path"
+            :class="[
+              'flex items-center gap-3 px-3 py-2 rounded-[6px] text-sm font-medium transition-colors select-none cursor-pointer',
+              isActive(item.path)
+                ? 'bg-primary/10 text-primary border-l-2 border-primary font-semibold'
+                : 'text-muted-fg hover:text-fg hover:bg-muted'
+            ]"
+            @click="isMobileMenuOpen = false"
+          >
+            <component :is="item.icon" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+            <span>{{ item.name }}</span>
+          </router-link>
+        </div>
       </nav>
 
       <!-- Sidebar Footer (System Info) -->
@@ -144,11 +153,7 @@ async function handleLogout() {
     <!-- Main Content Layout Area -->
     <div class="flex-1 flex flex-col min-w-0">
       <!-- Desktop Header (48px) -->
-      <header class="hidden md:flex items-center justify-between h-12 px-6 bg-card border-b border-border sticky top-0 z-10">
-        <h1 class="text-base font-semibold text-fg truncate">
-          {{ pageTitle }}
-        </h1>
-
+      <header class="hidden md:flex items-center justify-end h-12 px-6 bg-card border-b border-border sticky top-0 z-10">
         <div class="flex items-center gap-4">
           <!-- Theme Toggle -->
           <button
