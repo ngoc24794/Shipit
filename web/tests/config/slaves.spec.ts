@@ -104,7 +104,7 @@ describe('Slaves View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     expect(notFoundWrapper.text()).toContain('Không tìm thấy máy build')

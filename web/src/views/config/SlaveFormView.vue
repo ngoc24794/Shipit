@@ -169,13 +169,15 @@ async function handleTestConnection() {
 onMounted(async () => {
   pageLoading.value = true
   try {
-    await credStore.fetchCredentials().catch(() => {})
+    await Promise.all([
+      credStore.fetchCredentials().catch(() => {}),
+      isEditing.value ? store.fetchSlaves() : Promise.resolve()
+    ])
     if (isEditing.value) {
       if (slaveId.value === null || Number.isNaN(slaveId.value)) {
         notFound.value = true
         return
       }
-      await store.fetchSlaves()
       const slave = store.slaves.find((s) => s.id === slaveId.value)
       if (!slave) {
         notFound.value = true

@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Boxes,
   Plus,
-  ArrowLeft,
   CheckCircle2,
   FileCode,
-  Save,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  AlertCircle
 } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
+import FormWizardLayout from '../../components/FormWizardLayout.vue'
+import type { WizardStep } from '../../components/FormStepper.vue'
 import AppButton from '../../components/AppButton.vue'
 import AppInput from '../../components/AppInput.vue'
 import AppSelect from '../../components/AppSelect.vue'
@@ -47,6 +47,68 @@ const saveLoading = ref(false)
 const validateLoading = ref(false)
 const previewLoading = ref(false)
 const showAdvanced = ref(false)
+const activeTaskIndex = ref(0)
+
+const STEP_DEFS = [
+  { id: 'source', label: 'Nguồn mã' },
+  { id: 'build', label: 'Build image' },
+  { id: 'runtime', label: 'Nơi chạy' },
+  { id: 'tasks', label: 'Tác vụ' },
+  { id: 'review', label: 'Xem lại và kiểm tra' }
+] as const
+
+const STEP_FIELDS: Record<number, string[]> = {
+  0: ['name', 'gitUrl', 'gitBranch', 'gitCredentialId'],
+  1: ['slaveId', 'dockerfilePath', 'buildContext', 'imageName', 'registryHost', 'registryCredentialId', 'deployRegistryHost'],
+  2: ['namespace', 'containerName', 'serviceAccount', 'imagePullSecrets'],
+  3: ['tasks']
+}
+
+function parseStepQuery(q: unknown): number {
+  const n = Number(q)
+  if (Number.isInteger(n) && n >= 1 && n <= STEP_DEFS.length) {
+    return n - 1
+  }
+  return 0
+}
+
+const currentStep = ref(parseStepQuery(route.query.step))
+const highestVisitedStep = ref(currentStep.value)
+const completedSteps = ref<Set<number>>(new Set())
+const stepErrorFlags = ref<Set<number>>(new Set())
+
+watch(
+  () => route.query.step,
+  (val) => {
+    const parsed = parseStepQuery(val)
+    if (parsed !== currentStep.value) {
+      currentStep.value = parsed
+      if (parsed > highestVisitedStep.value) {
+        highestVisitedStep.value = parsed
+      }
+    }
+  }
+)
+
+function goToStep(index: number) {
+  if (index < 0 || index >= STEP_DEFS.length) return
+  currentStep.value = index
+  if (index > highestVisitedStep.value) {
+    highestVisitedStep.value = index
+  }
+  router.replace({
+    path: route.path,
+    query: { ...route.query, step: String(index + 1) }
+  })
+  if (index === 4) {
+    refreshPreview()
+  }
+}
+
+function canNavigateTo(index: number): boolean {
+  if (isEditing.value) return true
+  return index <= highestVisitedStep.value
+}
 
 const form = ref<{
   name: string
@@ -98,58 +160,39 @@ const form = ref<{
 const formErrors = ref<Record<string, string[]>>({})
 const previewTasks = ref<JobPreviewTask[]>([])
 
-// Git Credentials (kind === 'git_token')
 const gitCredentialOptions = computed(() => {
   return credStore.credentials
     .filter((c) => c.kind === 'git_token')
-    .map((c) => ({
-      label: c.name,
-      value: c.id
-    }))
+    .map((c) => ({ label: c.name, value: c.id }))
 })
 
-// Registry Credentials (kind === 'registry')
 const registryCredentialOptions = computed(() => {
   return [
     { label: 'Không cần đăng nhập', value: '' },
     ...credStore.credentials
       .filter((c) => c.kind === 'registry')
-      .map((c) => ({
-        label: c.name,
-        value: c.id
-      }))
+      .map((c) => ({ label: c.name, value: c.id }))
   ]
 })
 
-// Slaves
 const slaveOptions = computed(() => {
-  return slaveStore.slaves.map((s) => ({
-    label: `${s.name} (${s.host})`,
-    value: s.id
-  }))
+  return slaveStore.slaves.map((s) => ({ label: `${s.name} (${s.host})`, value: s.id }))
 })
 
-// Namespace options from allowlist
 const namespaceOptions = computed(() => {
-  return allowStore.namespaces.map((ns) => ({
-    label: ns,
-    value: ns
-  }))
+  return allowStore.namespaces.map((ns) => ({ label: ns, value: ns }))
 })
 
-// PullSecret options for current namespace
 const currentPullSecretOptions = computed(() => {
   if (!form.value.namespace) return []
   return allowStore.pullSecretsFor(form.value.namespace)
 })
 
-// ConfigMap options for current namespace
 const currentConfigMapOptions = computed(() => {
   if (!form.value.namespace) return []
   return allowStore.configMapsFor(form.value.namespace)
 })
 
-// Secret options for current namespace
 const currentSecretOptions = computed(() => {
   if (!form.value.namespace) return []
   return allowStore.secretsFor(form.value.namespace)
@@ -192,9 +235,10 @@ onMounted(async () => {
           ttlSeconds: t.ttlSeconds
         }))
       }
+      highestVisitedStep.value = STEP_DEFS.length - 1
+      completedSteps.value = new Set([0, 1, 2, 3])
       await refreshPreview()
     } else {
-      // Default namespace to first allowed namespace if available
       if (allowStore.namespaces.length > 0 && !form.value.namespace) {
         form.value.namespace = allowStore.namespaces[0]
       }
@@ -212,7 +256,6 @@ onMounted(async () => {
   }
 })
 
-// Helper to convert form to API JobInput payload
 function buildPayload(): JobInput {
   return {
     name: form.value.name.trim(),
@@ -250,60 +293,136 @@ function buildPayload(): JobInput {
   }
 }
 
-// Client-side quick check
-function validateClientSide(): boolean {
-  const errors: Record<string, string[]> = {}
-
-  if (!form.value.name.trim()) {
-    errors.name = ['Vui lòng nhập tên Job']
-  } else if (!/^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$/.test(form.value.name.trim())) {
-    errors.name = ['Tên Job phải tuân theo chuẩn DNS-1123 subdomain (chữ thường, số, dấu chấm, dấu gạch ngang)']
+function validateStep(stepIndex: number): boolean {
+  const errors: Record<string, string[]> = { ...formErrors.value }
+  for (const field of STEP_FIELDS[stepIndex] || []) {
+    delete errors[field]
+  }
+  if (stepIndex === 3) {
+    for (const k of Object.keys(errors)) {
+      if (k.startsWith('tasks[')) delete errors[k]
+    }
   }
 
-  if (!form.value.gitUrl.trim()) {
-    errors.gitUrl = ['Vui lòng nhập địa chỉ Git URL']
-  }
-
-  if (!form.value.gitCredentialId) {
-    errors.gitCredentialId = ['Vui lòng chọn thông tin xác thực Git']
-  }
-
-  if (!form.value.slaveId) {
-    errors.slaveId = ['Vui lòng chọn máy build']
-  }
-
-  if (!form.value.imageName.trim()) {
-    errors.imageName = ['Vui lòng nhập tên Image']
-  }
-
-  if (!form.value.registryHost.trim()) {
-    errors.registryHost = ['Vui lòng nhập Host registry']
-  }
-
-  if (!form.value.namespace.trim()) {
-    errors.namespace = ['Vui lòng chọn Namespace']
-  }
-
-  if (!form.value.containerName.trim()) {
-    errors.containerName = ['Vui lòng nhập tên container']
-  }
-
-  if (form.value.tasks.length === 0) {
-    errors.tasks = ['Job phải có ít nhất một tác vụ']
-  } else {
-    form.value.tasks.forEach((t, i) => {
-      if (!t.label || !t.label.trim()) {
-        errors[`tasks[${i}].label`] = ['Vui lòng nhập nhãn tác vụ']
-      }
-      if (t.timeoutSeconds === undefined || t.timeoutSeconds === null || Number(t.timeoutSeconds) <= 0) {
-        errors[`tasks[${i}].timeoutSeconds`] = ['Thời gian timeout bắt buộc và phải lớn hơn 0']
-      }
-    })
+  if (stepIndex === 0) {
+    if (!form.value.name.trim()) {
+      errors.name = ['Vui lòng nhập tên Job']
+    } else if (!/^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$/.test(form.value.name.trim())) {
+      errors.name = ['Tên Job phải tuân theo chuẩn DNS-1123 subdomain (chữ thường, số, dấu chấm, dấu gạch ngang)']
+    }
+    if (!form.value.gitUrl.trim()) {
+      errors.gitUrl = ['Vui lòng nhập địa chỉ Git URL']
+    }
+    if (!form.value.gitCredentialId) {
+      errors.gitCredentialId = ['Vui lòng chọn thông tin xác thực Git']
+    }
+  } else if (stepIndex === 1) {
+    if (!form.value.slaveId) {
+      errors.slaveId = ['Vui lòng chọn máy build']
+    }
+    if (!form.value.imageName.trim()) {
+      errors.imageName = ['Vui lòng nhập tên Image']
+    }
+    if (!form.value.registryHost.trim()) {
+      errors.registryHost = ['Vui lòng nhập Host registry']
+    }
+  } else if (stepIndex === 2) {
+    if (!form.value.namespace.trim()) {
+      errors.namespace = ['Vui lòng chọn Namespace']
+    }
+    if (!form.value.containerName.trim()) {
+      errors.containerName = ['Vui lòng nhập tên container']
+    }
+  } else if (stepIndex === 3) {
+    if (form.value.tasks.length === 0) {
+      errors.tasks = ['Job phải có ít nhất một tác vụ']
+    } else {
+      form.value.tasks.forEach((t, i) => {
+        if (!t.label || !t.label.trim()) {
+          errors[`tasks[${i}].label`] = ['Vui lòng nhập nhãn tác vụ']
+        }
+        if (t.timeoutSeconds === undefined || t.timeoutSeconds === null || Number(t.timeoutSeconds) <= 0) {
+          errors[`tasks[${i}].timeoutSeconds`] = ['Thời gian timeout bắt buộc và phải lớn hơn 0']
+        }
+      })
+    }
   }
 
   formErrors.value = errors
-  return Object.keys(errors).length === 0
+
+  const hasStepError =
+    stepIndex === 3
+      ? Boolean(errors.tasks) || Object.keys(errors).some((k) => k.startsWith('tasks['))
+      : (STEP_FIELDS[stepIndex] || []).some((f) => Boolean(errors[f]))
+
+  const nextErr = new Set(stepErrorFlags.value)
+  const nextCompleted = new Set(completedSteps.value)
+  if (hasStepError) {
+    nextErr.add(stepIndex)
+    nextCompleted.delete(stepIndex)
+  } else {
+    nextErr.delete(stepIndex)
+    nextCompleted.add(stepIndex)
+  }
+  stepErrorFlags.value = nextErr
+  completedSteps.value = nextCompleted
+  return !hasStepError
 }
+
+function validateClientSide(): boolean {
+  let allValid = true
+  for (let i = 0; i < 4; i++) {
+    if (!validateStep(i)) allValid = false
+  }
+  return allValid
+}
+
+function handleNext() {
+  if (!validateStep(currentStep.value)) return
+  goToStep(currentStep.value + 1)
+}
+
+function handlePrev() {
+  goToStep(currentStep.value - 1)
+}
+
+const wizardSteps = computed<WizardStep[]>(() => {
+  return STEP_DEFS.map((s, idx) => {
+    let status: WizardStep['status'] = 'pending'
+    if (idx === currentStep.value) status = 'current'
+    else if (stepErrorFlags.value.has(idx)) status = 'error'
+    else if (completedSteps.value.has(idx)) status = 'complete'
+    return { id: s.id, label: s.label, status }
+  })
+})
+
+const reviewErrorItems = computed(() => {
+  const items: Array<{ stepIndex: number; stepLabel: string; field: string; message: string }> = []
+  for (let i = 0; i < 4; i++) {
+    for (const field of STEP_FIELDS[i]) {
+      const msgs = formErrors.value[field]
+      if (msgs && msgs.length > 0) {
+        items.push({
+          stepIndex: i,
+          stepLabel: STEP_DEFS[i].label,
+          field,
+          message: msgs[0]
+        })
+      }
+    }
+  }
+  for (const [key, msgs] of Object.entries(formErrors.value)) {
+    if (key.startsWith('tasks[') && msgs && msgs.length > 0) {
+      items.push({
+        stepIndex: 3,
+        stepLabel: STEP_DEFS[3].label,
+        field: key,
+        message: msgs[0]
+      })
+    }
+  }
+  return items
+})
 
 // Task management functions
 function addTask() {
@@ -317,6 +436,7 @@ function addTask() {
     backoffLimit: 0,
     ttlSeconds: 3600
   })
+  activeTaskIndex.value = form.value.tasks.length - 1
 }
 
 function updateTask(index: number, updated: JobTaskInput) {
@@ -326,6 +446,9 @@ function updateTask(index: number, updated: JobTaskInput) {
 function removeTask(index: number) {
   if (form.value.tasks.length > 1) {
     form.value.tasks.splice(index, 1)
+    if (activeTaskIndex.value >= form.value.tasks.length) {
+      activeTaskIndex.value = form.value.tasks.length - 1
+    }
   }
 }
 
@@ -342,12 +465,14 @@ function duplicateTask(index: number) {
     ttlSeconds: original.ttlSeconds
   }
   form.value.tasks.splice(index + 1, 0, copy)
+  activeTaskIndex.value = index + 1
 }
 
 function moveTaskUp(index: number) {
   if (index > 0) {
     const item = form.value.tasks.splice(index, 1)[0]
     form.value.tasks.splice(index - 1, 0, item)
+    activeTaskIndex.value = index - 1
   }
 }
 
@@ -355,10 +480,10 @@ function moveTaskDown(index: number) {
   if (index < form.value.tasks.length - 1) {
     const item = form.value.tasks.splice(index, 1)[0]
     form.value.tasks.splice(index + 1, 0, item)
+    activeTaskIndex.value = index + 1
   }
 }
 
-// Drag and drop for tasks
 let draggedTaskIndex: number | null = null
 
 function onTaskDragStart(index: number, event: DragEvent) {
@@ -366,7 +491,7 @@ function onTaskDragStart(index: number, event: DragEvent) {
   event.dataTransfer?.setData('text/plain', String(index))
 }
 
-function onTaskDragOver(index: number, event: DragEvent) {
+function onTaskDragOver(_index: number, event: DragEvent) {
   event.preventDefault()
 }
 
@@ -375,10 +500,10 @@ function onTaskDrop(index: number, event: DragEvent) {
   if (draggedTaskIndex === null || draggedTaskIndex === index) return
   const item = form.value.tasks.splice(draggedTaskIndex, 1)[0]
   form.value.tasks.splice(index, 0, item)
+  activeTaskIndex.value = index
   draggedTaskIndex = null
 }
 
-// Validate button handler
 async function handleValidate() {
   validateLoading.value = true
   try {
@@ -397,7 +522,6 @@ async function handleValidate() {
   }
 }
 
-// Refresh preview YAML
 async function refreshPreview() {
   previewLoading.value = true
   try {
@@ -405,13 +529,12 @@ async function refreshPreview() {
     const res = await jobsStore.previewJob(payload)
     previewTasks.value = res.tasks
   } catch {
-    // If preview fails due to partial form, keep previous
+    // Keep previous preview if partial
   } finally {
     previewLoading.value = false
   }
 }
 
-// Save form
 async function handleSave() {
   if (!validateClientSide()) {
     toast.error('Vui lòng kiểm tra lại các trường có lỗi')
@@ -432,9 +555,20 @@ async function handleSave() {
   } catch (err: any) {
     if (err instanceof ApiError && err.status === 400 && err.problem?.errors) {
       formErrors.value = err.problem.errors
+      const nextErr = new Set(stepErrorFlags.value)
+      for (let i = 0; i < 4; i++) {
+        if (STEP_FIELDS[i].some((f) => Boolean(formErrors.value[f]))) {
+          nextErr.add(i)
+        }
+      }
+      if (Object.keys(formErrors.value).some((k) => k.startsWith('tasks['))) {
+        nextErr.add(3)
+      }
+      stepErrorFlags.value = nextErr
       toast.error('Dữ liệu không hợp lệ. Vui lòng kiểm tra lại các ô bị đánh dấu.')
     } else if (err instanceof ApiError && err.status === 409) {
       formErrors.value = { name: ['Tên Job đã tồn tại'] }
+      stepErrorFlags.value = new Set([...stepErrorFlags.value, 0])
       toast.error(err.problem?.detail || err.message || 'Tên Job đã tồn tại')
     } else {
       toast.error(err.message || 'Lưu Job thất bại')
@@ -443,167 +577,127 @@ async function handleSave() {
     saveLoading.value = false
   }
 }
+
+function findOptionLabel(options: Array<{ label: string; value: string | number }>, val: string | number | null): string {
+  if (val === '' || val === null || val === undefined) return 'Không có'
+  return options.find((o) => o.value === val)?.label || String(val)
+}
 </script>
 
 <template>
-  <AppLayout>
-    <div class="space-y-8 max-w-4xl mx-auto pb-12">
-      <!-- Top header with back link -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
-        <div class="flex items-center gap-3 min-w-0">
-          <button
-            type="button"
-            aria-label="Quay lại danh sách Job"
-            class="p-2 rounded-[6px] text-muted-fg hover:text-fg hover:bg-muted transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring shrink-0"
-            @click="router.push('/jobs')"
-          >
-            <ArrowLeft class="w-5 h-5" aria-hidden="true" />
-          </button>
-          <div class="min-w-0">
-            <h1 class="text-xl font-bold tracking-tight text-fg flex items-center gap-2 truncate">
-              <Boxes class="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
-              <span class="truncate">{{ isEditing ? `Cấu hình Job: ${form.name}` : 'Tạo Job mới' }}</span>
-            </h1>
-            <p class="text-xs text-muted-fg mt-0.5 truncate">
-              {{ isEditing ? 'Chỉnh sửa thông số và danh sách tác vụ của Job' : 'Cấu hình nguồn mã, máy build, nơi chạy và các tác vụ k8s' }}
-            </p>
-          </div>
+  <FormWizardLayout
+    :title="isEditing ? `Cấu hình Job: ${form.name}` : 'Tạo Job mới'"
+    back-to="/jobs"
+    breadcrumb-parent="Job"
+    :breadcrumb-current="isEditing ? (form.name || 'Sửa') : 'Tạo mới'"
+    :steps="wizardSteps"
+    :current-step="currentStep"
+    :can-navigate-to="canNavigateTo"
+    :save-label="isEditing ? 'Lưu thay đổi' : 'Tạo Job'"
+    :saving="saveLoading"
+    :loading="pageLoading"
+    @cancel="router.push('/jobs')"
+    @prev="handlePrev"
+    @next="handleNext"
+    @save="handleSave"
+    @select-step="goToStep"
+  >
+    <template #icon>
+      <Boxes class="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
+    </template>
+
+    <form class="space-y-6" @submit.prevent="handleSave">
+      <!-- Step 1: Nguồn mã -->
+      <section v-if="currentStep === 0" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+        <div class="border-b border-border pb-3">
+          <h2 class="text-base font-semibold text-fg">1. Nguồn mã</h2>
+          <p class="text-xs text-muted-fg mt-0.5">Tên Job và thông tin kho mã nguồn Git</p>
         </div>
 
-        <div class="flex items-center gap-3 shrink-0 whitespace-nowrap">
-          <AppButton
-            variant="secondary"
-            aria-label="Huỷ thao tác"
-            @click="router.push('/jobs')"
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <AppField
+            label="Tên Job"
+            :required="true"
+            description="Tên định danh (DNS-1123, chữ thường, số, dấu chấm hoặc gạch ngang)"
+            :error="formErrors.name?.[0]"
           >
-            Huỷ
-          </AppButton>
-          <AppButton
-            variant="primary"
-            :loading="saveLoading"
-            :disabled="saveLoading || pageLoading"
-            aria-label="Lưu Job"
-            @click="handleSave"
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="form.name"
+                placeholder="VD: avina-dbmigrator"
+                :disabled="saveLoading"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
+
+          <AppField
+            label="Git URL"
+            :required="true"
+            description="Địa chỉ repository (HTTPS hoặc SSH)"
+            :error="formErrors.gitUrl?.[0]"
           >
-            <Save class="w-4 h-4 mr-1.5" aria-hidden="true" />
-            <span>{{ isEditing ? 'Lưu thay đổi' : 'Tạo Job' }}</span>
-          </AppButton>
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="form.gitUrl"
+                placeholder="http://git.example/AvinaWorkspace"
+                :disabled="saveLoading"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
+
+          <AppField
+            label="Nhánh Git"
+            description="Mặc định 'main'"
+            :error="formErrors.gitBranch?.[0]"
+          >
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="form.gitBranch"
+                placeholder="main"
+                :disabled="saveLoading"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
+
+          <AppField
+            label="Token Git"
+            :required="true"
+            description="Token truy cập Git (chỉ lọc credential loại Git Token)"
+            :error="formErrors.gitCredentialId?.[0]"
+          >
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppSelect
+                :id="id"
+                v-model="form.gitCredentialId"
+                :options="gitCredentialOptions"
+                placeholder="Chọn Token Git"
+                :disabled="saveLoading"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
         </div>
-      </div>
+      </section>
 
-      <!-- Loading skeleton -->
-      <div v-if="pageLoading" class="py-16 text-center text-muted-fg">
-        Đang tải dữ liệu...
-      </div>
-
-      <form v-else class="space-y-6" @submit.prevent="handleSave">
-        <!-- ================================================================= -->
-        <!-- (1) Nguồn mã                                                      -->
-        <!-- ================================================================= -->
-        <section class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+      <!-- Step 2: Build image -->
+      <section v-else-if="currentStep === 1" class="space-y-4">
+        <div class="p-6 rounded-[8px] border border-border bg-card space-y-5">
           <div class="border-b border-border pb-3">
-            <h2 class="text-base font-semibold text-fg">
-              1. Nguồn mã
-            </h2>
-            <p class="text-xs text-muted-fg mt-0.5">
-              Tên Job và thông tin kho mã nguồn Git
-            </p>
+            <h2 class="text-base font-semibold text-fg">2. Build image</h2>
+            <p class="text-xs text-muted-fg mt-0.5">Máy build, Dockerfile và registry lưu Docker image</p>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Job Name -->
-            <AppField
-              label="Tên Job"
-              :required="true"
-              description="Tên định danh (DNS-1123, chữ thường, số, dấu chấm hoặc gạch ngang)"
-              :error="formErrors.name?.[0]"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.name"
-                  placeholder="VD: avina-dbmigrator"
-                  :disabled="saveLoading"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-
-            <!-- Git URL -->
-            <AppField
-              label="Git URL"
-              :required="true"
-              description="Địa chỉ repository (HTTPS hoặc SSH)"
-              :error="formErrors.gitUrl?.[0]"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.gitUrl"
-                  placeholder="http://git.example/AvinaWorkspace"
-                  :disabled="saveLoading"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-
-            <!-- Git Branch -->
-            <AppField
-              label="Nhánh Git"
-              description="Mặc định 'main'"
-              :error="formErrors.gitBranch?.[0]"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.gitBranch"
-                  placeholder="main"
-                  :disabled="saveLoading"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-
-            <!-- Git Credential (kind === 'git_token') -->
-            <AppField
-              label="Token Git"
-              :required="true"
-              description="Token truy cập Git (chỉ lọc credential loại Git Token)"
-              :error="formErrors.gitCredentialId?.[0]"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppSelect
-                  :id="id"
-                  v-model="form.gitCredentialId"
-                  :options="gitCredentialOptions"
-                  placeholder="Chọn Token Git"
-                  :disabled="saveLoading"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-          </div>
-        </section>
-
-        <!-- ================================================================= -->
-        <!-- (2) Build image                                                   -->
-        <!-- ================================================================= -->
-        <section class="p-6 rounded-[8px] border border-border bg-card space-y-5">
-          <div class="border-b border-border pb-3">
-            <h2 class="text-base font-semibold text-fg">
-              2. Build image
-            </h2>
-            <p class="text-xs text-muted-fg mt-0.5">
-              Máy build, Dockerfile và registry lưu Docker image
-            </p>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Slave -->
             <AppField
               label="Máy build"
               :required="true"
@@ -623,7 +717,6 @@ async function handleSave() {
               </template>
             </AppField>
 
-            <!-- Dockerfile Path -->
             <AppField
               label="Đường dẫn Dockerfile"
               description="Đường dẫn tương đối trong repo. Mặc định 'Dockerfile'"
@@ -641,7 +734,6 @@ async function handleSave() {
               </template>
             </AppField>
 
-            <!-- Image Name -->
             <AppField
               label="Tên Image"
               :required="true"
@@ -660,7 +752,6 @@ async function handleSave() {
               </template>
             </AppField>
 
-            <!-- Registry Host -->
             <AppField
               label="Registry host"
               :required="true"
@@ -679,7 +770,6 @@ async function handleSave() {
               </template>
             </AppField>
 
-            <!-- Registry Credential (Optional) -->
             <AppField
               label="Registry credential"
               description="Thông tin đăng nhập Docker registry (tuỳ chọn)"
@@ -697,107 +787,25 @@ async function handleSave() {
               </template>
             </AppField>
           </div>
-        </section>
+        </div>
 
-        <!-- ================================================================= -->
-        <!-- (3) Nơi chạy                                                      -->
-        <!-- ================================================================= -->
-        <section class="p-6 rounded-[8px] border border-border bg-card space-y-5">
-          <div class="border-b border-border pb-3">
-            <h2 class="text-base font-semibold text-fg">
-              3. Nơi chạy
-            </h2>
-            <p class="text-xs text-muted-fg mt-0.5">
-              Cấu hình namespace Kubernetes, container và pull secret (chỉ từ allowlist)
-            </p>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Namespace (from allowlist kind 'namespace') -->
-            <AppField
-              label="Namespace"
-              :required="true"
-              description="Namespace được phép chạy Job (chọn từ allowlist)"
-              :error="formErrors.namespace?.[0]"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppSelect
-                  :id="id"
-                  v-model="form.namespace"
-                  :options="namespaceOptions"
-                  placeholder="Chọn Namespace"
-                  :disabled="saveLoading"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-
-            <!-- Container Name -->
-            <AppField
-              label="Tên container"
-              :required="true"
-              description="Tên container trong k8s Pod spec"
-              :error="formErrors.containerName?.[0]"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.containerName"
-                  placeholder="VD: dbmigrator"
-                  :disabled="saveLoading"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-
-            <!-- Image Pull Secrets (from allowlist kind 'pullsecret' of that namespace) -->
-            <div class="md:col-span-2">
-              <AppField
-                label="ImagePullSecrets"
-                description="Secret kéo ảnh từ registry (chỉ liệt kê từ allowlist của namespace đã chọn)"
-                :error="formErrors.imagePullSecrets?.[0]"
-              >
-                <template #default="{ id, error, ariaDescribedby }">
-                  <AllowlistMultiSelect
-                    :id="id"
-                    v-model="form.imagePullSecrets"
-                    :options="currentPullSecretOptions"
-                    placeholder="Chọn pullSecret từ allowlist..."
-                    empty-text="Chưa có pullSecret nào trong allowlist của namespace này"
-                    :disabled="saveLoading || !form.namespace"
-                    :error="error"
-                    :aria-describedby="ariaDescribedby"
-                  />
-                </template>
-              </AppField>
-            </div>
-          </div>
-        </section>
-
-        <!-- ================================================================= -->
-        <!-- Tuỳ chọn nâng cao (mặc định gập)                                  -->
-        <!-- ================================================================= -->
-        <section class="rounded-[8px] border border-border bg-card overflow-hidden">
+        <!-- Collapsible Advanced Build Options -->
+        <div class="rounded-[8px] border border-border bg-card overflow-hidden">
           <button
             type="button"
             :aria-expanded="showAdvanced"
-            class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-muted/40 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+            class="w-full flex items-center justify-between px-6 py-3.5 text-left hover:bg-muted/40 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
             @click="showAdvanced = !showAdvanced"
           >
             <div>
-              <h2 class="text-sm font-semibold text-fg">Tuỳ chọn nâng cao</h2>
-              <p class="text-xs text-muted-fg mt-0.5">
-                Build context, Deploy registry host và ServiceAccount
-              </p>
+              <h3 class="text-sm font-semibold text-fg">Tuỳ chọn nâng cao</h3>
+              <p class="text-xs text-muted-fg mt-0.5">Build context và Deploy registry host</p>
             </div>
             <ChevronDown v-if="showAdvanced" class="w-4 h-4 text-muted-fg shrink-0" aria-hidden="true" />
             <ChevronRight v-else class="w-4 h-4 text-muted-fg shrink-0" aria-hidden="true" />
           </button>
 
-          <div v-show="showAdvanced" class="px-6 pb-6 pt-2 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Build Context -->
+          <div v-show="showAdvanced" class="px-6 pb-5 pt-3 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-4">
             <AppField
               label="Build context"
               description="Thư mục context khi build (. là gốc repository)"
@@ -815,7 +823,6 @@ async function handleSave() {
               </template>
             </AppField>
 
-            <!-- Deploy Registry Host (Optional) -->
             <AppField
               label="Deploy registry host"
               description="Host registry đặt vào k8s Job spec (tuỳ chọn, để trống dùng Registry host)"
@@ -832,111 +839,225 @@ async function handleSave() {
                 />
               </template>
             </AppField>
-
-            <!-- Service Account (Optional) -->
-            <AppField
-              label="Service Account"
-              description="ServiceAccount trong namespace (tuỳ chọn)"
-              :error="formErrors.serviceAccount?.[0]"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.serviceAccount"
-                  placeholder="default"
-                  :disabled="saveLoading"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <!-- ================================================================= -->
-        <!-- (4) Tác vụ                                                        -->
-        <!-- ================================================================= -->
-        <section class="p-6 rounded-[8px] border border-border bg-card space-y-6">
-          <div class="flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <h2 class="text-base font-semibold text-fg">
-                4. Tác vụ
-              </h2>
-              <p class="text-xs text-muted-fg mt-0.5">
-                Danh sách tác vụ chạy tuần tự. Kéo thả hoặc dùng nút lên/xuống để đổi thứ tự.
-              </p>
-            </div>
+      <!-- Step 3: Nơi chạy -->
+      <section v-else-if="currentStep === 2" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+        <div class="border-b border-border pb-3">
+          <h2 class="text-base font-semibold text-fg">3. Nơi chạy</h2>
+          <p class="text-xs text-muted-fg mt-0.5">Cấu hình namespace Kubernetes, container và pull secret (chỉ từ allowlist)</p>
+        </div>
 
-            <AppButton
-              type="button"
-              variant="secondary"
-              size="sm"
-              :disabled="saveLoading"
-              aria-label="Thêm tác vụ mới"
-              @click="addTask"
-            >
-              <Plus class="w-4 h-4 mr-1" aria-hidden="true" />
-              <span>Thêm tác vụ</span>
-            </AppButton>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <AppField
+            label="Namespace"
+            :required="true"
+            description="Namespace được phép chạy Job (chọn từ allowlist)"
+            :error="formErrors.namespace?.[0]"
+          >
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppSelect
+                :id="id"
+                v-model="form.namespace"
+                :options="namespaceOptions"
+                placeholder="Chọn Namespace"
+                :disabled="saveLoading"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
+
+          <AppField
+            label="Tên container"
+            :required="true"
+            description="Tên container trong k8s Pod spec"
+            :error="formErrors.containerName?.[0]"
+          >
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="form.containerName"
+                placeholder="VD: dbmigrator"
+                :disabled="saveLoading"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
+
+          <AppField
+            label="ImagePullSecrets"
+            description="Secret kéo ảnh từ registry (chỉ liệt kê từ allowlist của namespace đã chọn)"
+            :error="formErrors.imagePullSecrets?.[0]"
+          >
+            <template #default="{ id, error, ariaDescribedby }">
+              <AllowlistMultiSelect
+                :id="id"
+                v-model="form.imagePullSecrets"
+                :options="currentPullSecretOptions"
+                placeholder="Chọn pullSecret từ allowlist..."
+                empty-text="Chưa có pullSecret nào trong allowlist của namespace này"
+                :disabled="saveLoading || !form.namespace"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
+
+          <AppField
+            label="Service Account"
+            description="ServiceAccount trong namespace (tuỳ chọn)"
+            :error="formErrors.serviceAccount?.[0]"
+          >
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="form.serviceAccount"
+                placeholder="default"
+                :disabled="saveLoading"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
+        </div>
+      </section>
+
+      <!-- Step 4: Tác vụ (chỉ sửa một tác vụ một lần) -->
+      <section v-else-if="currentStep === 3" class="space-y-4">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-semibold text-fg">4. Tác vụ ({{ form.tasks.length }})</h2>
+            <p class="text-xs text-muted-fg mt-0.5">Chọn một tác vụ bên trái để chỉnh sửa chi tiết.</p>
           </div>
 
-          <div v-if="formErrors.tasks" class="text-xs text-danger font-medium">
-            {{ formErrors.tasks[0] }}
-          </div>
+          <AppButton
+            type="button"
+            variant="secondary"
+            size="sm"
+            :disabled="saveLoading"
+            aria-label="Thêm tác vụ mới"
+            @click="addTask"
+          >
+            <Plus class="w-4 h-4 mr-1" aria-hidden="true" />
+            <span>Thêm tác vụ</span>
+          </AppButton>
+        </div>
 
-          <!-- List of Task Cards -->
-          <div class="space-y-4">
-            <TaskCard
+        <div v-if="formErrors.tasks" class="text-xs text-danger font-medium">
+          {{ formErrors.tasks[0] }}
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+          <!-- Task Selector List -->
+          <div class="md:col-span-4 rounded-[8px] border border-border bg-card p-2 space-y-1">
+            <button
               v-for="(task, idx) in form.tasks"
               :key="idx"
-              :task="task"
-              :index="idx"
+              type="button"
+              :class="[
+                'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-[6px] text-left text-xs transition-colors cursor-pointer',
+                'focus-visible:outline-2 focus-visible:outline-ring',
+                activeTaskIndex === idx
+                  ? 'bg-primary/10 text-primary font-semibold'
+                  : 'text-fg hover:bg-muted'
+              ]"
+              @click="activeTaskIndex = idx"
+            >
+              <span class="truncate font-mono">#{{ idx + 1 }} {{ task.label || '(chưa đặt tên)' }}</span>
+              <span
+                v-if="formErrors[`tasks[${idx}].label`] || formErrors[`tasks[${idx}].timeoutSeconds`]"
+                class="w-2 h-2 rounded-full bg-danger shrink-0"
+                title="Tác vụ có lỗi"
+              />
+            </button>
+          </div>
+
+          <!-- Active Task Editor -->
+          <div class="md:col-span-8">
+            <TaskCard
+              v-if="form.tasks[activeTaskIndex]"
+              :key="activeTaskIndex"
+              :task="form.tasks[activeTaskIndex]"
+              :index="activeTaskIndex"
               :total-tasks="form.tasks.length"
               :config-map-options="currentConfigMapOptions"
               :secret-options="currentSecretOptions"
               :errors="formErrors"
               :disabled="saveLoading"
-              @update:task="updateTask(idx, $event)"
-              @move-up="moveTaskUp(idx)"
-              @move-down="moveTaskDown(idx)"
-              @duplicate="duplicateTask(idx)"
-              @remove="removeTask(idx)"
-              @dragstart="onTaskDragStart(idx, $event)"
-              @dragover="onTaskDragOver(idx, $event)"
-              @drop="onTaskDrop(idx, $event)"
+              @update:task="updateTask(activeTaskIndex, $event)"
+              @move-up="moveTaskUp(activeTaskIndex)"
+              @move-down="moveTaskDown(activeTaskIndex)"
+              @duplicate="duplicateTask(activeTaskIndex)"
+              @remove="removeTask(activeTaskIndex)"
+              @dragstart="onTaskDragStart(activeTaskIndex, $event)"
+              @dragover="onTaskDragOver(activeTaskIndex, $event)"
+              @drop="onTaskDrop(activeTaskIndex, $event)"
             />
           </div>
+        </div>
+      </section>
 
-          <div class="pt-2">
-            <AppButton
-              type="button"
-              variant="secondary"
-              class="w-full border-dashed"
-              :disabled="saveLoading"
-              aria-label="Thêm tác vụ"
-              @click="addTask"
-            >
-              <Plus class="w-4 h-4 mr-1.5" aria-hidden="true" />
-              <span>Thêm tác vụ</span>
-            </AppButton>
+      <!-- Step 5: Xem lại và kiểm tra -->
+      <section v-else class="space-y-4">
+        <div
+          v-if="reviewErrorItems.length > 0"
+          role="alert"
+          class="p-4 rounded-[8px] border border-danger/40 border-l-4 border-l-danger bg-danger/10 text-sm space-y-2"
+        >
+          <div class="flex items-center gap-2 font-semibold text-danger">
+            <AlertCircle class="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>Còn {{ reviewErrorItems.length }} lỗi cần sửa trước khi lưu</span>
           </div>
-        </section>
+          <ul class="space-y-1 pl-6 list-disc text-xs text-fg">
+            <li v-for="(errItem, i) in reviewErrorItems" :key="i">
+              <button
+                type="button"
+                class="font-semibold text-primary hover:underline cursor-pointer mr-1.5"
+                @click="goToStep(errItem.stepIndex)"
+              >
+                {{ errItem.stepLabel }}:
+              </button>
+              <span>{{ errItem.message }}</span>
+            </li>
+          </ul>
+        </div>
 
-        <!-- ================================================================= -->
-        <!-- (4) Xem trước và kiểm tra                                         -->
-        <!-- ================================================================= -->
-        <section class="p-6 rounded-[8px] border border-border bg-card space-y-6">
-          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-3">
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="p-4 rounded-[8px] border border-border bg-card space-y-1.5 text-xs">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-fg">1. Nguồn mã</h3>
+              <button type="button" class="text-primary hover:underline cursor-pointer" @click="goToStep(0)">Sửa</button>
+            </div>
+            <div class="text-muted-fg">Tên: <span class="text-fg font-medium">{{ form.name || '—' }}</span></div>
+            <div class="text-muted-fg truncate">Git: <span class="text-fg font-mono">{{ form.gitUrl || '—' }}@{{ form.gitBranch || 'main' }}</span></div>
+            <div class="text-muted-fg">Token Git: <span class="text-fg">{{ findOptionLabel(gitCredentialOptions, form.gitCredentialId) }}</span></div>
+          </div>
+
+          <div class="p-4 rounded-[8px] border border-border bg-card space-y-1.5 text-xs">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-fg">2. Build image & 3. Nơi chạy</h3>
+              <button type="button" class="text-primary hover:underline cursor-pointer" @click="goToStep(1)">Sửa</button>
+            </div>
+            <div class="text-muted-fg truncate">Image: <span class="text-fg font-mono">{{ form.registryHost }}/{{ form.imageName }}</span></div>
+            <div class="text-muted-fg">Máy build: <span class="text-fg">{{ findOptionLabel(slaveOptions, form.slaveId) }}</span></div>
+            <div class="text-muted-fg">Namespace / Container: <span class="text-fg font-mono">{{ form.namespace }} / {{ form.containerName }}</span></div>
+          </div>
+        </div>
+
+        <!-- Validate & Preview Toolbar -->
+        <div class="p-4 rounded-[8px] border border-border bg-card space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 class="text-base font-semibold text-fg">
-                5. Xem trước và kiểm tra
-              </h2>
-              <p class="text-xs text-muted-fg mt-0.5">
-                Kiểm tra tính hợp lệ của cấu hình và xem trước manifest Kubernetes Job YAML
-              </p>
+              <h2 class="text-sm font-semibold text-fg">Kiểm tra & Xem trước YAML</h2>
+              <p class="text-xs text-muted-fg mt-0.5">Kiểm tra tính hợp lệ và xem trước manifest Kubernetes Job YAML.</p>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 shrink-0">
               <AppButton
                 type="button"
                 variant="secondary"
@@ -965,38 +1086,13 @@ async function handleSave() {
             </div>
           </div>
 
-          <!-- YamlPreview component -->
           <YamlPreview
             :tasks="previewTasks"
             :loading="previewLoading"
             :errors="formErrors"
           />
-        </section>
-
-        <!-- Bottom Save Button Bar -->
-        <div class="flex items-center justify-end gap-3 pt-4 border-t border-border">
-          <AppButton
-            type="button"
-            variant="secondary"
-            :disabled="saveLoading"
-            aria-label="Huỷ"
-            @click="router.push('/jobs')"
-          >
-            Huỷ
-          </AppButton>
-
-          <AppButton
-            type="submit"
-            variant="primary"
-            :loading="saveLoading"
-            :disabled="saveLoading"
-            aria-label="Lưu Job"
-          >
-            <Save class="w-4 h-4 mr-1.5" aria-hidden="true" />
-            <span>{{ isEditing ? 'Lưu thay đổi' : 'Tạo Job' }}</span>
-          </AppButton>
         </div>
-      </form>
-    </div>
-  </AppLayout>
+      </section>
+    </form>
+  </FormWizardLayout>
 </template>

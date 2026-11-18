@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Workflow,
-  ArrowLeft,
-  Save,
   GitBranch,
   Hammer,
+  Package,
   Rocket,
-  FileQuestion
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
-import AppButton from '../../components/AppButton.vue'
+import FormWizardLayout from '../../components/FormWizardLayout.vue'
+import type { WizardStep } from '../../components/FormStepper.vue'
 import AppInput from '../../components/AppInput.vue'
 import AppSelect from '../../components/AppSelect.vue'
 import AppField from '../../components/AppField.vue'
@@ -45,6 +45,64 @@ const notFound = ref(false)
 const actionLoading = ref(false)
 const initialSnapshot = ref('')
 const allowLeave = ref(false)
+
+const STEP_DEFS = [
+  { id: 'source', label: 'Nguồn mã' },
+  { id: 'build', label: 'Build' },
+  { id: 'registry', label: 'Registry' },
+  { id: 'deploy', label: 'Deploy' },
+  { id: 'review', label: 'Xem lại' }
+] as const
+
+const STEP_FIELDS: Record<number, string[]> = {
+  0: ['name', 'gitUrl', 'gitBranch', 'gitCredentialId'],
+  1: ['slaveId', 'dockerfilePath', 'buildContext'],
+  2: ['imageName', 'registryHost', 'registryCredentialId', 'deployRegistryHost'],
+  3: ['deployNamespace', 'deployDeployment', 'deployContainer']
+}
+
+function parseStepQuery(q: unknown): number {
+  const n = Number(q)
+  if (Number.isInteger(n) && n >= 1 && n <= STEP_DEFS.length) {
+    return n - 1
+  }
+  return 0
+}
+
+const currentStep = ref(parseStepQuery(route.query.step))
+const highestVisitedStep = ref(currentStep.value)
+const completedSteps = ref<Set<number>>(new Set())
+const stepErrorFlags = ref<Set<number>>(new Set())
+
+watch(
+  () => route.query.step,
+  (val) => {
+    const parsed = parseStepQuery(val)
+    if (parsed !== currentStep.value) {
+      currentStep.value = parsed
+      if (parsed > highestVisitedStep.value) {
+        highestVisitedStep.value = parsed
+      }
+    }
+  }
+)
+
+function goToStep(index: number) {
+  if (index < 0 || index >= STEP_DEFS.length) return
+  currentStep.value = index
+  if (index > highestVisitedStep.value) {
+    highestVisitedStep.value = index
+  }
+  router.replace({
+    path: route.path,
+    query: { ...route.query, step: String(index + 1) }
+  })
+}
+
+function canNavigateTo(index: number): boolean {
+  if (isEditing.value) return true
+  return index <= highestVisitedStep.value
+}
 
 const form = ref<{
   name: string
@@ -91,41 +149,28 @@ const isDirty = computed(() => {
 
 useUnsavedChangesGuard(isDirty)
 
-const gitCredentials = computed(() => {
-  return credStore.credentials.filter((c) => c.kind === 'git_token')
-})
+const gitCredentials = computed(() => credStore.credentials.filter((c) => c.kind === 'git_token'))
+const gitCredentialOptions = computed(() => gitCredentials.value.map((c) => ({ label: c.name, value: c.id })))
 
-const gitCredentialOptions = computed(() => {
-  return gitCredentials.value.map((c) => ({
-    label: c.name,
+const registryCredentials = computed(() => credStore.credentials.filter((c) => c.kind === 'registry'))
+const registryCredentialOptions = computed(() => [
+  { label: 'Không cần đăng nhập', value: '' },
+  ...registryCredentials.value.map((c) => ({
+    label: c.username ? `${c.name} (${c.username})` : c.name,
     value: c.id
   }))
-})
+])
 
-const registryCredentials = computed(() => {
-  return credStore.credentials.filter((c) => c.kind === 'registry')
-})
-
-const registryCredentialOptions = computed(() => {
-  return [
-    { label: 'Không cần đăng nhập', value: '' },
-    ...registryCredentials.value.map((c) => ({
-      label: c.username ? `${c.name} (${c.username})` : c.name,
-      value: c.id
-    }))
-  ]
-})
-
-const slaveOptions = computed(() => {
-  return slaveStore.slaves.map((s) => ({
+const slaveOptions = computed(() =>
+  slaveStore.slaves.map((s) => ({
     label: `${s.name} (${s.host})`,
     value: s.id
   }))
-})
+)
 
-const allowedNamespaces = computed(() => {
-  return [...new Set(deployTargetStore.deployTargets.map((t) => t.namespace))].sort()
-})
+const allowedNamespaces = computed(() =>
+  [...new Set(deployTargetStore.deployTargets.map((t) => t.namespace))].sort()
+)
 
 const allowedDeployments = computed(() => {
   const ns = form.value.deployNamespace.trim()
@@ -153,86 +198,139 @@ function validateHost(val: string): string | null {
   return null
 }
 
-function validateForm(): boolean {
-  const errors: Record<string, string> = {}
-
-  if (!form.value.name.trim()) {
-    errors.name = 'Vui lòng nhập tên pipeline'
+function validateStep(stepIndex: number): boolean {
+  const errors = { ...formErrors.value }
+  for (const field of STEP_FIELDS[stepIndex] || []) {
+    delete errors[field]
   }
 
-  // Source group
-  if (!form.value.gitUrl.trim()) {
-    errors.gitUrl = 'Vui lòng nhập địa chỉ Git URL'
-  } else if (!/^https?:\/\/.+/.test(form.value.gitUrl.trim())) {
-    errors.gitUrl = 'Git URL phải bắt đầu bằng http:// hoặc https://'
-  }
-
-  if (!form.value.gitCredentialId) {
-    errors.gitCredentialId = 'Vui lòng chọn Token Git'
-  }
-
-  // Build group
-  if (!form.value.slaveId) {
-    errors.slaveId = 'Vui lòng chọn máy build'
-  }
-
-  const ctx = form.value.buildContext.trim()
-  if (ctx) {
-    if (ctx.length > 200) {
-      errors.buildContext = 'Thư mục context build tối đa 200 ký tự'
-    } else if (ctx.startsWith('/') || ctx.startsWith('-')) {
-      errors.buildContext = 'Thư mục context build không được bắt đầu bằng / hoặc -'
-    } else if (ctx.includes('..')) {
-      errors.buildContext = 'Thư mục context build không được chứa ..'
-    } else if (!/^[A-Za-z0-9._/-]+$/.test(ctx)) {
-      errors.buildContext = 'Thư mục context build chỉ chứa chữ cái, số và ký tự . _ / -'
+  if (stepIndex === 0) {
+    if (!form.value.name.trim()) {
+      errors.name = 'Vui lòng nhập tên pipeline'
     }
-  }
-
-  if (!form.value.imageName.trim()) {
-    errors.imageName = 'Vui lòng nhập tên Image'
-  } else if (!IMAGE_NAME_REGEX.test(form.value.imageName.trim())) {
-    errors.imageName = 'Tên image chỉ chứa chữ thường, số và ký tự . _ - /'
-  }
-
-  if (!form.value.registryHost.trim()) {
-    errors.registryHost = 'Vui lòng nhập địa chỉ máy chủ Registry'
-  } else {
-    const hostErr = validateHost(form.value.registryHost)
-    if (hostErr) {
-      errors.registryHost = hostErr
+    if (!form.value.gitUrl.trim()) {
+      errors.gitUrl = 'Vui lòng nhập địa chỉ Git URL'
+    } else if (!/^https?:\/\/.+/.test(form.value.gitUrl.trim())) {
+      errors.gitUrl = 'Git URL phải bắt đầu bằng http:// hoặc https://'
     }
-  }
-
-  // Deploy group
-  const deployHost = form.value.deployRegistryHost.trim()
-  if (deployHost) {
-    const hostErr = validateHost(deployHost)
-    if (hostErr) {
-      errors.deployRegistryHost = hostErr
+    if (!form.value.gitCredentialId) {
+      errors.gitCredentialId = 'Vui lòng chọn Token Git'
     }
-  }
-
-  const ns = form.value.deployNamespace.trim()
-  if (!ns) {
-    errors.deployNamespace = 'Vui lòng nhập Namespace'
-  } else if (ns.length > 63 || !DNS_1123_REGEX.test(ns)) {
-    errors.deployNamespace = 'Namespace phải tuân theo chuẩn DNS-1123 (chữ thường, số, dấu gạch ngang; tối đa 63 ký tự)'
-  }
-
-  const deploy = form.value.deployDeployment.trim()
-  if (!deploy) {
-    errors.deployDeployment = 'Vui lòng nhập tên Deployment'
-  } else if (deploy.length > 63 || !DNS_1123_REGEX.test(deploy)) {
-    errors.deployDeployment = 'Deployment phải tuân theo chuẩn DNS-1123 (chữ thường, số, dấu gạch ngang; tối đa 63 ký tự)'
-  }
-
-  if (!form.value.deployContainer.trim()) {
-    errors.deployContainer = 'Vui lòng nhập tên Container cần cập nhật'
+  } else if (stepIndex === 1) {
+    if (!form.value.slaveId) {
+      errors.slaveId = 'Vui lòng chọn máy build'
+    }
+    const ctx = form.value.buildContext.trim()
+    if (ctx) {
+      if (ctx.length > 200) {
+        errors.buildContext = 'Thư mục context build tối đa 200 ký tự'
+      } else if (ctx.startsWith('/') || ctx.startsWith('-')) {
+        errors.buildContext = 'Thư mục context build không được bắt đầu bằng / hoặc -'
+      } else if (ctx.includes('..')) {
+        errors.buildContext = 'Thư mục context build không được chứa ..'
+      } else if (!/^[A-Za-z0-9._/-]+$/.test(ctx)) {
+        errors.buildContext = 'Thư mục context build chỉ chứa chữ cái, số và ký tự . _ / -'
+      }
+    }
+  } else if (stepIndex === 2) {
+    if (!form.value.imageName.trim()) {
+      errors.imageName = 'Vui lòng nhập tên Image'
+    } else if (!IMAGE_NAME_REGEX.test(form.value.imageName.trim())) {
+      errors.imageName = 'Tên image chỉ chứa chữ thường, số và ký tự . _ - /'
+    }
+    if (!form.value.registryHost.trim()) {
+      errors.registryHost = 'Vui lòng nhập địa chỉ máy chủ Registry'
+    } else {
+      const hostErr = validateHost(form.value.registryHost)
+      if (hostErr) errors.registryHost = hostErr
+    }
+    const deployHost = form.value.deployRegistryHost.trim()
+    if (deployHost) {
+      const hostErr = validateHost(deployHost)
+      if (hostErr) errors.deployRegistryHost = hostErr
+    }
+  } else if (stepIndex === 3) {
+    const ns = form.value.deployNamespace.trim()
+    if (!ns) {
+      errors.deployNamespace = 'Vui lòng nhập Namespace'
+    } else if (ns.length > 63 || !DNS_1123_REGEX.test(ns)) {
+      errors.deployNamespace = 'Namespace phải tuân theo chuẩn DNS-1123 (chữ thường, số, dấu gạch ngang; tối đa 63 ký tự)'
+    }
+    const deploy = form.value.deployDeployment.trim()
+    if (!deploy) {
+      errors.deployDeployment = 'Vui lòng nhập tên Deployment'
+    } else if (deploy.length > 63 || !DNS_1123_REGEX.test(deploy)) {
+      errors.deployDeployment = 'Deployment phải tuân theo chuẩn DNS-1123 (chữ thường, số, dấu gạch ngang; tối đa 63 ký tự)'
+    }
+    if (!form.value.deployContainer.trim()) {
+      errors.deployContainer = 'Vui lòng nhập tên Container cần cập nhật'
+    }
   }
 
   formErrors.value = errors
-  return Object.keys(errors).length === 0
+  const hasError = (STEP_FIELDS[stepIndex] || []).some((f) => Boolean(errors[f]))
+  const nextErrors = new Set(stepErrorFlags.value)
+  const nextCompleted = new Set(completedSteps.value)
+  if (hasError) {
+    nextErrors.add(stepIndex)
+    nextCompleted.delete(stepIndex)
+  } else {
+    nextErrors.delete(stepIndex)
+    nextCompleted.add(stepIndex)
+  }
+  stepErrorFlags.value = nextErrors
+  completedSteps.value = nextCompleted
+  return !hasError
+}
+
+function validateForm(): boolean {
+  let allValid = true
+  for (let i = 0; i < 4; i++) {
+    if (!validateStep(i)) allValid = false
+  }
+  return allValid
+}
+
+function handleNext() {
+  if (!validateStep(currentStep.value)) return
+  goToStep(currentStep.value + 1)
+}
+
+function handlePrev() {
+  goToStep(currentStep.value - 1)
+}
+
+const wizardSteps = computed<WizardStep[]>(() => {
+  return STEP_DEFS.map((s, idx) => {
+    let status: WizardStep['status'] = 'pending'
+    if (idx === currentStep.value) status = 'current'
+    else if (stepErrorFlags.value.has(idx)) status = 'error'
+    else if (completedSteps.value.has(idx)) status = 'complete'
+    return { id: s.id, label: s.label, status }
+  })
+})
+
+const reviewErrorItems = computed(() => {
+  const items: Array<{ stepIndex: number; stepLabel: string; field: string; message: string }> = []
+  for (let i = 0; i < 4; i++) {
+    for (const field of STEP_FIELDS[i]) {
+      const msg = formErrors.value[field]
+      if (msg) {
+        items.push({
+          stepIndex: i,
+          stepLabel: STEP_DEFS[i].label,
+          field,
+          message: msg
+        })
+      }
+    }
+  }
+  return items
+})
+
+function findLabel(options: Array<{ label: string; value: string | number }>, val: string | number | null): string {
+  if (val === '' || val === null || val === undefined) return 'Không có'
+  return options.find((o) => o.value === val)?.label || String(val)
 }
 
 async function handleSave() {
@@ -301,6 +399,13 @@ async function handleSave() {
           else if (lowerKey === 'deploycontainer') formErrors.value.deployContainer = firstMsg
         }
       }
+      const nextErr = new Set(stepErrorFlags.value)
+      for (let i = 0; i < 4; i++) {
+        if (STEP_FIELDS[i].some((f) => Boolean(formErrors.value[f]))) {
+          nextErr.add(i)
+        }
+      }
+      stepErrorFlags.value = nextErr
     }
     toast.error(err.message || 'Lưu cấu hình pipeline thất bại')
   } finally {
@@ -314,7 +419,8 @@ onMounted(async () => {
     await Promise.all([
       slaveStore.fetchSlaves().catch(() => {}),
       credStore.fetchCredentials().catch(() => {}),
-      deployTargetStore.fetchDeployTargets().catch(() => {})
+      deployTargetStore.fetchDeployTargets().catch(() => {}),
+      isEditing.value ? store.fetchPipelines() : Promise.resolve()
     ])
 
     if (isEditing.value) {
@@ -322,7 +428,6 @@ onMounted(async () => {
         notFound.value = true
         return
       }
-      await store.fetchPipelines()
       const pipeline = store.pipelines.find((p) => p.id === pipelineId.value)
       if (!pipeline) {
         notFound.value = true
@@ -344,6 +449,8 @@ onMounted(async () => {
         deployDeployment: pipeline.deployDeployment,
         deployContainer: pipeline.deployContainer
       }
+      highestVisitedStep.value = STEP_DEFS.length - 1
+      completedSteps.value = new Set([0, 1, 2, 3])
     } else {
       form.value.gitCredentialId = gitCredentials.value[0]?.id ?? ''
       form.value.slaveId = slaveStore.slaves[0]?.id ?? ''
@@ -359,365 +466,365 @@ onMounted(async () => {
 </script>
 
 <template>
-  <AppLayout>
-    <div class="space-y-6 max-w-4xl mx-auto pb-12">
-      <!-- Sticky Top Header Bar -->
-      <div class="sticky top-0 z-10 bg-bg/95 backdrop-blur-xs -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border">
-        <div class="flex items-center gap-3 min-w-0">
-          <button
-            type="button"
-            aria-label="Quay lại danh sách pipeline"
-            class="p-2 rounded-[6px] text-muted-fg hover:text-fg hover:bg-muted transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring shrink-0"
-            @click="router.push('/pipelines')"
-          >
-            <ArrowLeft class="w-5 h-5" aria-hidden="true" />
-          </button>
-          <div class="min-w-0">
-            <nav aria-label="Breadcrumb" class="text-xs text-muted-fg flex items-center gap-1.5">
-              <router-link to="/pipelines" class="hover:text-fg hover:underline">
-                Pipeline
-              </router-link>
-              <span aria-hidden="true">/</span>
-              <span class="text-fg font-medium truncate">
-                {{ isEditing ? (form.name || 'Sửa') : 'Thêm mới' }}
-              </span>
-            </nav>
-            <h1 class="text-xl font-bold tracking-tight text-fg flex items-center gap-2 mt-0.5 truncate">
-              <Workflow class="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
-              <span class="truncate">{{ isEditing ? 'Sửa pipeline' : 'Thêm pipeline mới' }}</span>
-            </h1>
+  <FormWizardLayout
+    :title="isEditing ? 'Sửa pipeline' : 'Thêm pipeline mới'"
+    back-to="/pipelines"
+    breadcrumb-parent="Pipeline"
+    :breadcrumb-current="isEditing ? (form.name || 'Sửa') : 'Thêm mới'"
+    :steps="wizardSteps"
+    :current-step="currentStep"
+    :can-navigate-to="canNavigateTo"
+    :save-label="isEditing ? 'Lưu thay đổi' : 'Tạo pipeline'"
+    :saving="actionLoading"
+    :loading="pageLoading"
+    :not-found="notFound"
+    not-found-title="Không tìm thấy pipeline"
+    not-found-description="Pipeline bạn tìm kiếm không tồn tại hoặc đã bị xoá."
+    @cancel="router.push('/pipelines')"
+    @prev="handlePrev"
+    @next="handleNext"
+    @save="handleSave"
+    @select-step="goToStep"
+  >
+    <template #icon>
+      <Workflow class="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
+    </template>
+
+    <form class="space-y-6" @submit.prevent="handleSave">
+      <!-- Step 1: Nguồn mã -->
+      <section v-if="currentStep === 0" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+        <div class="flex items-center gap-2 text-base font-semibold text-fg border-b border-border pb-3">
+          <GitBranch class="w-4 h-4 text-primary" aria-hidden="true" />
+          <span>1. Nguồn mã</span>
+        </div>
+
+        <AppField
+          label="Tên pipeline"
+          required
+          description="Tên đại diện cho quy trình build và deploy."
+          :error="formErrors.name"
+        >
+          <template #default="{ id, error, ariaDescribedby }">
+            <AppInput
+              :id="id"
+              v-model="form.name"
+              placeholder="Ví dụ: shipit-demo-pipeline"
+              :error="error"
+              :aria-describedby="ariaDescribedby"
+            />
+          </template>
+        </AppField>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="sm:col-span-2">
+            <AppField label="Địa chỉ Git URL" required :error="formErrors.gitUrl">
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.gitUrl"
+                  placeholder="https://git.example.com/repo.git"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
+          <div>
+            <AppField label="Nhánh (Branch)" required :error="formErrors.gitBranch">
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.gitBranch"
+                  placeholder="main"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
           </div>
         </div>
 
-        <div v-if="!notFound" class="flex items-center gap-2.5 shrink-0 whitespace-nowrap">
-          <AppButton
-            type="button"
-            variant="secondary"
-            :disabled="actionLoading"
-            @click="router.push('/pipelines')"
-          >
-            Huỷ
-          </AppButton>
-          <AppButton
-            type="button"
-            :loading="actionLoading"
-            :disabled="pageLoading"
-            @click="handleSave"
-          >
-            <Save class="w-4 h-4" aria-hidden="true" />
-            <span>{{ isEditing ? 'Lưu thay đổi' : 'Tạo pipeline' }}</span>
-          </AppButton>
-        </div>
-      </div>
+        <AppField
+          label="Token Git"
+          required
+          description="Thông tin xác thực loại Token Git có quyền đọc kho mã nguồn."
+          :error="formErrors.gitCredentialId"
+        >
+          <template #default="{ id, error, ariaDescribedby }">
+            <AppSelect
+              :id="id"
+              v-model="form.gitCredentialId"
+              :options="gitCredentialOptions"
+              placeholder="Chọn Token Git"
+              :disabled="gitCredentials.length === 0"
+              :error="error"
+              :aria-describedby="ariaDescribedby"
+            />
+          </template>
+        </AppField>
+      </section>
 
-      <!-- Loading -->
-      <div v-if="pageLoading" class="p-8 rounded-[8px] border border-border bg-card space-y-4" aria-busy="true">
-        <div v-for="i in 5" :key="i" class="h-10 rounded bg-muted/70 animate-pulse" />
-      </div>
-
-      <!-- Not Found -->
-      <div
-        v-else-if="notFound"
-        class="p-8 rounded-[8px] border border-border bg-card text-center space-y-4"
-      >
-        <div class="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-fg mx-auto">
-          <FileQuestion class="w-6 h-6" aria-hidden="true" />
+      <!-- Step 2: Build -->
+      <section v-else-if="currentStep === 1" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+        <div class="flex items-center gap-2 text-base font-semibold text-fg border-b border-border pb-3">
+          <Hammer class="w-4 h-4 text-primary" aria-hidden="true" />
+          <span>2. Build (Docker)</span>
         </div>
-        <div>
-          <h2 class="text-base font-semibold text-fg">Không tìm thấy pipeline</h2>
-          <p class="text-sm text-muted-fg mt-1">Pipeline bạn tìm kiếm không tồn tại hoặc đã bị xoá.</p>
-        </div>
-        <AppButton variant="secondary" @click="router.push('/pipelines')">
-          <ArrowLeft class="w-4 h-4" aria-hidden="true" />
-          <span>Quay lại danh sách</span>
-        </AppButton>
-      </div>
 
-      <!-- Form -->
-      <form v-else class="space-y-6" @submit.prevent="handleSave">
-        <!-- Pipeline General Name -->
-        <section class="p-6 rounded-[8px] border border-border bg-card space-y-4">
+        <AppField label="Máy build" required :error="formErrors.slaveId">
+          <template #default="{ id, error, ariaDescribedby }">
+            <AppSelect
+              :id="id"
+              v-model="form.slaveId"
+              :options="slaveOptions"
+              placeholder="Chọn máy build"
+              :disabled="slaveStore.slaves.length === 0"
+              :error="error"
+              :aria-describedby="ariaDescribedby"
+            />
+          </template>
+        </AppField>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <AppField label="Đường dẫn Dockerfile" required :error="formErrors.dockerfilePath">
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="form.dockerfilePath"
+                placeholder="Dockerfile"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
+
           <AppField
-            label="Tên pipeline"
-            required
-            description="Tên đại diện cho quy trình build và deploy."
-            :error="formErrors.name"
+            label="Thư mục context build"
+            description="Tuỳ chọn. Đường dẫn trong repo dùng làm context khi build. Nhập `.` để dùng gốc repo. Để trống để dùng thư mục chứa Dockerfile."
+            :error="formErrors.buildContext"
           >
             <template #default="{ id, error, ariaDescribedby }">
               <AppInput
                 :id="id"
-                v-model="form.name"
-                placeholder="Ví dụ: shipit-demo-pipeline"
+                v-model="form.buildContext"
+                placeholder=". (gốc repo)"
                 :error="error"
                 :aria-describedby="ariaDescribedby"
               />
             </template>
           </AppField>
-        </section>
+        </div>
+      </section>
 
-        <!-- Group 1: Source (Nguồn) -->
-        <section class="p-6 rounded-[8px] border border-border bg-card space-y-4">
-          <div class="flex items-center gap-2 text-sm font-semibold text-fg border-b border-border pb-3">
-            <GitBranch class="w-4 h-4 text-primary" aria-hidden="true" />
-            <span>Nguồn (Git)</span>
-          </div>
+      <!-- Step 3: Registry -->
+      <section v-else-if="currentStep === 2" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+        <div class="flex items-center gap-2 text-base font-semibold text-fg border-b border-border pb-3">
+          <Package class="w-4 h-4 text-primary" aria-hidden="true" />
+          <span>3. Registry</span>
+        </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div class="sm:col-span-2">
-              <AppField
-                label="Địa chỉ Git URL"
-                required
-                :error="formErrors.gitUrl"
-              >
-                <template #default="{ id, error, ariaDescribedby }">
-                  <AppInput
-                    :id="id"
-                    v-model="form.gitUrl"
-                    placeholder="https://git.example.com/repo.git"
-                    :error="error"
-                    :aria-describedby="ariaDescribedby"
-                  />
-                </template>
-              </AppField>
-            </div>
-            <div>
-              <AppField
-                label="Nhánh (Branch)"
-                required
-                :error="formErrors.gitBranch"
-              >
-                <template #default="{ id, error, ariaDescribedby }">
-                  <AppInput
-                    :id="id"
-                    v-model="form.gitBranch"
-                    placeholder="main"
-                    :error="error"
-                    :aria-describedby="ariaDescribedby"
-                  />
-                </template>
-              </AppField>
-            </div>
-          </div>
-
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <AppField
-            label="Token Git"
+            label="Tên Image"
             required
-            description="Thông tin xác thực loại Token Git có quyền đọc kho mã nguồn."
-            :error="formErrors.gitCredentialId"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppSelect
-                :id="id"
-                v-model="form.gitCredentialId"
-                :options="gitCredentialOptions"
-                placeholder="Chọn Token Git"
-                :disabled="gitCredentials.length === 0"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
-        </section>
-
-        <!-- Group 2: Build -->
-        <section class="p-6 rounded-[8px] border border-border bg-card space-y-4">
-          <div class="flex items-center gap-2 text-sm font-semibold text-fg border-b border-border pb-3">
-            <Hammer class="w-4 h-4 text-primary" aria-hidden="true" />
-            <span>Build (Docker)</span>
-          </div>
-
-          <AppField
-            label="Máy build"
-            required
-            :error="formErrors.slaveId"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppSelect
-                :id="id"
-                v-model="form.slaveId"
-                :options="slaveOptions"
-                placeholder="Chọn máy build"
-                :disabled="slaveStore.slaves.length === 0"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AppField
-              label="Đường dẫn Dockerfile"
-              required
-              :error="formErrors.dockerfilePath"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.dockerfilePath"
-                  placeholder="Dockerfile"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-
-            <AppField
-              label="Thư mục context build"
-              description="Tuỳ chọn. Đường dẫn trong repo dùng làm context khi build. Nhập `.` để dùng gốc repo. Để trống để dùng thư mục chứa Dockerfile."
-              :error="formErrors.buildContext"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.buildContext"
-                  placeholder=". (gốc repo)"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AppField
-              label="Tên Image"
-              required
-              description="Chỉ gồm chữ thường, số và ký tự . _ - /"
-              :error="formErrors.imageName"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.imageName"
-                  placeholder="Ví dụ: shipit-demo"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-
-            <AppField
-              label="Máy chủ Registry"
-              required
-              :error="formErrors.registryHost"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.registryHost"
-                  placeholder="Ví dụ: 192.168.1.241:5000"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-          </div>
-
-          <AppField
-            label="Thông tin xác thực Registry"
-            description="Chỉ chọn khi registry yêu cầu đăng nhập. Để trống nếu registry không cần xác thực."
-            :error="formErrors.registryCredentialId"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppSelect
-                :id="id"
-                v-model="form.registryCredentialId"
-                :options="registryCredentialOptions"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
-        </section>
-
-        <!-- Group 3: Deploy (Kubernetes) -->
-        <section class="p-6 rounded-[8px] border border-border bg-card space-y-4">
-          <div class="flex items-center gap-2 text-sm font-semibold text-fg border-b border-border pb-3">
-            <Rocket class="w-4 h-4 text-primary" aria-hidden="true" />
-            <span>Deploy (Kubernetes)</span>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <AppField
-                label="Namespace"
-                required
-                :error="formErrors.deployNamespace"
-              >
-                <template #default="{ id, error, ariaDescribedby }">
-                  <AppInput
-                    :id="id"
-                    v-model="form.deployNamespace"
-                    placeholder="devops"
-                    :error="error"
-                    :aria-describedby="ariaDescribedby"
-                    list="allowed-namespaces-list"
-                  />
-                  <datalist id="allowed-namespaces-list">
-                    <option v-for="ns in allowedNamespaces" :key="ns" :value="ns" />
-                  </datalist>
-                </template>
-              </AppField>
-            </div>
-
-            <div>
-              <AppField
-                label="Deployment"
-                required
-                :error="formErrors.deployDeployment"
-              >
-                <template #default="{ id, error, ariaDescribedby }">
-                  <AppInput
-                    :id="id"
-                    v-model="form.deployDeployment"
-                    placeholder="shipit-demo"
-                    :error="error"
-                    :aria-describedby="ariaDescribedby"
-                    list="allowed-deployments-list"
-                  />
-                  <datalist id="allowed-deployments-list">
-                    <option v-for="dep in allowedDeployments" :key="dep" :value="dep" />
-                  </datalist>
-                </template>
-              </AppField>
-            </div>
-
-            <div>
-              <AppField
-                label="Container"
-                required
-                :error="formErrors.deployContainer"
-              >
-                <template #default="{ id, error, ariaDescribedby }">
-                  <AppInput
-                    :id="id"
-                    v-model="form.deployContainer"
-                    placeholder="app"
-                    :error="error"
-                    :aria-describedby="ariaDescribedby"
-                  />
-                </template>
-              </AppField>
-            </div>
-          </div>
-
-          <AppField
-            label="Host registry khi deploy"
-            description="Tuỳ chọn. Dùng khi cụm k8s gọi registry bằng tên khác với máy build (ví dụ máy build dùng avina.ai:5000, cụm dùng registry.local:5000). Để trống để dùng chung Máy chủ Registry."
-            :error="formErrors.deployRegistryHost"
+            description="Chỉ gồm chữ thường, số và ký tự . _ - /"
+            :error="formErrors.imageName"
           >
             <template #default="{ id, error, ariaDescribedby }">
               <AppInput
                 :id="id"
-                v-model="form.deployRegistryHost"
-                placeholder="giống Máy chủ Registry"
+                v-model="form.imageName"
+                placeholder="Ví dụ: shipit-demo"
                 :error="error"
                 :aria-describedby="ariaDescribedby"
               />
             </template>
           </AppField>
-        </section>
-      </form>
-    </div>
-  </AppLayout>
+
+          <AppField label="Máy chủ Registry" required :error="formErrors.registryHost">
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="form.registryHost"
+                placeholder="Ví dụ: 192.168.1.241:5000"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
+        </div>
+
+        <AppField
+          label="Thông tin xác thực Registry"
+          description="Chỉ chọn khi registry yêu cầu đăng nhập. Để trống nếu registry không cần xác thực."
+          :error="formErrors.registryCredentialId"
+        >
+          <template #default="{ id, error, ariaDescribedby }">
+            <AppSelect
+              :id="id"
+              v-model="form.registryCredentialId"
+              :options="registryCredentialOptions"
+              :error="error"
+              :aria-describedby="ariaDescribedby"
+            />
+          </template>
+        </AppField>
+
+        <AppField
+          label="Host registry khi deploy"
+          description="Tuỳ chọn. Dùng khi cụm k8s gọi registry bằng tên khác với máy build (ví dụ máy build dùng avina.ai:5000, cụm dùng registry.local:5000). Để trống để dùng chung Máy chủ Registry."
+          :error="formErrors.deployRegistryHost"
+        >
+          <template #default="{ id, error, ariaDescribedby }">
+            <AppInput
+              :id="id"
+              v-model="form.deployRegistryHost"
+              placeholder="giống Máy chủ Registry"
+              :error="error"
+              :aria-describedby="ariaDescribedby"
+            />
+          </template>
+        </AppField>
+      </section>
+
+      <!-- Step 4: Deploy -->
+      <section v-else-if="currentStep === 3" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+        <div class="flex items-center gap-2 text-base font-semibold text-fg border-b border-border pb-3">
+          <Rocket class="w-4 h-4 text-primary" aria-hidden="true" />
+          <span>4. Deploy (Kubernetes)</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <AppField label="Namespace" required :error="formErrors.deployNamespace">
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="form.deployNamespace"
+                placeholder="devops"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+                list="allowed-namespaces-list"
+              />
+              <datalist id="allowed-namespaces-list">
+                <option v-for="ns in allowedNamespaces" :key="ns" :value="ns" />
+              </datalist>
+            </template>
+          </AppField>
+
+          <AppField label="Deployment" required :error="formErrors.deployDeployment">
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="form.deployDeployment"
+                placeholder="shipit-demo"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+                list="allowed-deployments-list"
+              />
+              <datalist id="allowed-deployments-list">
+                <option v-for="dep in allowedDeployments" :key="dep" :value="dep" />
+              </datalist>
+            </template>
+          </AppField>
+
+          <AppField label="Container" required :error="formErrors.deployContainer">
+            <template #default="{ id, error, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="form.deployContainer"
+                placeholder="app"
+                :error="error"
+                :aria-describedby="ariaDescribedby"
+              />
+            </template>
+          </AppField>
+        </div>
+      </section>
+
+      <!-- Step 5: Xem lại -->
+      <section v-else class="space-y-4">
+        <div
+          v-if="reviewErrorItems.length > 0"
+          role="alert"
+          class="p-4 rounded-[8px] border border-danger/40 border-l-4 border-l-danger bg-danger/10 text-sm space-y-2"
+        >
+          <div class="flex items-center gap-2 font-semibold text-danger">
+            <AlertCircle class="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>Còn {{ reviewErrorItems.length }} lỗi cần sửa trước khi lưu</span>
+          </div>
+          <ul class="space-y-1 pl-6 list-disc text-xs text-fg">
+            <li v-for="(errItem, i) in reviewErrorItems" :key="i">
+              <button
+                type="button"
+                class="font-semibold text-primary hover:underline cursor-pointer mr-1.5"
+                @click="goToStep(errItem.stepIndex)"
+              >
+                {{ errItem.stepLabel }}:
+              </button>
+              <span>{{ errItem.message }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <div
+          v-else
+          class="p-3.5 rounded-[8px] border border-success/30 bg-success/10 text-success text-xs font-medium flex items-center gap-2"
+        >
+          <CheckCircle2 class="w-4 h-4 shrink-0" aria-hidden="true" />
+          <span>Thông tin các bước đã đầy đủ. Kiểm tra lại trước khi lưu.</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="p-4 rounded-[8px] border border-border bg-card space-y-2">
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm font-semibold text-fg">1. Nguồn mã</h2>
+              <button type="button" class="text-xs text-primary hover:underline cursor-pointer" @click="goToStep(0)">Sửa</button>
+            </div>
+            <dl class="text-xs space-y-1">
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Tên:</dt><dd class="font-medium text-fg truncate">{{ form.name || '—' }}</dd></div>
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Git URL:</dt><dd class="font-mono text-fg truncate">{{ form.gitUrl || '—' }}</dd></div>
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Nhánh:</dt><dd class="font-mono text-fg">{{ form.gitBranch || 'main' }}</dd></div>
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Token Git:</dt><dd class="text-fg">{{ findLabel(gitCredentialOptions, form.gitCredentialId) }}</dd></div>
+            </dl>
+          </div>
+
+          <div class="p-4 rounded-[8px] border border-border bg-card space-y-2">
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm font-semibold text-fg">2. Build</h2>
+              <button type="button" class="text-xs text-primary hover:underline cursor-pointer" @click="goToStep(1)">Sửa</button>
+            </div>
+            <dl class="text-xs space-y-1">
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Máy build:</dt><dd class="text-fg truncate">{{ findLabel(slaveOptions, form.slaveId) }}</dd></div>
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Dockerfile:</dt><dd class="font-mono text-fg">{{ form.dockerfilePath || 'Dockerfile' }}</dd></div>
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Context:</dt><dd class="font-mono text-fg">{{ form.buildContext || '(thư mục Dockerfile)' }}</dd></div>
+            </dl>
+          </div>
+
+          <div class="p-4 rounded-[8px] border border-border bg-card space-y-2">
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm font-semibold text-fg">3. Registry</h2>
+              <button type="button" class="text-xs text-primary hover:underline cursor-pointer" @click="goToStep(2)">Sửa</button>
+            </div>
+            <dl class="text-xs space-y-1">
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Image:</dt><dd class="font-mono text-fg truncate">{{ form.registryHost }}/{{ form.imageName }}</dd></div>
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Xác thực:</dt><dd class="text-fg truncate">{{ findLabel(registryCredentialOptions, form.registryCredentialId) }}</dd></div>
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Deploy host:</dt><dd class="font-mono text-fg">{{ form.deployRegistryHost || '(dùng Registry host)' }}</dd></div>
+            </dl>
+          </div>
+
+          <div class="p-4 rounded-[8px] border border-border bg-card space-y-2">
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm font-semibold text-fg">4. Deploy</h2>
+              <button type="button" class="text-xs text-primary hover:underline cursor-pointer" @click="goToStep(3)">Sửa</button>
+            </div>
+            <dl class="text-xs space-y-1">
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Namespace:</dt><dd class="font-mono text-fg">{{ form.deployNamespace || '—' }}</dd></div>
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Deployment:</dt><dd class="font-mono text-fg">{{ form.deployDeployment || '—' }}</dd></div>
+              <div class="flex justify-between gap-2"><dt class="text-muted-fg">Container:</dt><dd class="font-mono text-fg">{{ form.deployContainer || '—' }}</dd></div>
+            </dl>
+          </div>
+        </div>
+      </section>
+    </form>
+  </FormWizardLayout>
 </template>

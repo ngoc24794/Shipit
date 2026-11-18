@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount as baseMount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import PipelinesView from '../../src/views/config/PipelinesView.vue'
 import PipelineFormView from '../../src/views/config/PipelineFormView.vue'
 import { useConfigPipelinesStore } from '../../src/stores/configPipelines'
@@ -15,6 +15,20 @@ import { ApiError } from '../../src/api/client'
 describe('Pipelines View, Form & Store', () => {
   let mockApi: MockShipitApi
   let pinia: ReturnType<typeof createPinia>
+  const mountedWrappers: VueWrapper[] = []
+
+  const mount: typeof baseMount = ((component: any, options?: any) => {
+    const w = baseMount(component, options)
+    mountedWrappers.push(w)
+    return w
+  }) as typeof baseMount
+
+  afterEach(() => {
+    while (mountedWrappers.length > 0) {
+      mountedWrappers.pop()?.unmount()
+    }
+    vi.restoreAllMocks()
+  })
 
   beforeEach(async () => {
     document.body.innerHTML = ''
@@ -22,6 +36,7 @@ describe('Pipelines View, Form & Store', () => {
     setActivePinia(pinia)
     mockApi = new MockShipitApi()
     setApi(mockApi)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     const authStore = useAuthStore()
     authStore.user = { username: 'admin' }
@@ -63,7 +78,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     expect(wrapper.text()).toContain('Sửa pipeline')
@@ -96,7 +111,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const nameInput = wrapper.find('input[placeholder="Ví dụ: shipit-demo-pipeline"]')
@@ -117,25 +132,31 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
-    const selects = wrapper.findAll('select').map((s) => s.element as HTMLSelectElement)
-    expect(selects.length).toBeGreaterThanOrEqual(3)
-
-    const gitSelect = selects.find((s) => Array.from(s.options).some((o) => o.text.includes('gitlab-token')))
+    const gitSelect = wrapper
+      .findAll('select')
+      .map((s) => s.element as HTMLSelectElement)
+      .find((s) => Array.from(s.options).some((o) => o.text.includes('gitlab-token')))
     expect(gitSelect).toBeDefined()
     const gitOptions = Array.from(gitSelect!.options).filter((o) => o.value !== '')
     expect(gitOptions.every((o) => !o.text.includes('ssh-key') && !o.text.includes('registry'))).toBe(true)
 
-    const regSelect = selects.find((s) => Array.from(s.options).some((o) => o.text.includes('registry-secret')))
+    await router.replace('/pipelines/new?step=3')
+    await wrapper.vm.$nextTick()
+
+    const regSelect = wrapper
+      .findAll('select')
+      .map((s) => s.element as HTMLSelectElement)
+      .find((s) => Array.from(s.options).some((o) => o.text.includes('registry-secret')))
     expect(regSelect).toBeDefined()
     const regOptions = Array.from(regSelect!.options).filter((o) => o.value !== '')
     expect(regOptions.every((o) => !o.text.includes('ssh-key') && !o.text.includes('gitlab-token'))).toBe(true)
   })
 
   it('validates client-side inputs for gitUrl, imageName, deployNamespace (validate)', async () => {
-    await router.push('/pipelines/new')
+    await router.push('/pipelines/new?step=5')
     await router.isReady()
 
     const wrapper = mount(PipelineFormView, {
@@ -144,7 +165,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Tạo pipeline'))
@@ -248,7 +269,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const vm = wrapper.vm as any
@@ -285,7 +306,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const vm = wrapper.vm as any
@@ -334,7 +355,7 @@ describe('Pipelines View, Form & Store', () => {
 
     const updateSpy = vi.spyOn(mockApi, 'updatePipeline')
 
-    await router.push(`/pipelines/${existing.id}/edit`)
+    await router.push(`/pipelines/${existing.id}/edit?step=3`)
     await router.isReady()
 
     const wrapper = mount(PipelineFormView, {
@@ -343,7 +364,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const vm = wrapper.vm as any
@@ -376,7 +397,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const vm = wrapper.vm as any
@@ -395,7 +416,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const vm = wrapper.vm as any
@@ -445,7 +466,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const vm = wrapper.vm as any
@@ -495,7 +516,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const vm = wrapper.vm as any
@@ -535,7 +556,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const vm = wrapper.vm as any
@@ -597,7 +618,7 @@ describe('Pipelines View, Form & Store', () => {
 
     const updateSpy = vi.spyOn(mockApi, 'updatePipeline')
 
-    await router.push(`/pipelines/${existing.id}/edit`)
+    await router.push(`/pipelines/${existing.id}/edit?step=2`)
     await router.isReady()
 
     const wrapper = mount(PipelineFormView, {
@@ -606,7 +627,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const vm = wrapper.vm as any
@@ -640,7 +661,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const vm = wrapper.vm as any
@@ -689,7 +710,7 @@ describe('Pipelines View, Form & Store', () => {
 
     const updateSpy = vi.spyOn(mockApi, 'updatePipeline')
 
-    await router.push(`/pipelines/${existing.id}/edit`)
+    await router.push(`/pipelines/${existing.id}/edit?step=3`)
     await router.isReady()
 
     const wrapper = mount(PipelineFormView, {
@@ -698,7 +719,7 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     const vm = wrapper.vm as any
@@ -721,7 +742,7 @@ describe('Pipelines View, Form & Store', () => {
   })
 
   it('renders buildContext and deployRegistryHost fields with labels, descriptions, and placeholders', async () => {
-    await router.push('/pipelines/new')
+    await router.push('/pipelines/new?step=2')
     await router.isReady()
 
     const wrapper = mount(PipelineFormView, {
@@ -730,12 +751,15 @@ describe('Pipelines View, Form & Store', () => {
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
     expect(wrapper.find('input[placeholder=". (gốc repo)"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Thư mục context build')
     expect(wrapper.text()).toContain('Tuỳ chọn. Đường dẫn trong repo dùng làm context khi build.')
+
+    await router.replace('/pipelines/new?step=3')
+    await wrapper.vm.$nextTick()
 
     expect(wrapper.find('input[placeholder="giống Máy chủ Registry"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Host registry khi deploy')

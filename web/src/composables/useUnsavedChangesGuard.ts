@@ -17,7 +17,7 @@ export function useUnsavedChangesGuard(
   onMounted(() => {
     window.addEventListener('beforeunload', handleBeforeUnload)
     removeRouteGuard = router.beforeEach((to, from) => {
-      if (to.fullPath === from.fullPath) return true
+      if (to.path === from.path) return true
       if (!isDirty.value) return true
       return window.confirm(message)
     })
