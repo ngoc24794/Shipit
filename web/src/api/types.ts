@@ -263,3 +263,31 @@ export interface JobPreview {
   errors: Record<string, string[]>
   tasks: JobPreviewTask[]
 }
+
+export type SearchKind =
+  | 'run'
+  | 'pipeline'
+  | 'job'
+  | 'slave'
+  | 'credential'
+  | 'deploy-target'
+  | 'job-allow'
+
+export interface SearchItem {
+  id: string
+  title: string
+  subtitle: string | null
+  path: string
+}
+
+export interface SearchGroup {
+  kind: SearchKind
+  label: string
+  items: SearchItem[]
+}
+
+export interface SearchResponse {
+  query: string
+  groups: SearchGroup[]
+}
+

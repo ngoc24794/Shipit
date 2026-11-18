@@ -24,7 +24,10 @@ import type {
   JobPreview,
   JobPreviewTask,
   JobAllowEntry,
-  JobAllowEntryInput
+  JobAllowEntryInput,
+  SearchGroup,
+  SearchItem,
+  SearchResponse
 } from './types'
 import { ApiError } from './client'
 
@@ -1603,5 +1606,133 @@ export class MockShipitApi implements ShipitApi {
     }
 
     this.jobAllowEntries = this.jobAllowEntries.filter((e) => e.id !== id)
+  }
+
+  async search(q: string, limit: number = 5, signal?: AbortSignal): Promise<SearchResponse> {
+    const checkAborted = () => {
+      if (signal?.aborted) {
+        const err = new Error('Yêu cầu tìm kiếm đã bị huỷ')
+        err.name = 'AbortError'
+        throw err
+      }
+    }
+
+    checkAborted()
+    await delay()
+    checkAborted()
+    this.checkAuth()
+
+    const trimmed = q.trim()
+    if (!trimmed) {
+      return { query: q, groups: [] }
+    }
+
+    const maxItems = Math.min(20, Math.max(1, Number.isFinite(limit) ? limit : 5))
+    const needle = trimmed.toLowerCase()
+    const matches = (...fields: Array<string | number | null | undefined>): boolean =>
+      fields.some((f) => f !== null && f !== undefined && String(f).toLowerCase().includes(needle))
+
+    const groups: SearchGroup[] = []
+
+    const runItems: SearchItem[] = [...this.runs]
+      .sort((a, b) => b.id - a.id)
+      .map((r) => {
+        const sourceName =
+          r.kind === 'job' || r.jobId
+            ? this.jobs.find((j) => j.id === r.jobId)?.name || `Job #${r.jobId ?? r.id}`
+            : this.pipelines.find((p) => p.id === r.pipelineId)?.name || `Pipeline #${r.pipelineId ?? r.id}`
+        return { r, sourceName }
+      })
+      .filter(({ r, sourceName }) => matches(`#${r.id}`, sourceName, r.image, r.tag, r.status))
+      .slice(0, maxItems)
+      .map(({ r, sourceName }) => ({
+        id: String(r.id),
+        title: `#${r.id} ${sourceName}`,
+        subtitle: [r.status, r.tag, r.image].filter(Boolean).join(' · ') || null,
+        path: `/runs/${r.id}`
+      }))
+    if (runItems.length > 0) {
+      groups.push({ kind: 'run', label: 'Lượt chạy', items: runItems })
+    }
+
+    const pipelineItems: SearchItem[] = this.pipelines
+      .filter((p) => matches(p.name, p.imageName, p.gitUrl, p.deployNamespace, p.deployDeployment))
+      .slice(0, maxItems)
+      .map((p) => ({
+        id: String(p.id),
+        title: p.name,
+        subtitle: `${p.imageName} · ${p.deployNamespace}/${p.deployDeployment}`,
+        path: `/pipelines/${p.id}/edit`
+      }))
+    if (pipelineItems.length > 0) {
+      groups.push({ kind: 'pipeline', label: 'Pipeline', items: pipelineItems })
+    }
+
+    const jobItems: SearchItem[] = this.jobs
+      .filter((j) => matches(j.name, j.imageName, j.namespace, j.gitUrl))
+      .slice(0, maxItems)
+      .map((j) => ({
+        id: String(j.id),
+        title: j.name,
+        subtitle: `${j.namespace} · ${j.imageName}`,
+        path: `/jobs/${j.id}`
+      }))
+    if (jobItems.length > 0) {
+      groups.push({ kind: 'job', label: 'Job', items: jobItems })
+    }
+
+    const slaveItems: SearchItem[] = this.slaves
+      .filter((s) => matches(s.name, s.host, s.user))
+      .slice(0, maxItems)
+      .map((s) => ({
+        id: String(s.id),
+        title: s.name,
+        subtitle: `${s.user}@${s.host}:${s.port ?? 22}`,
+        path: `/slaves/${s.id}/edit`
+      }))
+    if (slaveItems.length > 0) {
+      groups.push({ kind: 'slave', label: 'Máy build', items: slaveItems })
+    }
+
+    const credentialItems: SearchItem[] = this.credentials
+      .filter((c) => matches(c.name, c.kind, c.username))
+      .slice(0, maxItems)
+      .map((c) => ({
+        id: String(c.id),
+        title: c.name,
+        subtitle: c.username ? `${c.kind} · ${c.username}` : c.kind,
+        path: `/credentials/${c.id}/edit`
+      }))
+    if (credentialItems.length > 0) {
+      groups.push({ kind: 'credential', label: 'Thông tin xác thực', items: credentialItems })
+    }
+
+    const deployTargetItems: SearchItem[] = this.deployTargets
+      .filter((d) => matches(d.namespace, d.deployment))
+      .slice(0, maxItems)
+      .map((d) => ({
+        id: String(d.id),
+        title: `${d.namespace}/${d.deployment}`,
+        subtitle: 'Deployment được phép',
+        path: '/settings/allowlist?tab=deployment'
+      }))
+    if (deployTargetItems.length > 0) {
+      groups.push({ kind: 'deploy-target', label: 'Allowlist Deployment', items: deployTargetItems })
+    }
+
+    const jobAllowItems: SearchItem[] = this.jobAllowEntries
+      .filter((a) => matches(a.name, a.namespace, a.kind))
+      .slice(0, maxItems)
+      .map((a) => ({
+        id: String(a.id),
+        title: a.name,
+        subtitle: `${a.namespace} · ${a.kind}`,
+        path: '/settings/allowlist?tab=job'
+      }))
+    if (jobAllowItems.length > 0) {
+      groups.push({ kind: 'job-allow', label: 'Allowlist Job', items: jobAllowItems })
+    }
+
+    return { query: q, groups }
   }
 }

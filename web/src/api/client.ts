@@ -22,7 +22,8 @@ import type {
   JobValidation,
   JobPreview,
   JobAllowEntry,
-  JobAllowEntryInput
+  JobAllowEntryInput,
+  SearchResponse
 } from './types'
 
 export class ApiError extends Error {
@@ -118,6 +119,9 @@ export interface ShipitApi {
     onEnd: (status: RunStatus) => void,
     onError?: (err: Error) => void
   ): () => void
+
+  // Search
+  search(q: string, limit?: number, signal?: AbortSignal): Promise<SearchResponse>
 }
 
 export class HttpShipitApi implements ShipitApi {
@@ -456,5 +460,12 @@ export class HttpShipitApi implements ShipitApi {
     await this.request<void>(`/api/job-allow-entries/${id}`, {
       method: 'DELETE'
     })
+  }
+
+  async search(q: string, limit: number = 5, signal?: AbortSignal): Promise<SearchResponse> {
+    const params = new URLSearchParams()
+    params.set('q', q)
+    params.set('limit', String(limit))
+    return this.request<SearchResponse>(`/api/search?${params.toString()}`, { signal })
   }
 }
