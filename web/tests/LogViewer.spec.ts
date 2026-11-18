@@ -183,4 +183,62 @@ describe('LogViewer', () => {
     expect(copiedText).not.toContain('[ERR]')
     expect(copiedText).not.toContain('[WARN]')
   })
+
+  it('searches in log, highlights matches, and navigates prev/next', async () => {
+    const lines: LogLine[] = [
+      { seq: 1, step: 'checkout', stream: 'stdout', text: 'Starting build step', at: '2026-11-09T08:00:00Z' },
+      { seq: 2, step: 'build', stream: 'stdout', text: 'Compiling module alpha', at: '2026-11-09T08:00:01Z' },
+      { seq: 3, step: 'build', stream: 'stdout', text: 'Build finished alpha', at: '2026-11-09T08:00:02Z' }
+    ]
+
+    const wrapper = mount(LogViewer, {
+      props: {
+        lines,
+        status: 'success'
+      }
+    })
+
+    const searchInput = wrapper.find('input[aria-label="Tìm trong nhật ký"]')
+    expect(searchInput.exists()).toBe(true)
+
+    await searchInput.setValue('alpha')
+    await wrapper.vm.$nextTick()
+
+    const countEl = wrapper.find('[data-testid="log-search-count"]')
+    expect(countEl.exists()).toBe(true)
+    expect(countEl.text()).toBe('1/2')
+
+    const marks = wrapper.findAll('mark')
+    expect(marks.length).toBe(2)
+
+    const nextBtn = wrapper.find('button[aria-label="Kết quả sau"]')
+    await nextBtn.trigger('click')
+    expect(countEl.text()).toBe('2/2')
+
+    const prevBtn = wrapper.find('button[aria-label="Kết quả trước"]')
+    await prevBtn.trigger('click')
+    expect(countEl.text()).toBe('1/2')
+
+    // Wrap around when going prev from 1/2
+    await prevBtn.trigger('click')
+    expect(countEl.text()).toBe('2/2')
+
+    // Clear search
+    await wrapper.find('button[aria-label="Xoá tìm kiếm"]').trigger('click')
+    expect(wrapper.find('[data-testid="log-search-count"]').exists()).toBe(false)
+    expect(wrapper.findAll('mark').length).toBe(0)
+  })
+
+  it('does not wrap long log lines (uses whitespace-pre)', () => {
+    const wrapper = mount(LogViewer, {
+      props: {
+        lines: sampleLines,
+        status: 'success'
+      }
+    })
+
+    const lineTextSpan = wrapper.find('[data-log-seq="1"] span.whitespace-pre')
+    expect(lineTextSpan.exists()).toBe(true)
+    expect(wrapper.findAll('.whitespace-pre-wrap').length).toBe(0)
+  })
 })
