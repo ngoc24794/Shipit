@@ -6,9 +6,11 @@ import StatusBadge from '../StatusBadge.vue'
 const props = withDefaults(
   defineProps<{
     tasks?: RunTask[]
+    selectedPosition?: number | null
   }>(),
   {
-    tasks: () => []
+    tasks: () => [],
+    selectedPosition: null
   }
 )
 
@@ -30,21 +32,21 @@ function formatDuration(startedAt?: string | null, finishedAt?: string | null): 
 </script>
 
 <template>
-  <div class="w-full max-h-[360px] overflow-auto rounded-[8px] border border-border bg-card">
-    <table class="w-full text-left text-sm tabular-nums border-collapse">
-      <thead class="sticky top-0 z-10 bg-muted/90 backdrop-blur-xs text-xs font-semibold text-muted-fg border-b border-border">
+  <div class="w-full flex-1 min-h-0 overflow-auto rounded-[6px] border border-border bg-card">
+    <table class="w-full text-left text-xs tabular-nums border-collapse">
+      <thead class="sticky top-0 z-10 bg-muted/95 backdrop-blur-xs text-[11px] font-semibold text-muted-fg border-b border-border">
         <tr>
-          <th scope="col" class="py-2.5 px-4 w-16">#</th>
-          <th scope="col" class="py-2.5 px-4">Tác vụ</th>
-          <th scope="col" class="py-2.5 px-4">Trạng thái</th>
-          <th scope="col" class="py-2.5 px-4">Mã thoát</th>
-          <th scope="col" class="py-2.5 px-4">Thời lượng</th>
-          <th scope="col" class="py-2.5 px-4 text-right">Nhật ký</th>
+          <th scope="col" class="py-1.5 px-2 w-10 whitespace-nowrap">#</th>
+          <th scope="col" class="py-1.5 px-2 whitespace-nowrap">Tác vụ</th>
+          <th scope="col" class="py-1.5 px-2 whitespace-nowrap">Trạng thái</th>
+          <th scope="col" class="py-1.5 px-2 whitespace-nowrap">Mã</th>
+          <th scope="col" class="py-1.5 px-2 whitespace-nowrap">Thời lượng</th>
+          <th scope="col" class="py-1.5 px-2 text-right whitespace-nowrap">Log</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-border text-fg">
         <tr v-if="tasks.length === 0">
-          <td colspan="6" class="py-4 px-4 text-center text-muted-fg text-xs italic">
+          <td colspan="6" class="py-4 px-3 text-center text-muted-fg text-xs italic">
             Chưa có tác vụ nào được cấu hình
           </td>
         </tr>
@@ -52,20 +54,35 @@ function formatDuration(startedAt?: string | null, finishedAt?: string | null): 
           v-for="task in tasks"
           :key="task.position"
           :data-task-position="task.position"
-          class="hover:bg-muted/50 transition-colors"
+          :data-task-failed="task.status === 'failed' ? 'true' : undefined"
+          :data-task-selected="selectedPosition === task.position ? 'true' : undefined"
+          :class="[
+            'cursor-pointer transition-colors',
+            selectedPosition === task.position
+              ? 'bg-primary/10 hover:bg-primary/15'
+              : task.status === 'failed'
+                ? 'bg-danger/10 hover:bg-danger/15'
+                : 'hover:bg-muted/50'
+          ]"
+          @click="emit('viewLog', task.position)"
         >
           <!-- STT -->
-          <td class="py-2.5 px-4 font-mono font-medium text-xs text-muted-fg whitespace-nowrap">
+          <td
+            :class="[
+              'py-1.5 px-2 font-mono font-medium text-[11px] text-muted-fg whitespace-nowrap',
+              task.status === 'failed' ? 'border-l-2 border-l-danger text-danger font-semibold' : ''
+            ]"
+          >
             #{{ task.position + 1 }}
           </td>
 
           <!-- Nhãn -->
-          <td class="py-2.5 px-4 font-medium text-fg whitespace-nowrap">
+          <td class="py-1.5 px-2 font-medium text-fg max-w-[130px] truncate" :title="task.label">
             {{ task.label }}
           </td>
 
           <!-- StatusBadge -->
-          <td class="py-2.5 px-4 whitespace-nowrap">
+          <td class="py-1.5 px-2 whitespace-nowrap">
             <StatusBadge
               :status="task.status"
               size="sm"
@@ -74,10 +91,10 @@ function formatDuration(startedAt?: string | null, finishedAt?: string | null): 
           </td>
 
           <!-- Exit Code -->
-          <td class="py-2.5 px-4 whitespace-nowrap">
+          <td class="py-1.5 px-2 whitespace-nowrap">
             <span
               v-if="task.exitCode === 124"
-              class="inline-flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded bg-danger/10 text-danger border border-danger/30 font-semibold"
+              class="inline-flex items-center gap-1 font-mono text-[11px] px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/30 font-semibold"
               title="Quá thời gian thực thi (mã 124)"
             >
               <span>124</span>
@@ -85,34 +102,34 @@ function formatDuration(startedAt?: string | null, finishedAt?: string | null): 
             </span>
             <span
               v-else-if="task.exitCode !== null && task.exitCode !== undefined && task.exitCode !== 0"
-              class="inline-flex items-center font-mono text-xs px-2 py-0.5 rounded bg-danger/10 text-danger border border-danger/30 font-semibold"
+              class="inline-flex items-center font-mono text-[11px] px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/30 font-semibold"
             >
               {{ task.exitCode }}
             </span>
             <span
               v-else-if="task.exitCode === 0"
-              class="inline-flex items-center font-mono text-xs px-2 py-0.5 rounded bg-muted text-muted-fg border border-border/60"
+              class="inline-flex items-center font-mono text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-fg border border-border/60"
             >
               0
             </span>
-            <span v-else class="text-muted-fg text-xs">-</span>
+            <span v-else class="text-muted-fg text-[11px]">-</span>
           </td>
 
           <!-- Thời lượng -->
-          <td class="py-2.5 px-4 text-xs font-mono tabular-nums text-muted-fg whitespace-nowrap">
+          <td class="py-1.5 px-2 text-[11px] font-mono tabular-nums text-muted-fg whitespace-nowrap">
             {{ formatDuration(task.startedAt, task.finishedAt) }}
           </td>
 
           <!-- Nút Xem log tác vụ -->
-          <td class="py-2.5 px-4 text-right whitespace-nowrap">
+          <td class="py-1.5 px-2 text-right whitespace-nowrap">
             <button
               type="button"
-              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] text-xs font-medium text-muted-fg hover:text-fg hover:bg-muted border border-border transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+              class="inline-flex items-center justify-center p-1 rounded-[4px] text-muted-fg hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
               :aria-label="`Xem log tác vụ ${task.label}`"
-              @click="emit('viewLog', task.position)"
+              title="Xem log tác vụ"
+              @click.stop="emit('viewLog', task.position)"
             >
               <FileText class="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Xem log tác vụ</span>
             </button>
           </td>
         </tr>

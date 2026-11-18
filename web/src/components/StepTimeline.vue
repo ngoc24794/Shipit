@@ -15,10 +15,18 @@ import {
 } from 'lucide-vue-next'
 import type { RunStep, StepName, StepStatus } from '../api/types'
 
-const props = defineProps<{
-  steps?: RunStep[]
-  kind?: 'pipeline' | 'job'
-}>()
+const props = withDefaults(
+  defineProps<{
+    steps?: RunStep[]
+    kind?: 'pipeline' | 'job'
+    orientation?: 'horizontal' | 'vertical'
+  }>(),
+  {
+    steps: () => [],
+    kind: undefined,
+    orientation: 'horizontal'
+  }
+)
 
 interface StepDefinition {
   name: StepName
@@ -95,7 +103,84 @@ function getStatusBadge(status: StepStatus) {
 </script>
 
 <template>
-  <div class="w-full py-2">
+  <div v-if="orientation === 'vertical'" class="w-full">
+    <ol class="flex flex-col w-full">
+      <li
+        v-for="(step, index) in mappedSteps"
+        :key="step.name"
+        :data-step-name="step.name"
+        :data-step-status="step.status"
+        class="relative flex items-center gap-2.5 py-1 min-w-0"
+      >
+        <!-- Vertical connecting line -->
+        <div
+          v-if="index < mappedSteps.length - 1"
+          aria-hidden="true"
+          class="absolute left-[11px] top-[24px] bottom-[-4px] w-0.5 transition-colors"
+          :class="[
+            step.status === 'failed' || mappedSteps[index + 1]?.status === 'failed'
+              ? 'bg-danger/40'
+              : step.status === 'success'
+                ? 'bg-success'
+                : 'bg-border'
+          ]"
+        />
+
+        <!-- Compact Step Icon Circle -->
+        <div
+          :class="[
+            'relative z-10 flex items-center justify-center w-6 h-6 rounded-full border-2 shrink-0 transition-colors bg-card',
+            step.status === 'success' ? 'border-success text-success' : '',
+            step.status === 'failed' ? 'border-danger text-danger' : '',
+            step.status === 'running' ? 'border-info text-info ring-2 ring-info/15' : '',
+            step.status === 'cancelled' ? 'border-warn text-warn' : '',
+            step.status === 'skipped' ? 'border-border text-muted-fg' : '',
+            step.status === 'pending' ? 'border-border text-muted-fg' : ''
+          ]"
+        >
+          <component :is="step.icon" class="w-3.5 h-3.5" aria-hidden="true" />
+        </div>
+
+        <!-- Step Label + Status Icon + Duration -->
+        <div class="flex items-center justify-between gap-2 flex-1 min-w-0">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="text-xs font-medium text-fg whitespace-nowrap truncate">{{ step.label }}</span>
+            <component
+              :is="getStatusBadge(step.status).icon"
+              :class="['w-3.5 h-3.5 shrink-0', getStatusBadge(step.status).class]"
+              aria-hidden="true"
+            />
+          </div>
+          <span
+            v-if="step.status === 'running'"
+            class="text-[11px] text-info whitespace-nowrap shrink-0"
+          >
+            Đang chạy...
+          </span>
+          <span
+            v-else-if="step.status === 'cancelled'"
+            class="text-[11px] text-warn whitespace-nowrap shrink-0 tabular-nums"
+          >
+            {{ step.duration ? `Đã dừng (${step.duration})` : 'Đã dừng' }}
+          </span>
+          <span
+            v-else-if="step.duration"
+            class="text-[11px] text-muted-fg tabular-nums whitespace-nowrap shrink-0"
+          >
+            {{ step.duration }}
+          </span>
+          <span
+            v-else
+            class="text-[11px] text-muted-fg whitespace-nowrap shrink-0"
+          >
+            {{ step.status === 'skipped' ? 'Bỏ qua' : 'Chưa chạy' }}
+          </span>
+        </div>
+      </li>
+    </ol>
+  </div>
+
+  <div v-else class="w-full py-2">
     <ol class="flex flex-row items-center justify-between w-full gap-0">
       <li
         v-for="(step, index) in mappedSteps"

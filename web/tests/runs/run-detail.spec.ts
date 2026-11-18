@@ -541,4 +541,40 @@ describe('RunDetailView (Chi tiết lượt chạy)', () => {
       expect(normalStopBtn.attributes('disabled')).toBeUndefined()
     }
   })
+
+  it('renders 2-column layout with vertical StepTimeline and filters log when clicking a task row', async () => {
+    await router.push('/runs/5')
+    await router.isReady()
+
+    const wrapper = mount(RunDetailView, {
+      global: {
+        plugins: [router],
+        stubs: { AppLayout: { template: '<div><slot /></div>' } }
+      }
+    })
+    await waitMounted(wrapper)
+
+    // 2-column layout exists
+    const leftCol = wrapper.find('[data-testid="run-left-column"]')
+    const rightCol = wrapper.find('[data-testid="run-right-column"]')
+    expect(leftCol.exists()).toBe(true)
+    expect(rightCol.exists()).toBe(true)
+    expect(leftCol.find('[data-testid="run-task-panel"]').exists()).toBe(true)
+
+    // Failed task row is highlighted
+    const failedRow = wrapper.find('tr[data-task-position="1"]')
+    expect(failedRow.exists()).toBe(true)
+    expect(failedRow.attributes('data-task-failed')).toBe('true')
+
+    // Click task row 0 -> filters LogViewer to task 0
+    const firstRow = wrapper.find('tr[data-task-position="0"]')
+    await firstRow.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(firstRow.attributes('data-task-selected')).toBe('true')
+    const select = wrapper.find('select#task-filter').element as HTMLSelectElement
+    expect(select.value).toBe('0')
+    expect(wrapper.find('#task-group-1').attributes('style')).toContain('display: none')
+    expect(wrapper.find('#task-group-0').attributes('style') || '').not.toContain('display: none')
+  })
 })
