@@ -162,7 +162,7 @@ public static class RemoteCommandBuilder
             contextDir = $"{workDir}/{buildContext}";
         }
 
-        return new RemoteCommand($"docker build -f {Quote(fullDockerfilePath)} -t {Quote(image)} {Quote(contextDir)}");
+        return new RemoteCommand($"DOCKER_BUILDKIT=1 docker build -f {Quote(fullDockerfilePath)} -t {Quote(image)} {Quote(contextDir)}");
     }
 
     /// <summary>

@@ -329,9 +329,9 @@ public class EndToEndFlowTests
         Assert.All(steps, s => Assert.Equal("success", s.GetProperty("status").GetString()));
 
         // 6. Verify docker build command used root workDir as context, NOT the dockerfile subdirectory
-        var buildCmd = customSsh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker build"));
+        var buildCmd = customSsh.ExecutedCommands.Single(c => c.CommandText.StartsWith("DOCKER_BUILDKIT=1 docker build"));
         var expectedWorkDir = RemoteCommandBuilder.WorkDirFor(runId);
-        Assert.Equal($"docker build -f '{expectedWorkDir}/docker/Dockerfile.sub' -t '192.168.1.241/shipit-demo:abc1234' '{expectedWorkDir}'", buildCmd.CommandText);
+        Assert.Equal($"DOCKER_BUILDKIT=1 docker build -f '{expectedWorkDir}/docker/Dockerfile.sub' -t '192.168.1.241/shipit-demo:abc1234' '{expectedWorkDir}'", buildCmd.CommandText);
     }
 
     [Fact]

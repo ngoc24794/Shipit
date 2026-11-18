@@ -240,7 +240,7 @@ Khác với Pipeline (triển khai dịch vụ chạy liên tục dưới dạng
 
 Một Job trong Shipit được thực thi qua 4 bước:
 1. `checkout` (kéo mã nguồn từ Git trên Slave)
-2. `build` (đóng gói Docker image trên Slave)
+2. `build` (đóng gói Docker image trên Slave với BuildKit: `DOCKER_BUILDKIT=1 docker build`)
 3. `push` (đẩy image lên Docker Registry)
 4. `runjob` (tạo và giám sát các Kubernetes Job tuần tự trong cụm)
 

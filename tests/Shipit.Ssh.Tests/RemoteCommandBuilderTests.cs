@@ -209,19 +209,20 @@ public class RemoteCommandBuilderTests
             "192.168.1.241/shipit-demo:abc1234");
 
         Assert.Equal(
-            "docker build -f '/tmp/shipit/run-1/src/Dockerfile' -t '192.168.1.241/shipit-demo:abc1234' '/tmp/shipit/run-1/src'",
+            "DOCKER_BUILDKIT=1 docker build -f '/tmp/shipit/run-1/src/Dockerfile' -t '192.168.1.241/shipit-demo:abc1234' '/tmp/shipit/run-1/src'",
             cmd.CommandText);
         Assert.Null(cmd.StdinSecret);
 
         // Verify shell tokens are properly delimited
         var tokens = ParseShellTokens(cmd.CommandText);
-        Assert.Equal("docker", tokens[0]);
-        Assert.Equal("build", tokens[1]);
-        Assert.Equal("-f", tokens[2]);
-        Assert.Equal("/tmp/shipit/run-1/src/Dockerfile", tokens[3]);
-        Assert.Equal("-t", tokens[4]);
-        Assert.Equal("192.168.1.241/shipit-demo:abc1234", tokens[5]);
-        Assert.Equal("/tmp/shipit/run-1/src", tokens[6]);
+        Assert.Equal("DOCKER_BUILDKIT=1", tokens[0]);
+        Assert.Equal("docker", tokens[1]);
+        Assert.Equal("build", tokens[2]);
+        Assert.Equal("-f", tokens[3]);
+        Assert.Equal("/tmp/shipit/run-1/src/Dockerfile", tokens[4]);
+        Assert.Equal("-t", tokens[5]);
+        Assert.Equal("192.168.1.241/shipit-demo:abc1234", tokens[6]);
+        Assert.Equal("/tmp/shipit/run-1/src", tokens[7]);
     }
 
     [Fact]
@@ -230,7 +231,7 @@ public class RemoteCommandBuilderTests
         var cmd = RemoteCommandBuilder.DockerBuild("/tmp/shipit/run-1", "Dockerfile", "192.168.1.241/app:abc1234");
 
         Assert.Equal(
-            "docker build -f '/tmp/shipit/run-1/Dockerfile' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1'",
+            "DOCKER_BUILDKIT=1 docker build -f '/tmp/shipit/run-1/Dockerfile' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1'",
             cmd.CommandText);
     }
 
@@ -244,7 +245,7 @@ public class RemoteCommandBuilderTests
             buildContext: null);
 
         Assert.Equal(
-            "docker build -f '/tmp/shipit/run-1/docker/Dockerfile.x' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1/docker'",
+            "DOCKER_BUILDKIT=1 docker build -f '/tmp/shipit/run-1/docker/Dockerfile.x' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1/docker'",
             cmd.CommandText);
     }
 
@@ -258,7 +259,7 @@ public class RemoteCommandBuilderTests
             buildContext: ".");
 
         Assert.Equal(
-            "docker build -f '/tmp/shipit/run-1/docker/Dockerfile.x' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1'",
+            "DOCKER_BUILDKIT=1 docker build -f '/tmp/shipit/run-1/docker/Dockerfile.x' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1'",
             cmd.CommandText);
     }
 
@@ -272,7 +273,7 @@ public class RemoteCommandBuilderTests
             buildContext: "src/app");
 
         Assert.Equal(
-            "docker build -f '/tmp/shipit/run-1/docker/Dockerfile.x' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1/src/app'",
+            "DOCKER_BUILDKIT=1 docker build -f '/tmp/shipit/run-1/docker/Dockerfile.x' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1/src/app'",
             cmd.CommandText);
     }
 
@@ -286,8 +287,18 @@ public class RemoteCommandBuilderTests
             buildContext: null);
 
         Assert.Equal(
-            "docker build -f '/tmp/shipit/run-1/Dockerfile' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1'",
+            "DOCKER_BUILDKIT=1 docker build -f '/tmp/shipit/run-1/Dockerfile' -t '192.168.1.241/app:abc1234' '/tmp/shipit/run-1'",
             cmd.CommandText);
+    }
+
+    [Fact]
+    public void DockerBuild_EnablesBuildKitPrefix_ForAllOverloads()
+    {
+        var cmd3Args = RemoteCommandBuilder.DockerBuild("/tmp/shipit/run-1", "Dockerfile", "192.168.1.241/app:abc1234");
+        var cmd4Args = RemoteCommandBuilder.DockerBuild("/tmp/shipit/run-1", "Dockerfile", "192.168.1.241/app:abc1234", ".");
+
+        Assert.StartsWith("DOCKER_BUILDKIT=1 docker build ", cmd3Args.CommandText);
+        Assert.StartsWith("DOCKER_BUILDKIT=1 docker build ", cmd4Args.CommandText);
     }
 
     [Theory]
