@@ -263,3 +263,20 @@ export interface JobPreview {
   errors: Record<string, string[]>
   tasks: JobPreviewTask[]
 }
+
+export interface GetRunsParams {
+  pipelineId?: number
+  jobId?: number
+  kind?: 'pipeline' | 'job'
+  status?: RunStatus
+  q?: string
+  page?: number
+  pageSize?: number
+  limit?: number
+}
+
+export interface PagedResult<T> {
+  items: T[]
+  total: number
+  serverPaginated?: boolean
+}

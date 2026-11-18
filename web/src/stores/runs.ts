@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Run, RunDetail, Pipeline } from '../api/types'
+import type { Run, RunDetail, Pipeline, GetRunsParams, PagedResult } from '../api/types'
 import { getApi } from '../api'
 import { runJob as apiRunJob } from '../api/runs-job'
 
 export const useRunsStore = defineStore('runs', () => {
   const runs = ref<Run[]>([])
+  const totalRuns = ref(0)
   const pipelines = ref<Pipeline[]>([])
   const jobs = ref<Array<{ id: number; name: string }>>([])
   const currentRun = ref<RunDetail | null>(null)
@@ -58,13 +59,14 @@ export const useRunsStore = defineStore('runs', () => {
     }
   }
 
-  async function fetchRuns(params?: { pipelineId?: number; jobId?: number; limit?: number }): Promise<Run[]> {
+  async function fetchRuns(params?: GetRunsParams): Promise<Run[]> {
     const api = getApi()
     loading.value = true
     error.value = null
     try {
       const list = await api.getRuns(params)
       runs.value = list
+      totalRuns.value = list.length
       return list
     } catch (err: any) {
       error.value = err.message || 'Không thể tải danh sách lượt chạy'
@@ -74,14 +76,56 @@ export const useRunsStore = defineStore('runs', () => {
     }
   }
 
-  async function refreshRuns(params?: { pipelineId?: number; jobId?: number; limit?: number }): Promise<Run[]> {
+  async function fetchRunsPaged(params?: GetRunsParams): Promise<PagedResult<Run>> {
+    const api = getApi()
+    loading.value = true
+    error.value = null
+    try {
+      if (api.getRunsPaged) {
+        const res = await api.getRunsPaged(params)
+        runs.value = res.items
+        totalRuns.value = res.total
+        return res
+      }
+      const list = await api.getRuns(params)
+      runs.value = list
+      totalRuns.value = list.length
+      return { items: list, total: list.length, serverPaginated: false }
+    } catch (err: any) {
+      error.value = err.message || 'Không thể tải danh sách lượt chạy'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function refreshRuns(params?: GetRunsParams): Promise<Run[]> {
     const api = getApi()
     try {
       const list = await api.getRuns(params)
       runs.value = list
+      totalRuns.value = list.length
       return list
     } catch {
       return runs.value
+    }
+  }
+
+  async function refreshRunsPaged(params?: GetRunsParams): Promise<PagedResult<Run>> {
+    const api = getApi()
+    try {
+      if (api.getRunsPaged) {
+        const res = await api.getRunsPaged(params)
+        runs.value = res.items
+        totalRuns.value = res.total
+        return res
+      }
+      const list = await api.getRuns(params)
+      runs.value = list
+      totalRuns.value = list.length
+      return { items: list, total: list.length, serverPaginated: false }
+    } catch {
+      return { items: runs.value, total: totalRuns.value, serverPaginated: true }
     }
   }
 
@@ -136,6 +180,7 @@ export const useRunsStore = defineStore('runs', () => {
 
   return {
     runs,
+    totalRuns,
     pipelines,
     jobs,
     currentRun,
@@ -148,7 +193,9 @@ export const useRunsStore = defineStore('runs', () => {
     fetchJobs,
     fetchPipelines,
     fetchRuns,
+    fetchRunsPaged,
     refreshRuns,
+    refreshRunsPaged,
     fetchRun,
     triggerRun,
     runJob,

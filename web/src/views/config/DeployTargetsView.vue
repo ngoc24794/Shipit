@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   ShieldCheck,
   Plus,
@@ -13,8 +13,12 @@ import AppInput from '../../components/AppInput.vue'
 import AppField from '../../components/AppField.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import EmptyState from '../../components/EmptyState.vue'
+import DataToolbar, { type DataToolbarFilter } from '../../components/DataToolbar.vue'
+import DataPagination from '../../components/DataPagination.vue'
+import SortableHeader from '../../components/SortableHeader.vue'
 import { useConfigDeployTargetsStore } from '../../stores/configDeployTargets'
 import { useToast } from '../../composables/useToast'
+import { useDataTable } from '../../composables/useDataTable'
 import type { DeployTarget } from '../../api/types'
 import { ApiError } from '../../api/client'
 
@@ -39,6 +43,42 @@ const form = ref<{
 })
 
 const formErrors = ref<Record<string, string>>({})
+
+const table = useDataTable<DeployTarget>({
+  mode: 'client',
+  items: computed(() => store.deployTargets),
+  defaultFilters: {
+    namespace: ''
+  },
+  searchFields: ['namespace', 'deployment'],
+  filterFns: {
+    namespace: (t, val) => t.namespace === val
+  },
+  sortFns: {
+    namespace: (a, b) => a.namespace.localeCompare(b.namespace, 'vi'),
+    deployment: (a, b) => a.deployment.localeCompare(b.deployment, 'vi'),
+    createdAt: (a, b) =>
+      new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+  }
+})
+
+const toolbarFilters = computed<DataToolbarFilter[]>(() => {
+  const namespaces = Array.from(
+    new Set(store.deployTargets.map((t) => t.namespace).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b))
+
+  return [
+    {
+      key: 'namespace',
+      label: 'Namespace',
+      type: 'select',
+      options: [
+        { label: 'Tất cả namespace', value: '' },
+        ...namespaces.map((ns) => ({ label: ns, value: ns }))
+      ]
+    }
+  ]
+})
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '—'
@@ -234,20 +274,63 @@ onMounted(() => {
       />
 
       <!-- Table of Deploy Targets -->
-      <div v-else class="flex-1 min-h-0 flex flex-col">
-        <AppTable>
+      <div
+        v-else
+        class="flex-1 min-h-0 flex flex-col rounded-[8px] border border-border bg-card overflow-hidden"
+      >
+        <DataToolbar
+          :q="table.q.value"
+          search-placeholder="Tìm namespace, deployment..."
+          :filters="toolbarFilters"
+          :filter-values="table.filters"
+          :start-item="table.startItem.value"
+          :end-item="table.endItem.value"
+          :total="table.total.value"
+          :has-active-filters="table.hasActiveFilters.value"
+          @update:q="(v) => (table.q.value = v)"
+          @update:filter="(k, v) => (table.filters[k] = v)"
+          @clear="table.clearFilters()"
+        />
+
+        <div
+          v-if="table.items.value.length === 0"
+          class="flex-1 min-h-0 flex flex-col items-center justify-center p-8 text-center"
+        >
+          <p class="text-sm font-medium text-fg mb-1">Không có kết quả phù hợp</p>
+          <p class="text-xs text-muted-fg mb-4">Thử đổi từ khoá tìm kiếm hoặc xoá bộ lọc hiện tại.</p>
+          <AppButton variant="secondary" size="sm" @click="table.clearFilters()">
+            Xoá bộ lọc
+          </AppButton>
+        </div>
+
+        <AppTable v-else :bordered="false">
           <template #header>
             <tr>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg">
-                Namespace
-              </th>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg">
-                Deployment
-              </th>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg">
-                Ngày thêm
-              </th>
-              <th scope="col" class="py-3 px-4 text-right text-xs font-semibold text-muted-fg">
+              <SortableHeader
+                label="Namespace"
+                sort-key="namespace"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                class="py-3 px-4"
+                @sort="table.toggleSort"
+              />
+              <SortableHeader
+                label="Deployment"
+                sort-key="deployment"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                class="py-3 px-4"
+                @sort="table.toggleSort"
+              />
+              <SortableHeader
+                label="Ngày thêm"
+                sort-key="createdAt"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                class="py-3 px-4"
+                @sort="table.toggleSort"
+              />
+              <th scope="col" class="py-3 px-4 text-right text-xs font-semibold text-muted-fg whitespace-nowrap">
                 Thao tác
               </th>
             </tr>
@@ -255,20 +338,20 @@ onMounted(() => {
 
           <template #default>
             <tr
-              v-for="target in store.deployTargets"
+              v-for="target in table.items.value"
               :key="target.id"
               class="hover:bg-muted/40 transition-colors border-b border-border/50 last:border-0"
             >
-              <td class="py-3 px-4 text-sm font-medium text-fg">
+              <td class="py-3 px-4 text-sm font-medium text-fg whitespace-nowrap">
                 {{ target.namespace }}
               </td>
-              <td class="py-3 px-4 text-sm text-fg font-mono">
+              <td class="py-3 px-4 text-sm text-fg font-mono whitespace-nowrap">
                 {{ target.deployment }}
               </td>
-              <td class="py-3 px-4 text-sm text-muted-fg">
+              <td class="py-3 px-4 text-sm text-muted-fg whitespace-nowrap tabular-nums">
                 {{ formatDate(target.createdAt) }}
               </td>
-              <td class="py-3 px-4 text-sm text-right space-x-2">
+              <td class="py-3 px-4 text-sm text-right space-x-2 whitespace-nowrap">
                 <AppButton
                   variant="ghost"
                   size="sm"
@@ -282,6 +365,16 @@ onMounted(() => {
             </tr>
           </template>
         </AppTable>
+
+        <DataPagination
+          :page="table.page.value"
+          :page-size="table.pageSize.value"
+          :total="table.total.value"
+          :total-pages="table.totalPages.value"
+          :loading="store.loading"
+          @update:page="table.setPage"
+          @update:page-size="table.setPageSize"
+        />
       </div>
 
       <!-- Confirm Dialog for Deletion -->

@@ -24,7 +24,9 @@ import type {
   JobPreview,
   JobPreviewTask,
   JobAllowEntry,
-  JobAllowEntryInput
+  JobAllowEntryInput,
+  GetRunsParams,
+  PagedResult
 } from './types'
 import { ApiError } from './client'
 
@@ -463,6 +465,198 @@ export class MockShipitApi implements ShipitApi {
       { seq: 18, step: 'runjob', stream: 'stderr', text: 'Error: column "tenant_id" does not exist in table "organizations" (exit code 1)', at: '2026-11-09T09:02:08Z', taskPosition: 1 },
       { seq: 19, step: 'runjob', stream: 'system', text: 'Tác vụ 2 thất bại với exit code 1', at: '2026-11-09T09:02:10Z', taskPosition: 1 }
     ]
+  }
+
+  constructor() {
+    this.seedExtraData()
+  }
+
+  private seedExtraData(): void {
+    const namespaces = ['devops', 'avina-workspace', 'avina-billing', 'avina-portal']
+    const statuses: RunStatus[] = ['success', 'failed', 'cancelled']
+
+    const extraPipelineNames = [
+      'avina-auth-service',
+      'avina-billing-api',
+      'avina-portal-web',
+      'avina-gateway-proxy',
+      'avina-notify-worker',
+      'avina-report-engine',
+      'avina-search-indexer',
+      'avina-storage-sync',
+      'shipit-runner-agent',
+      'shipit-metrics-exporter'
+    ]
+
+    for (let i = 0; i < extraPipelineNames.length; i++) {
+      const id = i + 3
+      const name = extraPipelineNames[i]
+      const ns = namespaces[(i + 1) % namespaces.length]
+      const status = statuses[i % statuses.length]
+      this.pipelines.push({
+        id,
+        name,
+        gitUrl: `https://git.example.com/avina/${name}.git`,
+        gitBranch: i % 2 === 0 ? 'main' : 'release',
+        gitCredentialId: 2,
+        slaveId: (i % 2) + 1,
+        dockerfilePath: 'Dockerfile',
+        buildContext: null,
+        imageName: name,
+        registryHost: '192.168.1.241',
+        deployRegistryHost: null,
+        registryCredentialId: 3,
+        deployNamespace: ns,
+        deployDeployment: name,
+        deployContainer: 'app',
+        lastRun: {
+          id: 10 + i,
+          pipelineId: id,
+          kind: 'pipeline',
+          status,
+          tag: `b${id}c${i}d0`,
+          image: status === 'success' ? `192.168.1.241/${name}:b${id}c${i}d0` : null,
+          failureReason: status === 'failed' ? 'Docker build exited with code 1' : null,
+          createdAt: `2026-11-08T${String(23 - i).padStart(2, '0')}:00:00Z`,
+          startedAt: `2026-11-08T${String(23 - i).padStart(2, '0')}:00:05Z`,
+          finishedAt: `2026-11-08T${String(23 - i).padStart(2, '0')}:01:30Z`
+        }
+      })
+    }
+
+    const extraJobNames = [
+      'avina-seed-data',
+      'avina-cleanup-temp',
+      'avina-reindex-elastic',
+      'avina-sync-permissions',
+      'avina-export-audit',
+      'avina-rotate-keys',
+      'avina-archive-logs',
+      'avina-billing-reconcile',
+      'avina-cache-warmup',
+      'avina-schema-verify',
+      'avina-tenant-provision'
+    ]
+
+    for (let i = 0; i < extraJobNames.length; i++) {
+      const id = i + 2
+      const name = extraJobNames[i]
+      const ns = namespaces[(i + 1) % namespaces.length]
+      const status = statuses[(i + 1) % statuses.length]
+      this.jobs.push({
+        id,
+        name,
+        gitUrl: `http://git.example/${name}.git`,
+        gitBranch: 'main',
+        gitCredentialId: 2,
+        slaveId: (i % 2) + 1,
+        dockerfilePath: 'Dockerfile',
+        buildContext: '.',
+        imageName: name,
+        registryHost: '192.168.1.241',
+        deployRegistryHost: null,
+        registryCredentialId: null,
+        namespace: ns,
+        containerName: 'runner',
+        serviceAccount: null,
+        imagePullSecrets: ['registry-secret'],
+        tasks: [
+          {
+            position: 0,
+            label: 'Khởi tạo tác vụ',
+            args: ['run', '--step', 'init'],
+            envFromConfigMaps: ['avina-files-config'],
+            envFromSecrets: ['avina-files-secret'],
+            env: [{ name: 'ASPNETCORE_ENVIRONMENT', value: 'Staging' }],
+            timeoutSeconds: 900,
+            backoffLimit: 0,
+            ttlSeconds: 3600
+          }
+        ],
+        lastRun: {
+          id: 25 + i,
+          pipelineId: null,
+          jobId: id,
+          kind: 'job',
+          status,
+          tag: `j${id}a${i}f1`,
+          image: status === 'success' ? `192.168.1.241/${name}:j${id}a${i}f1` : null,
+          failureReason: status === 'failed' ? 'Job task failed with exit code 1' : null,
+          createdAt: `2026-11-08T${String(12 - (i % 12)).padStart(2, '0')}:30:00Z`,
+          startedAt: `2026-11-08T${String(12 - (i % 12)).padStart(2, '0')}:30:05Z`,
+          finishedAt: `2026-11-08T${String(12 - (i % 12)).padStart(2, '0')}:31:15Z`
+        }
+      })
+    }
+
+    const baseTime = new Date('2026-11-09T06:00:00Z').getTime()
+    for (let idx = 0; idx < 60; idx++) {
+      const id = idx + 6
+      const isJob = idx % 3 === 0
+      const status = statuses[idx % statuses.length]
+      const createdMs = baseTime - idx * 3600 * 1000
+      const startedMs = createdMs + 5000
+      const finishedMs = startedMs + (45 + (idx % 90)) * 1000
+      const createdAt = new Date(createdMs).toISOString()
+      const startedAt = new Date(startedMs).toISOString()
+      const finishedAt = new Date(finishedMs).toISOString()
+      const tag = `f${id.toString(16).padStart(6, '0')}`
+
+      if (isJob) {
+        const job = this.jobs[idx % this.jobs.length]
+        this.runs.push({
+          id,
+          kind: 'job',
+          pipelineId: null,
+          jobId: job.id,
+          status,
+          tag,
+          image: status === 'success' ? `192.168.1.241/${job.imageName}:${tag}` : null,
+          failureReason: status === 'failed' ? 'Tác vụ thất bại (exit code 1)' : null,
+          createdAt,
+          startedAt,
+          finishedAt,
+          steps: [
+            { name: 'checkout', status: 'success', startedAt, finishedAt },
+            { name: 'build', status: 'success', startedAt, finishedAt },
+            { name: 'push', status: 'success', startedAt, finishedAt },
+            { name: 'runjob', status: status === 'success' ? 'success' : 'failed', startedAt, finishedAt }
+          ],
+          tasks: [
+            {
+              position: 0,
+              label: job.tasks[0]?.label || 'Tác vụ 1',
+              status: status === 'success' ? 'success' : 'failed',
+              exitCode: status === 'success' ? 0 : 1,
+              startedAt,
+              finishedAt
+            }
+          ]
+        })
+      } else {
+        const pipeline = this.pipelines[idx % this.pipelines.length]
+        this.runs.push({
+          id,
+          kind: 'pipeline',
+          pipelineId: pipeline.id,
+          jobId: null,
+          status,
+          tag,
+          image: status === 'success' ? `192.168.1.241/${pipeline.imageName}:${tag}` : null,
+          failureReason: status === 'failed' ? 'Build failed' : null,
+          createdAt,
+          startedAt,
+          finishedAt,
+          steps: [
+            { name: 'checkout', status: 'success', startedAt, finishedAt },
+            { name: 'build', status: status === 'failed' ? 'failed' : 'success', startedAt, finishedAt },
+            { name: 'push', status: status === 'success' ? 'success' : 'skipped', startedAt: null, finishedAt: null },
+            { name: 'deploy', status: status === 'success' ? 'success' : 'skipped', startedAt: null, finishedAt: null }
+          ],
+          tasks: []
+        })
+      }
+    }
   }
 
   private checkAuth(): void {
@@ -983,9 +1177,7 @@ export class MockShipitApi implements ShipitApi {
     return { ...run }
   }
 
-  async getRuns(params?: { pipelineId?: number; jobId?: number; limit?: number }): Promise<Run[]> {
-    await delay()
-    this.checkAuth()
+  private filterAndSortRuns(params?: GetRunsParams): RunDetail[] {
     let list = [...this.runs]
     if (params?.pipelineId !== undefined) {
       list = list.filter((r) => r.pipelineId === params.pipelineId)
@@ -993,11 +1185,66 @@ export class MockShipitApi implements ShipitApi {
     if (params?.jobId !== undefined) {
       list = list.filter((r) => r.jobId === params.jobId)
     }
-    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    if (params?.limit) {
-      list = list.slice(0, params.limit)
+    if (params?.kind) {
+      list = list.filter((r) => (r.kind ?? (r.jobId ? 'job' : 'pipeline')) === params.kind)
     }
+    if (params?.status) {
+      list = list.filter((r) => r.status === params.status)
+    }
+    if (params?.q && params.q.trim() !== '') {
+      const q = params.q.trim().toLowerCase()
+      const qNum = q.startsWith('#') ? q.slice(1) : q
+      list = list.filter((r) => {
+        const pName = r.pipelineId
+          ? this.pipelines.find((p) => p.id === r.pipelineId)?.name ?? ''
+          : ''
+        const jName = r.jobId
+          ? this.jobs.find((j) => j.id === r.jobId)?.name ?? ''
+          : ''
+        return (
+          String(r.id).includes(qNum) ||
+          `#${r.id}`.includes(q) ||
+          pName.toLowerCase().includes(q) ||
+          jName.toLowerCase().includes(q) ||
+          (r.image ?? '').toLowerCase().includes(q) ||
+          (r.tag ?? '').toLowerCase().includes(q)
+        )
+      })
+    }
+    list.sort((a, b) => {
+      const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      return diff !== 0 ? diff : b.id - a.id
+    })
     return list
+  }
+
+  async getRuns(params?: GetRunsParams): Promise<Run[]> {
+    await delay()
+    this.checkAuth()
+    const filtered = this.filterAndSortRuns(params)
+    if (params?.page !== undefined || params?.pageSize !== undefined) {
+      const page = Math.max(1, params.page ?? 1)
+      const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20))
+      return filtered.slice((page - 1) * pageSize, page * pageSize)
+    }
+    if (params?.limit) {
+      return filtered.slice(0, params.limit)
+    }
+    return filtered
+  }
+
+  async getRunsPaged(params?: GetRunsParams): Promise<PagedResult<Run>> {
+    await delay()
+    this.checkAuth()
+    const filtered = this.filterAndSortRuns(params)
+    const page = Math.max(1, params?.page ?? 1)
+    const pageSize = Math.min(100, Math.max(1, params?.pageSize ?? 20))
+    const items = filtered.slice((page - 1) * pageSize, page * pageSize)
+    return {
+      items,
+      total: filtered.length,
+      serverPaginated: true
+    }
   }
 
   async getRun(id: number): Promise<RunDetail> {
