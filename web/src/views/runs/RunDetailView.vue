@@ -164,14 +164,13 @@ async function loadRunData(id: number) {
     runData.tasks = runData.tasks || []
     run.value = runData
 
-    if (runData.jobId && !runsStore.jobs.some((j) => j.id === runData.jobId)) {
-      runsStore.fetchJobs().catch(() => {})
-    }
-
-    // Fetch pipeline info and initial logs in parallel
+    // Fetch pipeline info, job list (if needed), and initial logs in parallel
     const [logsRes, pipelineRes] = await Promise.allSettled([
       api.getRunLogs(id, 0),
-      runData.pipelineId ? api.getPipeline(runData.pipelineId) : Promise.resolve(null)
+      runData.pipelineId ? api.getPipeline(runData.pipelineId) : Promise.resolve(null),
+      runData.jobId && !runsStore.jobs.some((j) => j.id === runData.jobId)
+        ? runsStore.fetchJobs()
+        : Promise.resolve(null)
     ])
 
     if (pipelineRes.status === 'fulfilled' && pipelineRes.value) {

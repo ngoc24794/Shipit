@@ -148,7 +148,10 @@ async function handleTriggerRun() {
 
 async function manualRefresh() {
   const pipelineId = selectedPipelineFilter.value ? Number(selectedPipelineFilter.value) : undefined
-  await runsStore.fetchRuns({ pipelineId })
+  await Promise.all([
+    runsStore.fetchRuns({ pipelineId }),
+    runsStore.fetchJobs()
+  ])
 }
 
 function navigateToRun(id: number) {

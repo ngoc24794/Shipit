@@ -306,4 +306,73 @@ describe('Job Run UI (Task J3: job-ui-run)', () => {
     expect(newRun.status).toBe('queued')
     expect(store.runs[0].id).toBe(newRun.id)
   })
+
+  it('runsStore: fresh store does not return hardcoded avina-dbmigrator for getJobName(1), and returns fetched job name after fetchJobs', async () => {
+    const store = useRunsStore()
+    expect(store.getJobName(1)).not.toBe('avina-dbmigrator')
+    expect(store.getJobName(1)).toBe('Job #1')
+
+    vi.spyOn(mockApi, 'getJobs').mockResolvedValue([
+      {
+        id: 1,
+        name: 'job-probe-ok',
+        gitUrl: 'http://git.example/probe',
+        gitBranch: 'main',
+        gitCredentialId: 1,
+        slaveId: 1,
+        dockerfilePath: 'Dockerfile',
+        buildContext: '.',
+        imageName: 'job-probe-ok',
+        registryHost: '192.168.1.241',
+        deployRegistryHost: null,
+        registryCredentialId: null,
+        namespace: 'devops',
+        containerName: 'probe',
+        serviceAccount: null,
+        imagePullSecrets: [],
+        tasks: []
+      }
+    ])
+
+    await store.fetchJobs()
+    expect(store.getJobName(1)).toBe('job-probe-ok')
+  })
+
+  it('RunDetailView awaits fetchJobs and displays fetched job name instead of hardcoded avina-dbmigrator', async () => {
+    vi.spyOn(mockApi, 'getJobs').mockResolvedValue([
+      {
+        id: 1,
+        name: 'job-probe-ok',
+        gitUrl: 'http://git.example/probe',
+        gitBranch: 'main',
+        gitCredentialId: 1,
+        slaveId: 1,
+        dockerfilePath: 'Dockerfile',
+        buildContext: '.',
+        imageName: 'job-probe-ok',
+        registryHost: '192.168.1.241',
+        deployRegistryHost: null,
+        registryCredentialId: null,
+        namespace: 'devops',
+        containerName: 'probe',
+        serviceAccount: null,
+        imagePullSecrets: [],
+        tasks: []
+      }
+    ])
+
+    const wrapper = mount(RunDetailView, {
+      global: {
+        plugins: [router],
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' }
+        }
+      }
+    })
+
+    await waitMounted(wrapper)
+
+    expect(wrapper.find('h1').text()).toBe('job-probe-ok')
+    expect(wrapper.find('h1').text()).not.toContain('avina-dbmigrator')
+  })
 })
