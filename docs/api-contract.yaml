@@ -5,7 +5,8 @@ info:
   description: |
     Contract for the Shipit monolith. All routes except /healthz, /readyz and /api/auth/login
     require the admin session cookie (401 otherwise). Credential values are write-only:
-    no response ever contains a secret value.
+    no response ever contains a secret value. ConfigMaps and Secrets in Job definitions are
+    referenced by name only.
 servers:
   - url: /
 tags:
@@ -16,6 +17,9 @@ tags:
   - name: pipelines
   - name: runs
   - name: deploy-targets
+  - name: jobs
+  - name: job-allow-entries
+  - name: search
 paths:
   /healthz:
     get:
@@ -305,6 +309,30 @@ paths:
           in: query
           required: false
           schema: { type: integer, format: int64 }
+        - name: jobId
+          in: query
+          required: false
+          schema: { type: integer, format: int64 }
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string, enum: [pipeline, job] }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [queued, running, success, failed, cancelled] }
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
         - name: limit
           in: query
           required: false
@@ -312,11 +340,16 @@ paths:
       responses:
         '200':
           description: Runs
+          headers:
+            X-Total-Count:
+              description: Total number of matching runs before pagination
+              schema: { type: integer, format: int64 }
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Run' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
   /api/runs/{id}:
     parameters:
@@ -413,6 +446,184 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { description: Deploy target not found }
         '409': { $ref: '#/components/responses/Conflict' }
+  /api/jobs:
+    get:
+      tags: [jobs]
+      summary: List jobs
+      responses:
+        '200':
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Job' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [jobs]
+      summary: Create a job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/JobInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/jobs/validate:
+    post:
+      tags: [jobs]
+      summary: Validate job configuration without saving
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/JobInput' }
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobValidation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/jobs/preview:
+    post:
+      tags: [jobs]
+      summary: Preview Kubernetes Job YAML generated for tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/JobInput' }
+      responses:
+        '200':
+          description: Preview result with generated YAML per task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobPreview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/jobs/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [jobs]
+      summary: Get a job
+      responses:
+        '200':
+          description: Job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [jobs]
+      summary: Update a job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/JobInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [jobs]
+      summary: Delete a job (409 while a run is active)
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/jobs/{id}/runs:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [jobs]
+      summary: Trigger a run (409 if this job already has an active run)
+      responses:
+        '202':
+          description: Run accepted and queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/job-allow-entries:
+    get:
+      tags: [job-allow-entries]
+      summary: List allowed job namespaces, configmaps, secrets and pull secrets
+      responses:
+        '200':
+          description: Allowed job entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/JobAllowEntry' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [job-allow-entries]
+      summary: Add an allowed job entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/JobAllowEntryInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobAllowEntry' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/job-allow-entries/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    delete:
+      tags: [job-allow-entries]
+      summary: Delete an allowed job entry
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { description: Job allow entry not found }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/search:
+    get:
+      tags: [search]
+      summary: Global search across runs, pipelines, jobs, slaves, credentials, deploy targets and job allow entries
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 20, default: 5 }
+      responses:
+        '200':
+          description: Grouped search results (empty groups omitted)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 components:
   securitySchemes:
     sessionCookie:
@@ -589,16 +800,18 @@ components:
       enum: [queued, running, success, failed, cancelled]
     StepName:
       type: string
-      enum: [checkout, build, push, deploy]
+      enum: [checkout, build, push, deploy, runjob]
     StepStatus:
       type: string
       enum: [pending, running, success, failed, skipped, cancelled]
     Run:
       type: object
-      required: [id, pipelineId, status, createdAt]
+      required: [id, kind, status, createdAt]
       properties:
         id: { type: integer, format: int64 }
-        pipelineId: { type: integer, format: int64 }
+        pipelineId: { type: integer, format: int64, nullable: true }
+        jobId: { type: integer, format: int64, nullable: true }
+        kind: { type: string, enum: [pipeline, job] }
         status: { $ref: '#/components/schemas/RunStatus' }
         tag: { type: string, nullable: true, description: Short git sha, known after checkout }
         image: { type: string, nullable: true }
@@ -614,15 +827,28 @@ components:
         status: { $ref: '#/components/schemas/StepStatus' }
         startedAt: { type: string, format: date-time, nullable: true }
         finishedAt: { type: string, format: date-time, nullable: true }
+    RunTask:
+      type: object
+      required: [position, label, status]
+      properties:
+        position: { type: integer }
+        label: { type: string }
+        status: { $ref: '#/components/schemas/StepStatus' }
+        exitCode: { type: integer, nullable: true }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
     RunDetail:
       allOf:
         - $ref: '#/components/schemas/Run'
         - type: object
-          required: [steps]
+          required: [steps, tasks]
           properties:
             steps:
               type: array
               items: { $ref: '#/components/schemas/RunStep' }
+            tasks:
+              type: array
+              items: { $ref: '#/components/schemas/RunTask' }
     LogLine:
       type: object
       required: [seq, step, stream, text, at]
@@ -632,6 +858,7 @@ components:
         stream: { type: string, enum: [stdout, stderr, system] }
         text: { type: string, description: Already masked; secrets are replaced by *** }
         at: { type: string, format: date-time }
+        taskPosition: { type: integer, nullable: true, description: Null for pipeline runs; 0-based task index for job runs }
     DeployTarget:
       type: object
       required: [id, namespace, deployment, createdAt]
@@ -646,5 +873,196 @@ components:
       properties:
         namespace: { type: string, example: devops }
         deployment: { type: string, example: shipit-demo }
+    JobAllowKind:
+      type: string
+      enum: [namespace, configmap, secret, pullsecret]
+    JobAllowEntry:
+      type: object
+      required: [id, namespace, kind, name, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        namespace: { type: string }
+        kind: { $ref: '#/components/schemas/JobAllowKind' }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+    JobAllowEntryInput:
+      type: object
+      required: [namespace, kind, name]
+      properties:
+        namespace: { type: string }
+        kind: { $ref: '#/components/schemas/JobAllowKind' }
+        name: { type: string }
+    JobEnvVar:
+      type: object
+      description: Env var for a task. Plain value or a reference to a Secret key resolved by Kubernetes. Secret values are never stored or returned.
+      properties:
+        name: { type: string, nullable: true }
+        value: { type: string, nullable: true }
+        secretName: { type: string, nullable: true }
+        secretKey: { type: string, nullable: true }
+    JobTask:
+      type: object
+      description: One task in a Job. References ConfigMaps and Secrets by name only; secret values are never returned.
+      required: [position, label, args, envFromConfigMaps, envFromSecrets, env, timeoutSeconds, backoffLimit, ttlSeconds]
+      properties:
+        position: { type: integer }
+        label: { type: string }
+        args:
+          type: array
+          items: { type: string }
+        envFromConfigMaps:
+          type: array
+          items: { type: string }
+        envFromSecrets:
+          type: array
+          items: { type: string }
+        env:
+          type: array
+          items: { $ref: '#/components/schemas/JobEnvVar' }
+        timeoutSeconds: { type: integer, default: 1800 }
+        backoffLimit: { type: integer, default: 0 }
+        ttlSeconds: { type: integer, default: 3600 }
+    JobTaskInput:
+      type: object
+      required: [label]
+      properties:
+        label: { type: string }
+        args:
+          type: array
+          items: { type: string }
+        envFromConfigMaps:
+          type: array
+          items: { type: string }
+        envFromSecrets:
+          type: array
+          items: { type: string }
+        env:
+          type: array
+          items: { $ref: '#/components/schemas/JobEnvVar' }
+        timeoutSeconds: { type: integer, nullable: true, default: 1800 }
+        backoffLimit: { type: integer, nullable: true, default: 0 }
+        ttlSeconds: { type: integer, nullable: true, default: 3600 }
+    Job:
+      type: object
+      description: Job resource. All secret references (credentials, ConfigMaps, Secrets, ImagePullSecrets) are by ID or name; secret values are never returned.
+      required: [id, name, gitUrl, gitBranch, gitCredentialId, slaveId, dockerfilePath, imageName, registryHost, namespace, containerName, imagePullSecrets, tasks]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        gitUrl: { type: string }
+        gitBranch: { type: string, default: main }
+        gitCredentialId: { type: integer, format: int64 }
+        slaveId: { type: integer, format: int64 }
+        dockerfilePath: { type: string, default: Dockerfile }
+        buildContext:
+          type: string
+          nullable: true
+          description: Relative path within repo for docker build context (. for repo root). Null defaults to the directory containing Dockerfile.
+        imageName: { type: string, description: 'Repository name without registry host, e.g. shipit-demo' }
+        registryHost: { type: string, example: 192.168.1.241 }
+        deployRegistryHost:
+          type: string
+          nullable: true
+          description: Host (and optional port) placed into the Job container image reference. Null/empty defaults to registryHost.
+        registryCredentialId: { type: integer, format: int64, nullable: true }
+        namespace: { type: string }
+        containerName: { type: string }
+        serviceAccount: { type: string, nullable: true }
+        imagePullSecrets:
+          type: array
+          items: { type: string }
+        tasks:
+          type: array
+          items: { $ref: '#/components/schemas/JobTask' }
+        lastRun:
+          allOf:
+            - $ref: '#/components/schemas/Run'
+          nullable: true
+    JobInput:
+      type: object
+      required: [name, gitUrl, gitCredentialId, slaveId, imageName, registryHost, namespace, containerName]
+      properties:
+        name: { type: string }
+        gitUrl: { type: string }
+        gitBranch: { type: string, default: main }
+        gitCredentialId: { type: integer, format: int64 }
+        slaveId: { type: integer, format: int64 }
+        dockerfilePath: { type: string, default: Dockerfile }
+        buildContext:
+          type: string
+          nullable: true
+          description: Relative path within repo for docker build context (. for repo root). Null/empty defaults to the directory containing Dockerfile.
+        imageName: { type: string }
+        registryHost: { type: string }
+        deployRegistryHost:
+          type: string
+          nullable: true
+          description: Host (and optional port) placed into the Job container image reference. Null/empty defaults to registryHost.
+        registryCredentialId: { type: integer, format: int64, nullable: true }
+        namespace: { type: string }
+        containerName: { type: string }
+        serviceAccount: { type: string, nullable: true }
+        imagePullSecrets:
+          type: array
+          items: { type: string }
+        tasks:
+          type: array
+          items: { $ref: '#/components/schemas/JobTaskInput' }
+    JobValidation:
+      type: object
+      required: [valid, errors]
+      properties:
+        valid: { type: boolean }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+    JobPreviewTask:
+      type: object
+      required: [position, label, yaml]
+      properties:
+        position: { type: integer }
+        label: { type: string }
+        yaml: { type: string }
+    JobPreview:
+      type: object
+      required: [errors, tasks]
+      properties:
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+        tasks:
+          type: array
+          items: { $ref: '#/components/schemas/JobPreviewTask' }
+    SearchItem:
+      type: object
+      required: [id, title, path]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        subtitle: { type: string, nullable: true }
+        path: { type: string }
+    SearchGroup:
+      type: object
+      required: [kind, label, items]
+      properties:
+        kind:
+          type: string
+          enum: [run, pipeline, job, slave, credential, deploy-target, job-allow]
+        label: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SearchItem' }
+    SearchResponse:
+      type: object
+      required: [query, groups]
+      properties:
+        query: { type: string }
+        groups:
+          type: array
+          items: { $ref: '#/components/schemas/SearchGroup' }
 security:
   - sessionCookie: []

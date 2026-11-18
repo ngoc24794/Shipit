@@ -216,7 +216,7 @@ Quy ước chung:
 - Xong khi: tiêu chí MVP phần "Thật sau khi bạn nhập credential" (mục 8); mọi lỗi tôi gặp được sửa trên nhánh `agent/<task>` tương ứng rồi build/deploy lại.
 
 ### Giai đoạn 3 – Sau MVP
-Webhook/cron trigger, nhiều slave + hàng đợi, rollback, apply manifest/helm, thông báo, build cache, đa người dùng. Lập kế hoạch riêng khi MVP xong.
+Xem mục 9 (Job). Còn lại: webhook/cron trigger, nhiều slave + hàng đợi, rollback, apply manifest/helm, thông báo, build cache, đa người dùng. Lập kế hoạch riêng khi MVP xong.
 
 ## 5. Bảng phân công
 
@@ -295,3 +295,96 @@ Kiểm chứng mỗi đợt: chạy lại lệnh "Xong khi" của từng task tr
 11. Deploy: `kubectl --context staging-admin@staging -n devops get deploy/shipit-demo -o jsonpath='{.spec.template.spec.containers[0].image}'` = image vừa push; `rollout status` hoàn tất; UI hiện run `success` kèm log đầy đủ.
 12. Log run và log pod `shipit` không chứa secret (private key, token, password); slave không còn phiên `docker login` của Shipit.
 13. Run cố ý lỗi (ví dụ Dockerfile sai) cho trạng thái `failed`, deploy không chạy, `shipit-demo` giữ nguyên image cũ.
+
+## 9. Mở rộng: Job (tài nguyên chạy tác vụ một lần)
+
+Trạng thái: **đã chốt hướng** (2026-11-14), chưa triển khai. Động lực: chạy các công cụ run-to-completion như `Avina.AI.DbMigrator` (AvinaWorkspace, `src/Tools/Avina.AI.DbMigrator`, `docker/Dockerfile.dbmigrator`) bằng Shipit thay cho `kubectl apply job-migrate.yaml` thủ công. Pipeline hiện chỉ `set image` cho Deployment có sẵn; không tạo được k8s Job, không đọc được exit code/log của pod.
+
+### 9.1 Quyết định đã chốt
+
+| # | Quyết định |
+|---|---|
+| J1 | **Job là tài nguyên riêng**, mục "Job" ở sidebar cạnh Pipeline; không thêm công tắc "Loại" vào form Pipeline. Dùng chung Slave, Credential, bảng Run, `StepTimeline`, `LogViewer` |
+| J2 | Nguồn mã vẫn là **Git** (url, nhánh, credential, Dockerfile, build context), build trên slave như Pipeline. Shipit không đọc đường dẫn thư mục trên PC |
+| J3 | Job k8s được Shipit **tự dựng từ mẫu có cấu trúc lưu trong DB**, không nhận YAML tuỳ ý. Lý do: quyền `create jobs` không giới hạn được theo `resourceNames`; YAML tuỳ ý = tạo được pod mount secret bất kỳ |
+| J4 | Cần **allowlist Job** (admin cấu hình): namespace được chạy, và tên ConfigMap / Secret / pullSecret được phép tham chiếu. Shipit chỉ lưu và dùng **tên**, không bao giờ đọc hay hiển thị giá trị secret; RBAC của Shipit **không** có `get secrets` |
+| J5 | Một Job gồm danh sách **tác vụ có thứ tự** (mỗi tác vụ = một k8s Job: args, nguồn env, timeout). Chạy tuần tự, dừng ở tác vụ lỗi đầu tiên; mỗi tác vụ có trạng thái, exit code, log riêng |
+| J6 | Phạm vi giai đoạn 1: **chỉ staging** (cụm Shipit đang chạy), namespace do allowlist cho phép. Không production. Các lệnh in bí mật của DbMigrator (`create-admin`, `reset-admin-password`, `reset-admin-totp`) **không** đưa vào Shipit |
+| J7 | `backoffLimit` mặc định **0** (người dùng tự chạy lại), `ttlSecondsAfterFinished` mặc định 3600, `activeDeadlineSeconds` bắt buộc có giá trị (mặc định 1800). Security context cố định: non-root 1654, `runAsNonRoot`, `emptyDir` ở `/tmp` |
+
+### 9.2 Mô hình dữ liệu (thêm, additive)
+
+- `Job`: `Name` (unique), `GitUrl`, `GitBranch`, `GitCredentialId`, `SlaveId`, `DockerfilePath`, `BuildContext`, `ImageName`, `RegistryHost`, `DeployRegistryHost`, `RegistryCredentialId?`, `Namespace`, `ContainerName`, `ServiceAccount?`, `ImagePullSecrets` (JSON list tên), `CreatedAt/UpdatedAt`.
+- `JobTask`: `JobId`, `Position`, `Label`, `Args` (JSON list), `EnvFromConfigMaps` / `EnvFromSecrets` (JSON list tên), `Env` (JSON list `{name, value}` hoặc `{name, secretName, secretKey}`), `TimeoutSeconds`, `BackoffLimit`, `TtlSeconds`.
+- `JobAllowEntry`: `Namespace`, `Kind` (`namespace|configmap|secret|pullsecret`), `Name`; unique `(Namespace, Kind, Name)`; seed từ cấu hình như `DeployTarget`.
+- `Run`: thêm `JobId?` (đúng một trong `PipelineId`/`JobId` có giá trị, ràng buộc CHECK). `RunStep`: thêm giá trị `StepName.RunJob`; run của Job có 4 bước `Checkout, Build, Push, RunJob` (không có `Deploy`).
+- `RunTask`: `RunId`, `Position`, `Label`, `Status`, `ExitCode?`, `StartedAt/FinishedAt`, `K8sJobName?`. `RunLog`: thêm `TaskPosition?` để nhóm log theo tác vụ.
+- Một migration additive duy nhất (`AddJobs`), viết ở J0.
+
+### 9.3 API (bổ sung vào `docs/api-contract.yaml`)
+
+`/api/jobs` (GET list, POST) · `/api/jobs/{id}` (GET, PUT, DELETE; 409 nếu còn run đang chạy) · `/api/jobs/{id}/runs` (POST: chạy, 409 nếu đang có run của Job đó) · `POST /api/jobs/validate` và `POST /api/jobs/preview` (nhận body như form chưa lưu; trả danh sách lỗi và YAML Job sinh ra, chỉ đọc) · `/api/job-allow-entries` (GET, POST, DELETE; chỉ admin) · `GET /api/runs` và `GET /api/runs/{id}` trả thêm `kind` (`pipeline|job`), `jobId?`, `tasks[]` · SSE log có thêm `taskPosition`. Giá trị credential và giá trị secret **không bao giờ** xuất hiện trong response.
+
+### 9.4 Luồng bước `RunJob`
+
+Với từng tác vụ theo thứ tự: kiểm tra allowlist (từ chối mà **không gọi API cụm**) → tạo Job tên `<job>-<runId>-<position>`, label `shipit/run-id`, `shipit/job-id`, `shipit/task` → theo dõi pod, stream `pods/log` vào `RunLogs` qua `LogMasker` → chờ hoàn tất → exit 0 thì `Success`, khác 0 thì `Failed` với lý do `job exited with code N` (124 nếu quá `activeDeadlineSeconds`) → tác vụ sau `Skipped`. Huỷ run: xoá Job đang chạy (propagation foreground). Khởi động lại Shipit giữa chừng: run `failed (interrupted)`; khi khởi động đối soát theo label và xoá Job mồ côi. Tag image = sha ngắn từ checkout, y như Pipeline.
+
+### 9.5 Task
+
+Quy ước chung giữ nguyên mục 4 (commit `<prefix>: <lower message>`, không push, không merge vào `main`; chạy test bằng `env -u AVINA_STAGING_SHIPIT_DB_URL dotnet test ...`; worker không chạm cụm/slave/DB/secret thật; không đổi `deploy/k8s/prod/`).
+
+**J0 `job-scaffold`** (Claude, tuần tự, nhánh `agent/job-scaffold`) – Chốt các thứ để task song song không đụng nhau: phần Job trong `docs/api-contract.yaml`; trong `Shipit.Core`: `IK8sJobRunner`, `JobRequest`, `JobTaskRequest`, `JobResult`, `IJobAllowList`; entity + `ShipitDbContext` + migration `AddJobs` + seed `JobAllowEntry`; DTO trong `Shipit.Api/Dtos.cs`. Chưa có logic.
+- Xong khi: `dotnet build -warnaserror` OK; `dotnet test` toàn solution pass (test cũ không đổi); `dotnet ef migrations script --idempotent` ra SQL hợp lệ không cần DB; `dotnet format --verify-no-changes` sạch.
+
+**J1 `job-k8s`** (agy) – `Shipit.K8s`: `JobSpecBuilder` (hàm thuần: `JobRequest` → `V1Job` + serialize YAML cho preview, security context cố định theo J7), `KubernetesJobRunner` (create, watch pod, follow log, đọc exit code, delete), `JobAllowList`, `FakeK8sJobRunner` (kịch bản cấu hình được: exit code, log, treo/timeout).
+- Được sửa: `src/Shipit.K8s/`, `tests/Shipit.K8s.Tests/`, `deploy/k8s/base/11-rbac-avina-workspace.yaml` (thêm `batch/jobs` create/get/list/watch/delete, `pods` get/list/watch, `pods/log` get; **không** thêm secrets, không wildcard).
+- Phụ thuộc: J0.
+- Xong khi: `dotnet test tests/Shipit.K8s.Tests` pass với `HttpMessageHandler` giả: namespace / configmap / secret ngoài allowlist bị từ chối không gọi API; YAML sinh ra có `runAsNonRoot`, `backoffLimit: 0`, `activeDeadlineSeconds`, label `shipit/*`, và **không chứa giá trị secret**; exit code khác 0 và timeout được trả đúng; xoá Job khi huỷ. `kubectl apply --dry-run=client -f deploy/k8s/base/` OK.
+
+**J2 `job-ui-config`** (agy) – Trang Job trong `web/`: danh sách, form tạo/sửa 4 phần (nguồn mã; nơi chạy; tác vụ; xem trước), `TaskCard` (kéo thả đổi thứ tự, nhân bản), `ChipInput` (args), `EnvEditor`, `YamlPreview` (chỉ đọc), nút "Kiểm tra cấu hình"; trang admin "Allowlist Job"; mục sidebar "Job". Dùng mock adapter theo contract, theo `docs/design.md` (nhãn tiếng Việt: Job, Tác vụ, Kiểm tra cấu hình, Xem trước, Chạy ngay). Dropdown ConfigMap/Secret chỉ liệt kê tên từ allowlist.
+- Được sửa: `web/src/views/jobs/`, `web/src/components/job/`, `web/src/stores/jobs*`, `web/src/api/` (chỉ phần job), `web/src/router` + sidebar (chỉ thêm mục), test tương ứng.
+- Phụ thuộc: J0.
+- Xong khi: `cd web && npm ci && npm run typecheck && npm run test && npm run build` pass; test component: tạo Job DbMigrator mẫu (Git url, `docker/Dockerfile.dbmigrator`, context `.`, 2 tác vụ) gọi đúng API mock; bắt buộc có timeout; không render lại giá trị secret; không cuộn ngang ở 375px.
+
+**J3 `job-ui-run`** (agy) – Run của Job: `StepTimeline` đổi bước 4 thành "Chạy Job"; bảng tác vụ mở rộng (trạng thái, exit code, thời lượng); `LogViewer` nhóm log theo tác vụ (gập được, lọc theo tác vụ); cột "Loại" và liên kết tới Job trong danh sách Run; nút "Chạy ngay" trên trang Job. Chưa làm "chạy lại từ tác vụ lỗi" (giai đoạn sau).
+- Được sửa: `web/src/views/runs/`, `web/src/components/run/`, `web/src/stores/runs*`, test tương ứng (không đụng `web/src/views/jobs/`).
+- Phụ thuộc: J0.
+- Xong khi: `npm run typecheck && npm run test && npm run build` pass; test: SSE giả có `taskPosition` hiển thị đúng nhóm, tác vụ lỗi hiện exit code, tác vụ sau là "Bỏ qua".
+
+**J4 `job-engine`** (Claude, sau J1) – `Shipit.Engine`: nhánh `RunJob` trong `PipelineRunner` (hoặc `JobRunner` dùng chung checkout/build/push), khoá 1 run/Job, đối soát Job mồ côi lúc khởi động, huỷ, mask secret, ghi `RunTask`/`RunLog.TaskPosition`.
+- Xong khi: `dotnet test tests/Shipit.Engine.Tests` pass: 2 tác vụ thành công; tác vụ 1 lỗi thì tác vụ 2 `Skipped` và run `failed`; allowlist chặn thì không gọi runner; huỷ giữa tác vụ xoá Job; run thứ hai cùng Job bị từ chối; log không chứa secret giả; `interrupted` khi khởi động lại.
+
+**J5 `job-api`** (Claude, sau J4) – `Shipit.Api`: endpoint mục 9.3, validate (tên DNS-1123, args không chứa ký tự điều khiển, tham chiếu nằm trong allowlist, namespace được phép), preview bằng `JobSpecBuilder`, admin-only cho allowlist, seed allowlist từ cấu hình.
+- Xong khi: `dotnet test tests/Shipit.Api.Tests` pass: 401 khi chưa login; response không lộ credential / secret; tạo Job → chạy (fake) → run `success` với `tasks[]`; mọi path trong contract có endpoint (`ContractConformanceTests`); xoá allowlist entry đang được Job dùng → 409.
+
+**J6 `job-e2e`** (agy, Claude review, sau J2, J3, J5) – `tests/Shipit.E2E.Tests` luồng Job (login → credential + slave → allowlist → tạo Job DbMigrator mẫu → Run → 4 bước + tác vụ thành công, một biến thể tác vụ lỗi); cập nhật `README.md`, `scripts/dev-run.ps1` (dữ liệu mẫu Job).
+- Xong khi: `dotnet test` toàn solution pass; `pwsh scripts/dev-run.ps1` chạy được luồng Job với fake.
+
+**J7 `job-stage`** (Claude, sau J6, **có điểm dừng**) – Build và push image Shipit mới từ `build-srv`, áp RBAC mới ở `avina-workspace` và `devops`, rollout. Kiểm chứng thật bằng một Job vô hại ở `devops` (image `shipit-demo`, args in ra rồi thoát 0, và một lần thoát khác 0) — **không** chạy DbMigrator thật. Sau đó **dừng** để bạn quyết định: tạo allowlist + Job `avina-dbmigrator` trỏ vào configmap/secret của `avina-workspace` và chạy thật hay không (việc này migrate DB staging của Avina).
+- Xong khi: `kubectl --context staging-admin@staging auth can-i create jobs.batch -n avina-workspace --as=system:serviceaccount:devops:shipit` = yes, còn `get secrets` và `delete deployments` = no; run Job thử cho `success`, run lỗi cho `failed` với exit code đúng; log run và log pod `shipit` không chứa secret; Job k8s tự dọn theo TTL.
+
+### 9.6 Bảng phân công
+
+| Task | Agent | Nhánh | Chạy |
+|---|---|---|---|
+| J0 job-scaffold | Claude | `agent/job-scaffold` | Đầu tiên |
+| J1 job-k8s | agy | `agent/job-k8s` | Song song (đợt C) |
+| J2 job-ui-config | agy | `agent/job-ui-config` | Song song (đợt C) |
+| J3 job-ui-run | agy | `agent/job-ui-run` | Song song (đợt C) |
+| J4 job-engine | Claude | `agent/job-engine` | Sau J1 |
+| J5 job-api | Claude | `agent/job-api` | Sau J4 |
+| J6 job-e2e | agy (Claude review) | `agent/job-e2e` | Sau J2, J3, J5 |
+| J7 job-stage | Claude | `agent/job-stage` | Sau J6; **dừng** |
+
+Đợt C: 3 pane agy trong một tab (`j1-k8s` | `j2-ui-config` | `j3-ui-run`), mỗi agy một git worktree dưới `../Shipit.worktrees/`. Tôi kiểm `git diff --name-only main..agent/<task>` nằm trong phạm vi, chạy lại lệnh "Xong khi", rồi mới ghép cục bộ vào `integration`.
+
+### 9.7 Rủi ro riêng của Job
+
+| Rủi ro | Giảm thiểu | Kiểm chứng |
+|---|---|---|
+| Shipit tạo được pod tuỳ ý trong `avina-workspace` (create jobs không giới hạn theo tên) | Chỉ dựng pod từ mẫu cố định; allowlist namespace + tên configmap/secret/pullsecret; không nhận YAML; RBAC không có `get secrets` | Test J1 (YAML sinh ra, từ chối ngoài allowlist), `auth can-i` ở J7 |
+| Mật khẩu lọt vào log run (`create-admin`, `reset-admin-password`) | Không đưa các lệnh này vào Shipit giai đoạn 1; `LogMasker` vẫn áp dụng | Review args mẫu; test J4 |
+| Shipit restart khi Job đang chạy | `interrupted` + đối soát theo label lúc khởi động, xoá Job mồ côi; migration của Avina idempotent nên chạy lại an toàn | Test J4 |
+| Migrate nhầm DB staging thật | J7 chỉ chạy Job vô hại; chạy DbMigrator thật cần bạn xác nhận riêng | Điểm dừng J7 |
+| Log pod rất lớn / pod treo | `activeDeadlineSeconds` bắt buộc, giới hạn kích thước log như Pipeline | Test J1, J4 |
+| Job k8s bất biến (đổi args không áp lại được) | Mỗi run tạo Job tên mới theo run id + position | Test J1 |

@@ -53,6 +53,27 @@ public static class ShipitHost
                         return null;
                     }
                 }
+                if (name == ShipitOptions.JobAllowListKey || name == ShipitOptions.JobAllowListVar)
+                {
+                    var raw = config[name];
+                    if (!string.IsNullOrWhiteSpace(raw))
+                    {
+                        return raw;
+                    }
+                    var section = config.GetSection(ShipitOptions.JobAllowListKey);
+                    var children = section.GetChildren().ToList();
+                    if (children.Count > 0)
+                    {
+                        var entries = children.Select(c => new
+                        {
+                            Namespace = c["namespace"] ?? c["Namespace"] ?? "",
+                            Kind = c["kind"] ?? c["Kind"] ?? "",
+                            Name = c["name"] ?? c["Name"] ?? ""
+                        }).ToList();
+                        return System.Text.Json.JsonSerializer.Serialize(entries);
+                    }
+                    return null;
+                }
                 return config[name];
             });
             var missing = MissingSettings(options);
@@ -104,6 +125,10 @@ public static class ShipitHost
         services.AddSingleton<IDeployTargetStore, DbDeployTargetStore>();
         services.AddSingleton(sp => new DeployAllowList(sp.GetRequiredService<IDeployTargetStore>()));
 
+        services.AddSingleton<IJobAllowStore, DbJobAllowStore>();
+        services.AddSingleton(sp => new JobAllowList(sp.GetRequiredService<IJobAllowStore>()));
+        services.AddSingleton<IJobAllowList>(sp => sp.GetRequiredService<JobAllowList>());
+
         services.AddSingleton<ISshExecutor>(sp =>
             sp.GetRequiredService<ShipitOptions>().UseFakes ? FakeSshExecutor.HappyPath() : new SshNetExecutor());
         services.AddSingleton<IK8sDeployer>(sp =>
@@ -112,6 +137,13 @@ public static class ShipitHost
             return sp.GetRequiredService<ShipitOptions>().UseFakes
                 ? new FakeK8sDeployer(allowList)
                 : KubernetesDeployer.CreateInCluster(allowList);
+        });
+        services.AddSingleton<IK8sJobRunner>(sp =>
+        {
+            var allowList = sp.GetRequiredService<IJobAllowList>();
+            return sp.GetRequiredService<ShipitOptions>().UseFakes
+                ? new FakeK8sJobRunner(allowList)
+                : KubernetesJobRunner.CreateInCluster(allowList);
         });
 
         services.AddShipitEngine();
@@ -195,6 +227,7 @@ public static class ShipitHost
                 }
 
                 await SeedDeployTargetsAsync(scope.ServiceProvider, logger);
+                await SeedJobAllowListAsync(scope.ServiceProvider, logger);
                 return;
             }
             catch (Exception ex) when (attempt < 5)
@@ -220,6 +253,8 @@ public static class ShipitHost
         app.MapPipelines();
         app.MapRuns();
         app.MapDeployTargets();
+        app.MapJobs();
+        app.MapSearch();
 
         // Unknown API paths must be a plain 404, never the SPA shell.
         app.Map("/api/{**path}", () => Results.NotFound());
@@ -295,6 +330,78 @@ public static class ShipitHost
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Failed to parse or seed initial SHIPIT_DEPLOY_ALLOWLIST. Leaving deploy targets empty.");
+        }
+    }
+
+    private static async Task SeedJobAllowListAsync(IServiceProvider sp, ILogger logger)
+    {
+        var db = sp.GetRequiredService<ShipitDbContext>();
+
+        var isSeeded = await db.AppSettings.AnyAsync(s => s.Key == "job_allow_seeded");
+        if (isSeeded)
+        {
+            return;
+        }
+
+        var hasExistingData = await db.JobAllowEntries.AnyAsync();
+        if (hasExistingData)
+        {
+            db.AppSettings.Add(new Shipit.Data.Entities.AppSetting { Key = "job_allow_seeded", Value = "true" });
+            await db.SaveChangesAsync();
+            return;
+        }
+
+        var options = sp.GetRequiredService<ShipitOptions>();
+        var entries = options.JobAllowList;
+        if (entries == null || entries.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var now = DateTime.UtcNow;
+            var toAdd = new List<Shipit.Data.Entities.JobAllowEntry>();
+            var seen = new HashSet<(string, Shipit.Data.Entities.JobAllowKind, string)>();
+
+            foreach (var entry in entries)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Namespace)) continue;
+                var ns = entry.Namespace.Trim();
+                if (!Wire.TryParseAllowKind(entry.Kind, out var kind))
+                {
+                    continue;
+                }
+
+                var name = kind == Shipit.Data.Entities.JobAllowKind.Namespace
+                    ? ns
+                    : (string.IsNullOrWhiteSpace(entry.Name) ? string.Empty : entry.Name.Trim());
+
+                if (string.IsNullOrEmpty(name)) continue;
+
+                if (seen.Add((ns, kind, name)))
+                {
+                    toAdd.Add(new Shipit.Data.Entities.JobAllowEntry
+                    {
+                        Namespace = ns,
+                        Kind = kind,
+                        Name = name,
+                        CreatedAt = now
+                    });
+                }
+            }
+
+            if (toAdd.Count > 0)
+            {
+                db.JobAllowEntries.AddRange(toAdd);
+            }
+
+            db.AppSettings.Add(new Shipit.Data.Entities.AppSetting { Key = "job_allow_seeded", Value = "true" });
+            await db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to parse or seed initial Shipit:JobAllowList. Leaving job allow entries empty.");
         }
     }
 

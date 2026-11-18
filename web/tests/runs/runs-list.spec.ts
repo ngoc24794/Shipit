@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount as baseMount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import RunsView from '../../src/views/runs/RunsView.vue'
@@ -11,8 +11,15 @@ import { useRunsStore } from '../../src/stores/runs'
 describe('RunsView (Danh sách lượt chạy)', () => {
   let mockApi: MockShipitApi
   let router: any
+  const mountedWrappers: VueWrapper[] = []
 
-  beforeEach(() => {
+  const mount: typeof baseMount = ((component: any, options?: any) => {
+    const w = baseMount(component, options)
+    mountedWrappers.push(w)
+    return w
+  }) as typeof baseMount
+
+  beforeEach(async () => {
     setActivePinia(createPinia())
     mockApi = new MockShipitApi()
     setApi(mockApi)
@@ -21,21 +28,34 @@ describe('RunsView (Danh sách lượt chạy)', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/', name: 'runs', component: RunsView },
-        { path: '/runs/:id', name: 'run-detail', component: { template: '<div>Detail</div>' } }
+        { path: '/runs/:id', name: 'run-detail', component: { template: '<div>Detail</div>' } },
+        { path: '/pipelines', name: 'pipelines', component: { template: '<div>Pipelines</div>' } },
+        { path: '/jobs/:id', name: 'job-detail', component: { template: '<div>Job</div>' } }
       ]
     })
+    await router.push('/')
+    await router.isReady()
   })
 
   afterEach(() => {
+    while (mountedWrappers.length > 0) {
+      mountedWrappers.pop()?.unmount()
+    }
     vi.restoreAllMocks()
     vi.useRealTimers()
   })
 
   async function waitMounted(wrapper: any) {
     // MockShipitApi has 20ms delay on async methods
-    await new Promise((r) => setTimeout(r, 50))
+    await new Promise((r) => setTimeout(r, 80))
     await flushPromises()
     await wrapper.vm.$nextTick()
+    const store = useRunsStore()
+    for (let i = 0; i < 30 && (store.loading || store.loadingPipelines); i++) {
+      await new Promise((r) => setTimeout(r, 20))
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+    }
   }
 
   async function waitMountedFake(wrapper: any) {
@@ -49,7 +69,8 @@ describe('RunsView (Danh sách lượt chạy)', () => {
       global: {
         plugins: [router],
         stubs: {
-          AppLayout: { template: '<div><slot /></div>' }
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true
         }
       }
     })
@@ -66,14 +87,46 @@ describe('RunsView (Danh sách lượt chạy)', () => {
     expect(wrapper.text()).toContain('Đang chờ')
   })
 
+  it('renders "Loại" column with Pipeline and Job badges and links to corresponding resources', async () => {
+    const wrapper = mount(RunsView, {
+      global: {
+        plugins: [router],
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true
+        }
+      }
+    })
+
+    await waitMounted(wrapper)
+
+    // Table headers should include "Loại"
+    const headers = wrapper.findAll('th').map((th) => th.text())
+    expect(headers).toContain('Loại')
+
+    // Table rows should display both 'Pipeline' and 'Job'
+    expect(wrapper.text()).toContain('Pipeline')
+    expect(wrapper.text()).toContain('Job')
+
+    // Links to pipeline and job
+    const links = wrapper.findAll('a')
+    const hrefs = links.map((l) => l.attributes('href'))
+    expect(hrefs.some((h) => h?.includes('/jobs/1'))).toBe(true)
+    expect(hrefs.some((h) => h?.includes('/pipelines'))).toBe(true)
+  })
+
   it('displays EmptyState when runs list is empty', async () => {
-    vi.spyOn(mockApi, 'getRuns').mockResolvedValue([])
+    vi.spyOn(mockApi, 'getRunsPaged').mockResolvedValue({
+      items: [],
+      total: 0
+    })
 
     const wrapper = mount(RunsView, {
       global: {
         plugins: [router],
         stubs: {
-          AppLayout: { template: '<div><slot /></div>' }
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true
         }
       }
     })
@@ -92,7 +145,8 @@ describe('RunsView (Danh sách lượt chạy)', () => {
       global: {
         plugins: [router],
         stubs: {
-          AppLayout: { template: '<div><slot /></div>' }
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true
         }
       }
     })
@@ -120,7 +174,8 @@ describe('RunsView (Danh sách lượt chạy)', () => {
       global: {
         plugins: [router],
         stubs: {
-          AppLayout: { template: '<div><slot /></div>' }
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true
         }
       }
     })
@@ -144,7 +199,8 @@ describe('RunsView (Danh sách lượt chạy)', () => {
       global: {
         plugins: [router],
         stubs: {
-          AppLayout: { template: '<div><slot /></div>' }
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true
         }
       }
     })
@@ -167,7 +223,8 @@ describe('RunsView (Danh sách lượt chạy)', () => {
     expect(triggerSpy).toHaveBeenCalledWith(1)
     expect(vm.triggerError).toContain('Pipeline đang có lượt chạy')
 
-    // Now simulate successful trigger
+    // Now simulate successful trigger -> navigates to /runs/99
+    const pushSpy = vi.spyOn(router, 'push')
     const newMockRun: Run = {
       id: 99,
       pipelineId: 1,
@@ -177,79 +234,166 @@ describe('RunsView (Danh sách lượt chạy)', () => {
       finishedAt: null
     }
     triggerSpy.mockResolvedValueOnce(newMockRun)
-    vi.spyOn(mockApi, 'getRuns').mockResolvedValueOnce([
-      newMockRun,
-      ...(await mockApi.getRuns())
-    ])
 
     await vm.handleTriggerRun()
     await waitMounted(wrapper)
 
     expect(vm.showTriggerDialog).toBe(false)
-    expect(wrapper.text()).toContain('#99')
+    expect(pushSpy).toHaveBeenCalledWith('/runs/99')
+  })
+
+  it('supports triggering a Job run from "Chạy ngay" modal and handles 409 conflict', async () => {
+    const pushSpy = vi.spyOn(router, 'push')
+    const runJobSpy = vi.spyOn(mockApi, 'runJob')
+
+    const wrapper = mount(RunsView, {
+      global: {
+        plugins: [router],
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true
+        }
+      }
+    })
+
+    await waitMounted(wrapper)
+
+    const openBtn = wrapper.find('button:has(.fill-current)')
+    await openBtn.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    // Switch segmented control to Job
+    const jobToggle = wrapper.findAll('div[aria-label="Loại đối tượng chạy"] button').find((b) => b.text() === 'Job')!
+    await jobToggle.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    // Open combobox and search for avina-dbmigrator
+    const combobox = wrapper.get('button[role="combobox"]')
+    await combobox.trigger('click')
+    const searchInput = wrapper.get('input[aria-label="Lọc danh sách"]')
+    await searchInput.setValue('dbmigrator')
+    const options = wrapper.findAll('li[role="option"]')
+    expect(options.map((o) => o.text())).toContain('avina-dbmigrator (#1)')
+    const option = options.find((o) => o.text().includes('avina-dbmigrator'))!
+    await option.trigger('click')
+
+    // First test 409 conflict for Job
+    runJobSpy.mockRejectedValueOnce(new (await import('../../src/api/client')).ApiError(409, 'Job đang có lượt chạy'))
+    const submitBtn = wrapper.findAll('button').filter((b) => b.text() === 'Chạy ngay').pop()!
+    await submitBtn.trigger('click')
+    await waitMounted(wrapper)
+
+    expect(runJobSpy).toHaveBeenCalledWith(1)
+    expect(wrapper.text()).toContain('Job đang có lượt chạy')
+
+    // Now test successful Job run -> navigates to /runs/101
+    runJobSpy.mockResolvedValueOnce({
+      id: 101,
+      kind: 'job',
+      jobId: 1,
+      pipelineId: null,
+      status: 'queued',
+      createdAt: new Date().toISOString(),
+      startedAt: null,
+      finishedAt: null
+    })
+    await submitBtn.trigger('click')
+    await waitMounted(wrapper)
+
+    expect(pushSpy).toHaveBeenCalledWith('/runs/101')
   })
 
   it('auto-refreshes periodically when active runs exist, and stops when all runs complete', async () => {
     vi.useFakeTimers()
-    const getRunsSpy = vi.spyOn(mockApi, 'getRuns')
+    const getRunsPagedSpy = vi.spyOn(mockApi, 'getRunsPaged')
 
     // Initial state: runs 3 & 4 are running/queued
     const wrapper = mount(RunsView, {
       global: {
         plugins: [router],
         stubs: {
-          AppLayout: { template: '<div><slot /></div>' }
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true
         }
       }
     })
 
     await waitMountedFake(wrapper)
-    const initialCallCount = getRunsSpy.mock.calls.length
+    const initialCallCount = getRunsPagedSpy.mock.calls.length
 
     // Advance 3 seconds -> poll should trigger
     await vi.advanceTimersByTimeAsync(3050)
     await flushPromises()
-    expect(getRunsSpy.mock.calls.length).toBeGreaterThan(initialCallCount)
+    expect(getRunsPagedSpy.mock.calls.length).toBeGreaterThan(initialCallCount)
 
     // Now simulate runs completed: all success or failed
     const completedRuns: Run[] = [
       { id: 1, pipelineId: 1, status: 'success', createdAt: '2026-11-09T07:30:00Z' },
       { id: 2, pipelineId: 2, status: 'failed', createdAt: '2026-11-09T08:00:00Z' }
     ]
-    getRunsSpy.mockResolvedValue(completedRuns)
+    getRunsPagedSpy.mockResolvedValue({
+      items: completedRuns,
+      total: 2
+    })
 
     // Advance another 3 seconds to fetch completed runs
     await vi.advanceTimersByTimeAsync(3050)
     await flushPromises()
+    await wrapper.vm.$nextTick()
 
-    const callCountAfterComplete = getRunsSpy.mock.calls.length
+    const callCountAfterComplete = getRunsPagedSpy.mock.calls.length
 
     // Advance another 6 seconds -> no more polling should occur
     await vi.advanceTimersByTimeAsync(6000)
-    expect(getRunsSpy.mock.calls.length).toBe(callCountAfterComplete)
+    expect(getRunsPagedSpy.mock.calls.length).toBe(callCountAfterComplete)
 
     wrapper.unmount()
   })
 
-  it('filters runs by pipeline selection', async () => {
-    const getRunsSpy = vi.spyOn(mockApi, 'getRuns')
+  it('filters runs by kind, status, pipeline/job target, and paginates', async () => {
+    const getRunsPagedSpy = vi.spyOn(mockApi, 'getRunsPaged')
 
     const wrapper = mount(RunsView, {
       global: {
         plugins: [router],
         stubs: {
-          AppLayout: { template: '<div><slot /></div>' }
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true
         }
       }
     })
 
     await waitMounted(wrapper)
 
-    const select = wrapper.findComponent({ name: 'AppSelect' })
-    await select.vm.$emit('update:modelValue', 1)
+    expect(wrapper.text()).toContain('Hiển thị 1 đến 20 trong 65')
+
+    const targetSelect = wrapper.get('select[aria-label="Pipeline / Job"]')
+    await targetSelect.setValue('pipeline:1')
     await waitMounted(wrapper)
 
-    expect(getRunsSpy).toHaveBeenCalledWith({ pipelineId: 1 })
+    expect(getRunsPagedSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pipelineId: 1, page: 1, pageSize: 20 })
+    )
+
+    const statusSelect = wrapper.get('select[aria-label="Trạng thái"]')
+    await statusSelect.setValue('success')
+    await waitMounted(wrapper)
+
+    expect(getRunsPagedSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pipelineId: 1, status: 'success', page: 1, pageSize: 20 })
+    )
+
+    // Clear filters and go to page 2
+    const clearBtn = wrapper.findAll('button').find((b) => b.text().includes('Xoá bộ lọc'))!
+    await clearBtn.trigger('click')
+    await waitMounted(wrapper)
+
+    await wrapper.get('button[aria-label="Trang sau"]').trigger('click')
+    await waitMounted(wrapper)
+
+    expect(getRunsPagedSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 2, pageSize: 20 })
+    )
   })
 
   it('useRunsStore cancelRun action updates run in store and pipeline lastRun', async () => {

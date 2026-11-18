@@ -1,20 +1,42 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { mount } from '@vue/test-utils'
+import { mount as baseMount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import CredentialsView from '../../src/views/config/CredentialsView.vue'
+import CredentialFormView from '../../src/views/config/CredentialFormView.vue'
 import { useConfigCredentialsStore } from '../../src/stores/configCredentials'
+import { useAuthStore } from '../../src/stores/auth'
 import { MockShipitApi } from '../../src/api/mock'
 import { setApi } from '../../src/api'
 import { router } from '../../src/router'
-import { useToast } from '../../src/composables/useToast'
 
-describe('Credentials View & Store', () => {
+describe('Credentials View, Form & Store', () => {
   let mockApi: MockShipitApi
+  let pinia: ReturnType<typeof createPinia>
+  const mountedWrappers: VueWrapper[] = []
+
+  const mount: typeof baseMount = ((component: any, options?: any) => {
+    const w = baseMount(component, options)
+    mountedWrappers.push(w)
+    return w
+  }) as typeof baseMount
+
+  afterEach(() => {
+    while (mountedWrappers.length > 0) {
+      mountedWrappers.pop()?.unmount()
+    }
+    vi.restoreAllMocks()
+  })
 
   beforeEach(async () => {
-    setActivePinia(createPinia())
+    pinia = createPinia()
+    setActivePinia(pinia)
     mockApi = new MockShipitApi()
     setApi(mockApi)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    const authStore = useAuthStore()
+    authStore.user = { username: 'admin' }
+    authStore.initialized = true
   })
 
   it('loads credentials list without exposing secret values (tạo không lộ lại giá trị)', async () => {
@@ -27,7 +49,6 @@ describe('Credentials View & Store', () => {
       expect((cred as any).value).toBeUndefined()
     }
 
-    // Create a new credential
     const created = await store.createCredential({
       name: 'test-new-secret',
       kind: 'git_token',
@@ -36,58 +57,120 @@ describe('Credentials View & Store', () => {
 
     expect(created.id).toBeDefined()
     expect(created.hasValue).toBe(true)
-    // Secret value should never be present in returned credential
     expect((created as any).value).toBeUndefined()
 
-    // Assert that the newly fetched item in the list also doesn't contain secret value
     const found = store.credentials.find((c) => c.name === 'test-new-secret')
     expect(found).toBeDefined()
     expect((found as any)?.value).toBeUndefined()
   })
 
-  it('renders credentials view and mounts dialog properly', async () => {
+  it('renders credentials list and navigates to /credentials/new and /credentials/:id/edit', async () => {
+    await router.push('/credentials')
+    await router.isReady()
+    const pushSpy = vi.spyOn(router, 'push')
+
     const wrapper = mount(CredentialsView, {
       global: {
-        plugins: [createPinia(), router]
+        plugins: [pinia, router]
       }
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
     expect(wrapper.text()).toContain('Thông tin xác thực')
     expect(wrapper.text()).toContain('Khoá SSH')
     expect(wrapper.text()).toContain('Token Git')
-  })
 
-  it('displays username field ONLY when kind is Registry (trường username chỉ khi Registry)', async () => {
-    const store = useConfigCredentialsStore()
-    await store.fetchCredentials()
-
-    const wrapper = mount(CredentialsView, {
-      global: {
-        plugins: [createPinia(), router]
-      }
-    })
-
-    await new Promise((resolve) => setTimeout(resolve, 50))
-
-    // Open add dialog
     const addButton = wrapper.findAll('button').find((b) => b.text().includes('Thêm thông tin xác thực'))
     expect(addButton).toBeDefined()
     await addButton!.trigger('click')
+    expect(pushSpy).toHaveBeenCalledWith('/credentials/new')
+
+    const editButton = wrapper.find('button[aria-label="Sửa thông tin xác thực"]')
+    expect(editButton.exists()).toBe(true)
+    await editButton.trigger('click')
+    expect(pushSpy).toHaveBeenCalledWith('/credentials/1/edit')
+  })
+
+  it('displays username field ONLY when kind is Registry on CredentialFormView', async () => {
+    await router.push('/credentials/new')
+    await router.isReady()
+
+    const wrapper = mount(CredentialFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await flushPromises()
 
     // In default 'ssh_key' mode: username field should not be present
-    expect(document.body.innerHTML).not.toContain('Tên đăng nhập (Username)')
+    expect(wrapper.text()).not.toContain('Tên đăng nhập (Username)')
 
-    // Find select and change kind to 'registry'
-    const select = document.body.querySelector('select') as HTMLSelectElement
-    expect(select).toBeDefined()
-    select.value = 'registry'
-    select.dispatchEvent(new Event('change'))
+    // Change kind to 'registry'
+    const select = wrapper.find('select')
+    expect(select.exists()).toBe(true)
+    await select.setValue('registry')
     await wrapper.vm.$nextTick()
-    await new Promise((resolve) => setTimeout(resolve, 50))
 
-    // Now username field should be visible
-    expect(document.body.innerHTML).toContain('Tên đăng nhập (Username)')
+    expect(wrapper.text()).toContain('Tên đăng nhập (Username)')
+  })
+
+  it('loads credential by :id on edit page and shows not-found for unknown id', async () => {
+    await router.push('/credentials/1/edit')
+    await router.isReady()
+
+    const wrapper = mount(CredentialFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Sửa thông tin xác thực')
+    const nameInput = wrapper.find('input[placeholder="Ví dụ: gitlab-deploy-key"]')
+    expect((nameInput.element as HTMLInputElement).value).toBe('devops-ssh-key')
+
+    // Unknown id
+    await router.push('/credentials/99999/edit')
+    await router.isReady()
+
+    const notFoundWrapper = mount(CredentialFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    expect(notFoundWrapper.text()).toContain('Không tìm thấy thông tin xác thực')
+    expect(notFoundWrapper.text()).toContain('Quay lại danh sách')
+  })
+
+  it('warns on unsaved changes when leaving CredentialFormView', async () => {
+    await router.push('/credentials/new')
+    await router.isReady()
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false)
+
+    const wrapper = mount(CredentialFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await flushPromises()
+
+    const nameInput = wrapper.find('input[placeholder="Ví dụ: gitlab-deploy-key"]')
+    await nameInput.setValue('unsaved-cred')
+
+    await router.push('/credentials')
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(router.currentRoute.value.path).toBe('/credentials/new')
   })
 
   it('preserves existing value when editing without entering new secret (sửa để trống giữ giá trị)', async () => {
@@ -100,10 +183,9 @@ describe('Credentials View & Store', () => {
       value: 'original-secret-val'
     })
 
-    // Update credential without providing value
     await store.updateCredential(cred.id, {
       name: 'renamed-token',
-      value: undefined // empty / omitted
+      value: undefined
     })
 
     expect(updateSpy).toHaveBeenCalledWith(cred.id, {
@@ -119,11 +201,7 @@ describe('Credentials View & Store', () => {
 
   it('handles 409 conflict error when deleting an in-use credential (409 khi xoá)', async () => {
     const store = useConfigCredentialsStore()
-    const toast = useToast()
-    const toastErrorSpy = vi.spyOn(toast, 'error')
-
     await store.fetchCredentials()
-    // Credential id 1 is used by slave 1 in mock
     await expect(store.deleteCredential(1)).rejects.toThrow()
 
     expect(store.error).toBe('Thông tin xác thực đang được dùng bởi slave/pipeline')

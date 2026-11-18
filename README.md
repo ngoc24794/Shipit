@@ -49,19 +49,19 @@ Shipit hoạt động theo mô hình điều phối tập trung: người dùng 
 │   └── validate-manifests.py   # Script kiểm tra hợp lệ của manifest K8s
 ├── src/
 │   ├── Shipit.Api/             # Web API host, endpoints, cookie auth, SPA static files
-│   ├── Shipit.Core/            # Abstractions (ISshExecutor, IK8sDeployer, ISecretProtector)
+│   ├── Shipit.Core/            # Abstractions (ISshExecutor, IK8sDeployer, IK8sJobRunner, ISecretProtector)
 │   ├── Shipit.Data/            # EF Core DbContext, thực thể (Entities), Migrations
-│   ├── Shipit.Engine/          # PipelineRunner, RunCoordinator, xử lý hàng đợi
-│   ├── Shipit.K8s/             # Triển khai Kubernetes API client và FakeK8sDeployer
+│   ├── Shipit.Engine/          # PipelineRunner, RunCoordinator, điều phối Pipeline và Job
+│   ├── Shipit.K8s/             # Triển khai K8s Deployer, Job Runner, AllowList và Fake fakes
 │   ├── Shipit.Security/        # Mã hoá AES-GCM và LogMasker che bí mật
 │   └── Shipit.Ssh/             # SSH.NET executor, RemoteCommandBuilder, FakeSshExecutor
 ├── tests/
-│   ├── Shipit.Api.Tests/       # Integration tests cho API
+│   ├── Shipit.Api.Tests/       # Integration tests cho API (Pipeline & Job endpoints)
 │   ├── Shipit.Core.Tests/      # Unit tests cho Core
 │   ├── Shipit.Data.Tests/      # Tests cho tầng dữ liệu và DbUrlParser
-│   ├── Shipit.E2E.Tests/       # Bộ test toàn trình (End-to-End) qua HTTP
+│   ├── Shipit.E2E.Tests/       # Bộ test toàn trình (End-to-End) qua HTTP cho Pipeline & Job
 │   ├── Shipit.Engine.Tests/    # Unit tests cho Engine và PipelineRunner
-│   ├── Shipit.K8s.Tests/       # Tests cho DeployAllowList và K8s Deployer
+│   ├── Shipit.K8s.Tests/       # Tests cho DeployAllowList, JobAllowList, Deployer và JobRunner
 │   ├── Shipit.Security.Tests/  # Tests mã hoá AES-GCM và LogMasker
 │   └── Shipit.Ssh.Tests/       # Tests SSH command builder và FakeSshExecutor
 ├── web/                        # Mã nguồn frontend Vue 3 + TypeScript
@@ -233,11 +233,116 @@ Trong thư mục `examples/hello-shipit` có sẵn một ứng dụng ASP.NET Co
 
 ---
 
+## Job (Tài nguyên chạy tác vụ một lần)
+
+### Khái niệm
+Khác với Pipeline (triển khai dịch vụ chạy liên tục dưới dạng Kubernetes Deployment bằng cách `set image`), **Job** là tài nguyên dành cho các công cụ chạy-hoàn-tất-rồi-thoát (**run-to-completion**) như migration cơ sở dữ liệu (`Avina.AI.DbMigrator`), nạp dữ liệu mẫu ban đầu (seed data), hoặc dọn dẹp theo đợt.
+
+Một Job trong Shipit được thực thi qua 4 bước:
+1. `checkout` (kéo mã nguồn từ Git trên Slave)
+2. `build` (đóng gói Docker image trên Slave với BuildKit: `DOCKER_BUILDKIT=1 docker build`)
+3. `push` (đẩy image lên Docker Registry)
+4. `runjob` (tạo và giám sát các Kubernetes Job tuần tự trong cụm)
+
+Mỗi Job bao gồm danh sách **các tác vụ có thứ tự** (tasks). Trong bước `runjob`, các tác vụ được thực thi tuần tự:
+- Mỗi tác vụ tương ứng với 1 Kubernetes Job pod (tham số `args`, nguồn biến môi trường, thời gian timeout).
+- Shipit theo dõi pod, stream nhật ký (log) thời gian thực theo từng tác vụ (`taskPosition`), đọc exit code.
+- Nếu tác vụ hoàn thành với exit code 0 (`Success`), hệ thống tiếp tục chạy tác vụ tiếp theo.
+- Nếu bất kỳ tác vụ nào thất bại (exit code khác 0), lượt chạy lập tức dừng với trạng thái `Failed`, các tác vụ phía sau chuyển sang `Skipped`.
+
+### Tạo Job DbMigrator mẫu qua UI từng bước
+
+Để chạy migration cơ sở dữ liệu cho các dịch vụ Avina (ví dụ: `files` và `users`), thực hiện các bước sau:
+
+1. **Cấu hình Allowlist Job:**
+   - Vào mục **Allowlist Job** trên thanh điều hướng (hoặc truy cập `/jobs/allowlist`).
+   - Thêm các mục cho phép tương ứng:
+     - Loại `Namespace`: namespace `avina-workspace`
+     - Loại `ConfigMap`: `avina-files-config` và `avina-users-config` (thuộc namespace `avina-workspace`)
+     - Loại `Secret`: `avina-files-secret` và `avina-users-secret` (thuộc namespace `avina-workspace`)
+     - Loại `PullSecret`: `registry-secret` (thuộc namespace `avina-workspace`)
+
+2. **Tạo Job mới:**
+   - Vào mục **Job** ở thanh điều hướng, chọn **Tạo Job mới**.
+   - **Nguồn mã & Máy build:**
+     - Tên Job: `avina-dbmigrator`
+     - Git URL: `https://git.example.com/team/avina.git`, nhánh: `main`
+     - Thông tin xác thực Git: chọn credential Git Token đã cấu hình
+     - Máy build: chọn Slave build mong muốn
+   - **Đóng gói Docker:**
+     - Dockerfile: `docker/Dockerfile.dbmigrator`
+     - Thư mục context build: `.` (gốc repo)
+     - Tên Image: `avina-dbmigrator`
+     - Máy chủ Registry: `192.168.1.241` (kèm Registry Credential nếu cần)
+   - **Cấu hình Kubernetes:**
+     - Namespace: `avina-workspace`
+     - Tên container: `app`
+     - Pull Secrets: chọn `registry-secret`
+   - **Danh sách tác vụ (Tasks):**
+     - *Tác vụ 1:* Nhãn `files`, Args: `migrate --service files`, Nguồn ConfigMap: `avina-files-config`, Nguồn Secret: `avina-files-secret`, Timeout: `1800`s, Giới hạn thử lại: `0`, TTL: `3600`s.
+     - *Tác vụ 2:* Nhãn `users`, Args: `migrate --service users`, Nguồn ConfigMap: `avina-users-config`, Nguồn Secret: `avina-users-secret`, Timeout: `1800`s, Giới hạn thử lại: `0`, TTL: `3600`s.
+   - **Kiểm tra và Lưu:**
+     - Bấm **Kiểm tra cấu hình** (Validate) để backend kiểm tra tính hợp lệ và đối soát với allowlist.
+     - Xem tab **Bản xem trước YAML** (Preview YAML) để rà soát manifest K8s được sinh tự động cho từng tác vụ.
+     - Bấm **Tạo Job** để hoàn tất lưu trữ.
+
+3. **Khởi chạy và Giám sát:**
+   - Trên danh sách Job hoặc trang chi tiết, bấm **Chạy ngay**.
+   - Giao diện chuyển đến trang chi tiết lượt chạy:
+     - **Timeline:** Hiện 4 bước (`checkout` → `build` → `push` → `runjob`).
+     - **Bảng tác vụ:** Liệt kê trạng thái (`success`, `failed`, `skipped`), mã thoát (exit code), thời lượng thực thi của từng tác vụ.
+     - **Nhật ký (LogViewer):** Nhận log thời gian thực qua Server-Sent Events (SSE), tự động phân nhóm và hỗ trợ gập/mở hoặc lọc theo từng tác vụ.
+
+### Allowlist Job và cơ chế bảo mật Secret
+
+> [!IMPORTANT]
+> **Tại sao Shipit chỉ lưu tên ConfigMap / Secret mà không lưu giá trị?**
+>
+> Trong Kubernetes, quyền `create jobs` không thể giới hạn theo `resourceNames`. Nếu cho phép người dùng nhập file YAML tuỳ ý, một người dùng có thể tạo Pod mount bất kỳ Secret nhạy cảm nào trong toàn bộ cụm.
+>
+> Để triệt tiêu rủi ro này, Shipit áp dụng mô hình an toàn đa tầng:
+> 1. **Dựng Pod từ mẫu cố định:** Shipit tự sinh manifest K8s Job từ cấu trúc định sẵn trong CSDL, không nhận YAML tuỳ ý từ bên ngoài.
+> 2. **Allowlist nghiêm ngặt:** Chỉ các namespace, ConfigMap, Secret và ImagePullSecret đã được quản trị viên cấp phép trong **Allowlist Job** mới được phép đưa vào cấu hình Job. Mọi yêu cầu ngoài allowlist bị chặn ngay tại backend trước khi gọi K8s API.
+> 3. **Chỉ lưu tên tham chiếu:** CSDL Shipit chỉ lưu **tên** của ConfigMap/Secret để chuyển tiếp vào thuộc tính `envFrom.configMapRef` / `envFrom.secretRef` của Pod spec. Kubernetes tự nạp giá trị khi khởi chạy pod. Shipit **không bao giờ đọc, giải mã hay lưu giữ giá trị bí mật** của cụm.
+
+### RBAC cần thiết trong cụm Kubernetes
+
+Để chạy Job, ServiceAccount `shipit` cần được cấp Role trong namespace được phép (ví dụ `avina-workspace`):
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shipit-job-runner
+  namespace: avina-workspace
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+```
+
+> [!CAUTION]
+> ServiceAccount của Shipit **tuyệt đối không** có quyền `get`, `list` trên tài nguyên `secrets`, và không có quyền `delete` trên `deployments`.
+
+### Giới hạn & Quy tắc an toàn
+
+1. **Chỉ áp dụng trên Staging:** Trong giai đoạn hiện tại, tính năng Job chỉ được triển khai và sử dụng trên cụm Staging trong các namespace được allowlist cho phép.
+2. **Không dùng cho các lệnh in mật khẩu:** Các câu lệnh của DbMigrator có hành vi in thông tin xác thực ra màn hình (như `create-admin`, `reset-admin-password`, `reset-admin-totp`) **tuyệt đối không đưa vào Job của Shipit**, vì nhật ký pod sẽ được truyền về và lưu trữ trong bảng `RunLogs`.
+3. **Cơ chế chạy lại (Re-run):** Mặc định `backoffLimit = 0` để pod K8s không tự ý khởi động lại khi gặp lỗi logic. Khi một tác vụ bị lỗi, người dùng xem exit code và nguyên nhân trong log, sau đó chủ động bấm **Chạy lại** (Re-run) sau khi sự cố đã được khắc phục.
+
+---
+
 ## Mô hình an toàn (Security Model)
 
 - **Ghi nhớ đăng nhập & Quản lý phiên:** Tuỳ chọn "Ghi nhớ đăng nhập (30 ngày)" tạo cookie bền vững kéo dài 30 ngày (trượt); nếu không chọn, cookie phiên hết hạn khi đóng trình duyệt hoặc tối đa 8 giờ. Khoá Data Protection được lưu bền vững trong CSDL và mã hoá bằng master key. Mọi phiên đăng nhập đều gắn với dấu bảo mật; việc thay đổi mật khẩu admin (`SHIPIT_ADMIN_PASSWORD`) sẽ lập tức làm mất hiệu lực toàn bộ các phiên làm việc cũ.
 - **Secret chỉ ghi (Write-only):** Mọi bí mật (SSH private key, Git token, Registry password) được bảo vệ bằng chuẩn mã hoá `AES-256-GCM` với khoá đối xứng `SHIPIT_MASTER_KEY`. Các API trả về không bao giờ để lộ giá trị secret gốc.
 - **Che giấu bí mật trong Log (Log Masking):** Cơ chế `LogMasker` tự động phát hiện và thay thế các chuỗi bí mật bằng `***` trên mọi dòng log stdout/stderr cũng như sự kiện Server-Sent Events (SSE).
 - **Hạn chế Command Injection:** `RemoteCommandBuilder` kiểm tra định dạng an toàn cho tên nhánh, URL, container name; truyền mật khẩu Git và Docker qua `stdin` hoặc file askpass tạm thời, không đưa bí mật vào tham số dòng lệnh (`argv`).
-- **Deploy Allowlist:** Shipit chỉ cho phép cập nhật các deployment nằm trong danh sách trắng `SHIPIT_DEPLOY_ALLOWLIST`. Bất kỳ yêu cầu nào can thiệp ngoài danh sách đều bị chặn ngay tại tầng ứng dụng.
-- **RBAC tối thiểu:** ServiceAccount của Shipit trong Kubernetes chỉ được cấp quyền tối thiểu (đọc deployment/pod, patch deployment xác định trong namespace được phép).
+- **Deploy Allowlist & Job Allowlist:** Shipit quản lý danh sách trắng riêng biệt cho Deployment (`SHIPIT_DEPLOY_ALLOWLIST`) và Job (`JobAllowEntry`). Bất kỳ namespace, deployment, configmap hay secret nào nằm ngoài allowlist đều bị từ chối ngay tại tầng ứng dụng trước khi gọi API cụm Kubernetes.
+- **An toàn Kubernetes Job Pod:** Pod do Shipit tạo ra luôn tuân thủ security context cố định (`runAsNonRoot: true`, `runAsUser: 1654`, thư mục ghi tạm `/tmp` dùng `emptyDir`, `backoffLimit: 0`, bắt buộc có `activeDeadlineSeconds` và `ttlSecondsAfterFinished`). Khi run bị huỷ hoặc ứng dụng khởi động lại, các Job đang chạy hoặc mồ côi sẽ được đối soát theo nhãn `shipit/run-id` và xoá sạch khỏi cụm.
+- **RBAC tối thiểu:** ServiceAccount của Shipit trong Kubernetes chỉ được cấp quyền tối thiểu cần thiết để patch Deployment trong allowlist và điều phối batch Job; hoàn toàn không có quyền đọc nội dung `secrets` trong cụm.

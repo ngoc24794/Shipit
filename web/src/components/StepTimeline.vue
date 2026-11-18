@@ -5,6 +5,7 @@ import {
   Hammer,
   Upload,
   Rocket,
+  Terminal,
   CheckCircle2,
   XCircle,
   Loader2,
@@ -14,9 +15,18 @@ import {
 } from 'lucide-vue-next'
 import type { RunStep, StepName, StepStatus } from '../api/types'
 
-const props = defineProps<{
-  steps?: RunStep[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    steps?: RunStep[]
+    kind?: 'pipeline' | 'job'
+    orientation?: 'horizontal' | 'vertical'
+  }>(),
+  {
+    steps: () => [],
+    kind: undefined,
+    orientation: 'horizontal'
+  }
+)
 
 interface StepDefinition {
   name: StepName
@@ -24,12 +34,28 @@ interface StepDefinition {
   icon: any
 }
 
-const STEP_DEFINITIONS: StepDefinition[] = [
+const PIPELINE_DEFINITIONS: StepDefinition[] = [
   { name: 'checkout', label: 'Checkout', icon: GitBranch },
   { name: 'build', label: 'Build', icon: Hammer },
   { name: 'push', label: 'Push', icon: Upload },
   { name: 'deploy', label: 'Deploy', icon: Rocket }
 ]
+
+const JOB_DEFINITIONS: StepDefinition[] = [
+  { name: 'checkout', label: 'Checkout', icon: GitBranch },
+  { name: 'build', label: 'Build', icon: Hammer },
+  { name: 'push', label: 'Push', icon: Upload },
+  { name: 'runjob', label: 'Chạy Job', icon: Terminal }
+]
+
+const isJob = computed(() => {
+  if (props.kind === 'job') return true
+  return props.steps?.some((s) => s.name === 'runjob') ?? false
+})
+
+const currentDefinitions = computed(() => {
+  return isJob.value ? JOB_DEFINITIONS : PIPELINE_DEFINITIONS
+})
 
 function formatDuration(startedAt?: string | null, finishedAt?: string | null): string {
   if (!startedAt) return ''
@@ -43,7 +69,7 @@ function formatDuration(startedAt?: string | null, finishedAt?: string | null): 
 }
 
 const mappedSteps = computed(() => {
-  return STEP_DEFINITIONS.map((def) => {
+  return currentDefinitions.value.map((def) => {
     const stepData = props.steps?.find((s) => s.name === def.name)
     const status: StepStatus = stepData?.status || 'pending'
     const duration = formatDuration(stepData?.startedAt, stepData?.finishedAt)
@@ -60,7 +86,7 @@ const mappedSteps = computed(() => {
 function getStatusBadge(status: StepStatus) {
   switch (status) {
     case 'success':
-      return { icon: CheckCircle2, class: 'text-primary' }
+      return { icon: CheckCircle2, class: 'text-success' }
     case 'failed':
       return { icon: XCircle, class: 'text-danger' }
     case 'cancelled':
@@ -77,22 +103,103 @@ function getStatusBadge(status: StepStatus) {
 </script>
 
 <template>
-  <div class="w-full py-4">
-    <ol class="flex flex-col md:flex-row items-start md:items-center justify-between w-full gap-4 md:gap-0">
+  <div v-if="orientation === 'vertical'" class="w-full">
+    <ol class="flex flex-col w-full">
       <li
         v-for="(step, index) in mappedSteps"
         :key="step.name"
         :data-step-name="step.name"
         :data-step-status="step.status"
-        class="relative flex flex-row md:flex-col items-center md:items-center flex-1 w-full gap-3 md:gap-2"
+        class="relative flex items-center gap-2.5 py-1 min-w-0"
       >
-        <!-- Connecting line on desktop -->
+        <!-- Vertical connecting line -->
         <div
           v-if="index < mappedSteps.length - 1"
           aria-hidden="true"
-          class="hidden md:block absolute top-5 left-[50%] w-full h-0.5 -z-0 transition-colors"
+          class="absolute left-[11px] top-[24px] bottom-[-4px] w-0.5 transition-colors"
           :class="[
-            step.status === 'success' ? 'bg-primary' : 'bg-border'
+            step.status === 'failed' || mappedSteps[index + 1]?.status === 'failed'
+              ? 'bg-danger/40'
+              : step.status === 'success'
+                ? 'bg-success'
+                : 'bg-border'
+          ]"
+        />
+
+        <!-- Compact Step Icon Circle -->
+        <div
+          :class="[
+            'relative z-10 flex items-center justify-center w-6 h-6 rounded-full border-2 shrink-0 transition-colors bg-card',
+            step.status === 'success' ? 'border-success text-success' : '',
+            step.status === 'failed' ? 'border-danger text-danger' : '',
+            step.status === 'running' ? 'border-info text-info ring-2 ring-info/15' : '',
+            step.status === 'cancelled' ? 'border-warn text-warn' : '',
+            step.status === 'skipped' ? 'border-border text-muted-fg' : '',
+            step.status === 'pending' ? 'border-border text-muted-fg' : ''
+          ]"
+        >
+          <component :is="step.icon" class="w-3.5 h-3.5" aria-hidden="true" />
+        </div>
+
+        <!-- Step Label + Status Icon + Duration -->
+        <div class="flex items-center justify-between gap-2 flex-1 min-w-0">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="text-xs font-medium text-fg whitespace-nowrap truncate">{{ step.label }}</span>
+            <component
+              :is="getStatusBadge(step.status).icon"
+              :class="['w-3.5 h-3.5 shrink-0', getStatusBadge(step.status).class]"
+              aria-hidden="true"
+            />
+          </div>
+          <span
+            v-if="step.status === 'running'"
+            class="text-[11px] text-info whitespace-nowrap shrink-0"
+          >
+            Đang chạy...
+          </span>
+          <span
+            v-else-if="step.status === 'cancelled'"
+            class="text-[11px] text-warn whitespace-nowrap shrink-0 tabular-nums"
+          >
+            {{ step.duration ? `Đã dừng (${step.duration})` : 'Đã dừng' }}
+          </span>
+          <span
+            v-else-if="step.duration"
+            class="text-[11px] text-muted-fg tabular-nums whitespace-nowrap shrink-0"
+          >
+            {{ step.duration }}
+          </span>
+          <span
+            v-else
+            class="text-[11px] text-muted-fg whitespace-nowrap shrink-0"
+          >
+            {{ step.status === 'skipped' ? 'Bỏ qua' : 'Chưa chạy' }}
+          </span>
+        </div>
+      </li>
+    </ol>
+  </div>
+
+  <div v-else class="w-full py-2">
+    <ol class="flex flex-row items-center justify-between w-full gap-0">
+      <li
+        v-for="(step, index) in mappedSteps"
+        :key="step.name"
+        :data-step-name="step.name"
+        :data-step-status="step.status"
+        class="relative flex flex-col items-center flex-1 min-w-0 gap-2"
+      >
+        <!-- Connecting line -->
+        <div
+          v-if="index < mappedSteps.length - 1"
+          aria-hidden="true"
+          class="block absolute top-5 left-[50%] w-full h-0.5 -z-0 transition-colors"
+          :class="[
+            step.status === 'failed' || mappedSteps[index + 1]?.status === 'failed'
+              ? 'bg-danger/40'
+              : step.status === 'success'
+                ? 'bg-success'
+                : 'bg-border'
           ]"
         />
 
@@ -101,7 +208,7 @@ function getStatusBadge(status: StepStatus) {
           :class="[
             'relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all',
             'bg-card',
-            step.status === 'success' ? 'border-primary text-primary shadow-xs' : '',
+            step.status === 'success' ? 'border-success text-success shadow-xs' : '',
             step.status === 'failed' ? 'border-danger text-danger' : '',
             step.status === 'running' ? 'border-info text-info ring-4 ring-info/10' : '',
             step.status === 'cancelled' ? 'border-warn text-warn' : '',
@@ -113,9 +220,9 @@ function getStatusBadge(status: StepStatus) {
         </div>
 
         <!-- Step Info -->
-        <div class="flex flex-col md:items-center text-left md:text-center min-w-0">
+        <div class="flex flex-col items-center text-center min-w-0">
           <div class="flex items-center gap-1.5 font-medium text-sm text-fg">
-            <span>{{ step.label }}</span>
+            <span class="whitespace-nowrap">{{ step.label }}</span>
             <component
               :is="getStatusBadge(step.status).icon"
               :class="['w-3.5 h-3.5', getStatusBadge(step.status).class]"

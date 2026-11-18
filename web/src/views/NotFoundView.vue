@@ -7,7 +7,7 @@ const router = useRouter()
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col justify-center items-center p-4 bg-bg text-fg text-center">
+  <div class="h-full overflow-y-auto flex flex-col justify-center items-center p-4 bg-bg text-fg text-center">
     <div class="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-muted-fg mb-4">
       <FileQuestion class="w-8 h-8" aria-hidden="true" />
     </div>

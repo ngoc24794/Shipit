@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   ShieldCheck,
   Plus,
@@ -13,10 +13,18 @@ import AppInput from '../../components/AppInput.vue'
 import AppField from '../../components/AppField.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import EmptyState from '../../components/EmptyState.vue'
+import DataToolbar, { type DataToolbarFilter } from '../../components/DataToolbar.vue'
+import DataPagination from '../../components/DataPagination.vue'
+import SortableHeader from '../../components/SortableHeader.vue'
 import { useConfigDeployTargetsStore } from '../../stores/configDeployTargets'
 import { useToast } from '../../composables/useToast'
+import { useDataTable } from '../../composables/useDataTable'
 import type { DeployTarget } from '../../api/types'
 import { ApiError } from '../../api/client'
+
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), {
+  embedded: false
+})
 
 const store = useConfigDeployTargetsStore()
 const toast = useToast()
@@ -35,6 +43,42 @@ const form = ref<{
 })
 
 const formErrors = ref<Record<string, string>>({})
+
+const table = useDataTable<DeployTarget>({
+  mode: 'client',
+  items: computed(() => store.deployTargets),
+  defaultFilters: {
+    namespace: ''
+  },
+  searchFields: ['namespace', 'deployment'],
+  filterFns: {
+    namespace: (t, val) => t.namespace === val
+  },
+  sortFns: {
+    namespace: (a, b) => a.namespace.localeCompare(b.namespace, 'vi'),
+    deployment: (a, b) => a.deployment.localeCompare(b.deployment, 'vi'),
+    createdAt: (a, b) =>
+      new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+  }
+})
+
+const toolbarFilters = computed<DataToolbarFilter[]>(() => {
+  const namespaces = Array.from(
+    new Set(store.deployTargets.map((t) => t.namespace).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b))
+
+  return [
+    {
+      key: 'namespace',
+      label: 'Namespace',
+      type: 'select',
+      options: [
+        { label: 'Tất cả namespace', value: '' },
+        ...namespaces.map((ns) => ({ label: ns, value: ns }))
+      ]
+    }
+  ]
+})
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '—'
@@ -127,19 +171,19 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppLayout>
-    <div class="space-y-6">
+  <component :is="props.embedded ? 'div' : AppLayout" :class="props.embedded ? 'flex-1 min-h-0 flex flex-col' : undefined">
+    <div class="flex-1 min-h-0 flex flex-col gap-4">
       <!-- Header -->
-      <div>
-        <h2 class="text-xl font-semibold text-fg">Deployment được phép</h2>
+      <div v-if="!props.embedded" class="shrink-0">
+        <h1 class="text-2xl font-semibold text-fg tracking-tight">Deployment được phép</h1>
         <p class="text-sm text-muted-fg mt-1">
-          Quản lý danh sách namespace và deployment mà Shipit được phép triển khai cập nhật container image.
+          Danh sách namespace và Deployment mà Shipit được phép cập nhật image.
         </p>
       </div>
 
       <!-- Help text fixed banner -->
       <div
-        class="p-4 rounded-[8px] bg-muted/60 border border-border text-sm text-muted-fg leading-relaxed flex items-start gap-3"
+        class="shrink-0 p-4 rounded-[8px] bg-muted/60 border border-border text-sm text-muted-fg leading-relaxed flex items-start gap-3"
       >
         <ShieldCheck class="w-5 h-5 text-primary flex-shrink-0 mt-0.5" aria-hidden="true" />
         <span>
@@ -148,10 +192,10 @@ onMounted(() => {
       </div>
 
       <!-- Quick Add Form -->
-      <div class="bg-card border border-border rounded-[8px] p-4 shadow-sm">
+      <div class="shrink-0 bg-card border border-border rounded-[8px] p-4 shadow-sm">
         <h3 class="text-sm font-semibold text-fg mb-3">Thêm deployment nhanh</h3>
-        <form @submit.prevent="handleAdd" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
-          <div class="sm:col-span-5">
+        <form @submit.prevent="handleAdd" class="grid grid-cols-12 gap-3 items-start">
+          <div class="col-span-5">
             <AppField
               label="Namespace"
               required
@@ -169,7 +213,7 @@ onMounted(() => {
             </AppField>
           </div>
 
-          <div class="sm:col-span-5">
+          <div class="col-span-5">
             <AppField
               label="Deployment"
               required
@@ -187,7 +231,7 @@ onMounted(() => {
             </AppField>
           </div>
 
-          <div class="sm:col-span-2 sm:pt-6 flex">
+          <div class="col-span-2 pt-6 flex">
             <AppButton
               type="submit"
               :loading="actionLoading"
@@ -225,25 +269,68 @@ onMounted(() => {
       <EmptyState
         v-else-if="!store.loading && store.deployTargets.length === 0"
         title="Chưa có deployment được phép"
-        description="Thêm namespace và deployment ở biểu mẫu phía trên để bắt đầu cấu hình pipeline."
+        description="Thêm namespace và deployment ở biểu mẫu trên."
         :icon="ShieldCheck"
       />
 
       <!-- Table of Deploy Targets -->
-      <div v-else class="bg-card border border-border rounded-[8px] overflow-hidden shadow-sm">
-        <AppTable>
+      <div
+        v-else
+        class="flex-1 min-h-0 flex flex-col rounded-[8px] border border-border bg-card overflow-hidden"
+      >
+        <DataToolbar
+          :q="table.q.value"
+          search-placeholder="Tìm namespace, deployment..."
+          :filters="toolbarFilters"
+          :filter-values="table.filters"
+          :start-item="table.startItem.value"
+          :end-item="table.endItem.value"
+          :total="table.total.value"
+          :has-active-filters="table.hasActiveFilters.value"
+          @update:q="(v) => (table.q.value = v)"
+          @update:filter="(k, v) => (table.filters[k] = v)"
+          @clear="table.clearFilters()"
+        />
+
+        <div
+          v-if="table.items.value.length === 0"
+          class="flex-1 min-h-0 flex flex-col items-center justify-center p-8 text-center"
+        >
+          <p class="text-sm font-medium text-fg mb-1">Không có kết quả phù hợp</p>
+          <p class="text-xs text-muted-fg mb-4">Thử đổi từ khoá tìm kiếm hoặc xoá bộ lọc hiện tại.</p>
+          <AppButton variant="secondary" size="sm" @click="table.clearFilters()">
+            Xoá bộ lọc
+          </AppButton>
+        </div>
+
+        <AppTable v-else :bordered="false">
           <template #header>
             <tr>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg uppercase tracking-wider">
-                Namespace
-              </th>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg uppercase tracking-wider">
-                Deployment
-              </th>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg uppercase tracking-wider">
-                Ngày thêm
-              </th>
-              <th scope="col" class="py-3 px-4 text-right text-xs font-semibold text-muted-fg uppercase tracking-wider">
+              <SortableHeader
+                label="Namespace"
+                sort-key="namespace"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                class="py-3 px-4"
+                @sort="table.toggleSort"
+              />
+              <SortableHeader
+                label="Deployment"
+                sort-key="deployment"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                class="py-3 px-4"
+                @sort="table.toggleSort"
+              />
+              <SortableHeader
+                label="Ngày thêm"
+                sort-key="createdAt"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                class="py-3 px-4"
+                @sort="table.toggleSort"
+              />
+              <th scope="col" class="py-3 px-4 text-right text-xs font-semibold text-muted-fg whitespace-nowrap">
                 Thao tác
               </th>
             </tr>
@@ -251,39 +338,50 @@ onMounted(() => {
 
           <template #default>
             <tr
-              v-for="target in store.deployTargets"
+              v-for="target in table.items.value"
               :key="target.id"
               class="hover:bg-muted/40 transition-colors border-b border-border/50 last:border-0"
             >
-              <td class="py-3 px-4 text-sm font-medium text-fg">
+              <td class="py-3 px-4 text-sm font-medium text-fg whitespace-nowrap">
                 {{ target.namespace }}
               </td>
-              <td class="py-3 px-4 text-sm text-fg font-mono">
+              <td class="py-3 px-4 text-sm text-fg font-mono whitespace-nowrap">
                 {{ target.deployment }}
               </td>
-              <td class="py-3 px-4 text-sm text-muted-fg">
+              <td class="py-3 px-4 text-sm text-muted-fg whitespace-nowrap tabular-nums">
                 {{ formatDate(target.createdAt) }}
               </td>
-              <td class="py-3 px-4 text-sm text-right space-x-2">
+              <td class="py-3 px-4 text-sm text-right space-x-2 whitespace-nowrap">
                 <AppButton
                   variant="ghost"
                   size="sm"
+                  class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
                   :aria-label="`Xoá deployment ${target.namespace}/${target.deployment}`"
                   @click="openDeleteConfirm(target)"
                 >
-                  <Trash2 class="w-4 h-4 text-danger" aria-hidden="true" />
+                  <Trash2 class="w-4 h-4" aria-hidden="true" />
                 </AppButton>
               </td>
             </tr>
           </template>
         </AppTable>
+
+        <DataPagination
+          :page="table.page.value"
+          :page-size="table.pageSize.value"
+          :total="table.total.value"
+          :total-pages="table.totalPages.value"
+          :loading="store.loading"
+          @update:page="table.setPage"
+          @update:page-size="table.setPageSize"
+        />
       </div>
 
       <!-- Confirm Dialog for Deletion -->
       <ConfirmDialog
         v-model="isConfirmOpen"
         title="Xoá deployment được phép"
-        :message="`Bạn có chắc chắn muốn xoá deployment '${deletingTarget?.namespace}/${deletingTarget?.deployment}' khỏi danh sách được phép không?`"
+        :message="`Xoá deployment &quot;${deletingTarget?.namespace}/${deletingTarget?.deployment}&quot; khỏi danh sách được phép?`"
         confirm-text="Xoá deployment"
         :loading="deleteLoading"
         :danger="true"
@@ -291,5 +389,5 @@ onMounted(() => {
         @cancel="isConfirmOpen = false"
       />
     </div>
-  </AppLayout>
+  </component>
 </template>

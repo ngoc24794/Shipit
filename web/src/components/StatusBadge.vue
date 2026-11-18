@@ -17,6 +17,7 @@ const props = withDefaults(
   defineProps<{
     status: BadgeStatus
     size?: 'sm' | 'md'
+    label?: string
   }>(),
   {
     size: 'sm'
@@ -44,7 +45,7 @@ const config = computed(() => {
         label: 'Thành công',
         icon: CheckCircle2,
         spin: false,
-        classes: 'text-primary bg-primary/10 border-primary/30'
+        classes: 'text-success bg-success/10 border-success/30'
       }
     case 'failed':
       return {
@@ -96,6 +97,6 @@ const config = computed(() => {
       ]"
       aria-hidden="true"
     />
-    <span>{{ config.label }}</span>
+    <span>{{ label || config.label }}</span>
   </span>
 </template>

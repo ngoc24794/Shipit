@@ -29,4 +29,7 @@ public sealed class EngineOptions
     public TimeSpan LogFlushInterval { get; set; } = TimeSpan.FromMilliseconds(250);
 
     public int LogBatchSize { get; set; } = 100;
+
+    /// <summary>Additional secret strings to register with LogMasker during runs (e.g. for testing or external secrets).</summary>
+    public IList<string> AdditionalSecretsToMask { get; set; } = new List<string>();
 }

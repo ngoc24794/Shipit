@@ -53,7 +53,7 @@ async function onSubmit() {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col justify-center items-center p-4 bg-bg text-fg">
+  <div class="h-full overflow-y-auto flex flex-col justify-center items-center p-4 bg-bg text-fg">
     <AppToast />
 
     <!-- Top theme switcher -->
@@ -70,7 +70,7 @@ async function onSubmit() {
     </div>
 
     <!-- Login Card -->
-    <div class="w-full max-w-sm p-6 sm:p-8 rounded-[8px] border border-border bg-card shadow-lg">
+    <div class="w-full max-w-sm p-8 rounded-[8px] border border-border bg-card shadow-lg">
       <!-- Brand & Title -->
       <div class="flex flex-col items-center mb-6 text-center">
         <div class="flex items-center gap-2 mb-2 font-bold text-2xl tracking-wider text-primary">

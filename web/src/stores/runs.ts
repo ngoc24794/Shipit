@@ -1,11 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Run, RunDetail, Pipeline } from '../api/types'
+import type { Run, RunDetail, Pipeline, GetRunsParams, PagedResult } from '../api/types'
 import { getApi } from '../api'
+import { runJob as apiRunJob } from '../api/runs-job'
 
 export const useRunsStore = defineStore('runs', () => {
   const runs = ref<Run[]>([])
+  const totalRuns = ref(0)
   const pipelines = ref<Pipeline[]>([])
+  const jobs = ref<Array<{ id: number; name: string }>>([])
   const currentRun = ref<RunDetail | null>(null)
 
   const loading = ref(false)
@@ -24,6 +27,24 @@ export const useRunsStore = defineStore('runs', () => {
     return pipelinesMap.value.get(pipelineId)?.name || `Pipeline #${pipelineId}`
   }
 
+  function getJobName(jobId?: number | null): string {
+    if (!jobId) return 'Job'
+    const j = jobs.value.find((item) => item.id === jobId)
+    return j?.name || `Job #${jobId}`
+  }
+
+  async function fetchJobs(): Promise<Array<{ id: number; name: string }>> {
+    const api = getApi()
+    try {
+      const list = await api.getJobs()
+      const mapped = list.map((j) => ({ id: j.id, name: j.name }))
+      jobs.value = mapped
+      return mapped
+    } catch {
+      return jobs.value
+    }
+  }
+
   async function fetchPipelines(): Promise<Pipeline[]> {
     const api = getApi()
     loadingPipelines.value = true
@@ -38,13 +59,14 @@ export const useRunsStore = defineStore('runs', () => {
     }
   }
 
-  async function fetchRuns(params?: { pipelineId?: number; limit?: number }): Promise<Run[]> {
+  async function fetchRuns(params?: GetRunsParams): Promise<Run[]> {
     const api = getApi()
     loading.value = true
     error.value = null
     try {
       const list = await api.getRuns(params)
       runs.value = list
+      totalRuns.value = list.length
       return list
     } catch (err: any) {
       error.value = err.message || 'Không thể tải danh sách lượt chạy'
@@ -54,14 +76,56 @@ export const useRunsStore = defineStore('runs', () => {
     }
   }
 
-  async function refreshRuns(params?: { pipelineId?: number; limit?: number }): Promise<Run[]> {
+  async function fetchRunsPaged(params?: GetRunsParams): Promise<PagedResult<Run>> {
+    const api = getApi()
+    loading.value = true
+    error.value = null
+    try {
+      if (api.getRunsPaged) {
+        const res = await api.getRunsPaged(params)
+        runs.value = res.items
+        totalRuns.value = res.total
+        return res
+      }
+      const list = await api.getRuns(params)
+      runs.value = list
+      totalRuns.value = list.length
+      return { items: list, total: list.length }
+    } catch (err: any) {
+      error.value = err.message || 'Không thể tải danh sách lượt chạy'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function refreshRuns(params?: GetRunsParams): Promise<Run[]> {
     const api = getApi()
     try {
       const list = await api.getRuns(params)
       runs.value = list
+      totalRuns.value = list.length
       return list
     } catch {
       return runs.value
+    }
+  }
+
+  async function refreshRunsPaged(params?: GetRunsParams): Promise<PagedResult<Run>> {
+    const api = getApi()
+    try {
+      if (api.getRunsPaged) {
+        const res = await api.getRunsPaged(params)
+        runs.value = res.items
+        totalRuns.value = res.total
+        return res
+      }
+      const list = await api.getRuns(params)
+      runs.value = list
+      totalRuns.value = list.length
+      return { items: list, total: list.length }
+    } catch {
+      return { items: runs.value, total: totalRuns.value }
     }
   }
 
@@ -75,6 +139,15 @@ export const useRunsStore = defineStore('runs', () => {
   async function triggerRun(pipelineId: number): Promise<Run> {
     const api = getApi()
     const newRun = await api.triggerRun(pipelineId)
+    const exists = runs.value.some((r) => r.id === newRun.id)
+    if (!exists) {
+      runs.value.unshift(newRun)
+    }
+    return newRun
+  }
+
+  async function runJob(jobId: number): Promise<Run> {
+    const newRun = await apiRunJob(jobId)
     const exists = runs.value.some((r) => r.id === newRun.id)
     if (!exists) {
       runs.value.unshift(newRun)
@@ -107,18 +180,25 @@ export const useRunsStore = defineStore('runs', () => {
 
   return {
     runs,
+    totalRuns,
     pipelines,
+    jobs,
     currentRun,
     loading,
     loadingPipelines,
     error,
     pipelinesMap,
     getPipelineName,
+    getJobName,
+    fetchJobs,
     fetchPipelines,
     fetchRuns,
+    fetchRunsPaged,
     refreshRuns,
+    refreshRunsPaged,
     fetchRun,
     triggerRun,
+    runJob,
     cancelRun
   }
 })

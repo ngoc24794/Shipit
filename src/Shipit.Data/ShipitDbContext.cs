@@ -21,6 +21,10 @@ public class ShipitDbContext : DbContext
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
     public DbSet<DeployTarget> DeployTargets => Set<DeployTarget>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
+    public DbSet<Job> Jobs => Set<Job>();
+    public DbSet<JobTask> JobTasks => Set<JobTask>();
+    public DbSet<JobAllowEntry> JobAllowEntries => Set<JobAllowEntry>();
+    public DbSet<RunTask> RunTasks => Set<RunTask>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -81,12 +85,33 @@ public class ShipitDbContext : DbContext
             b.HasOne(r => r.Pipeline)
                 .WithMany(p => p.Runs)
                 .HasForeignKey(r => r.PipelineId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Partial unique index: at most one active (Queued or Running) run per pipeline
+            b.HasOne(r => r.Job)
+                .WithMany(j => j.Runs)
+                .HasForeignKey(r => r.JobId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // A run belongs to exactly one of a pipeline or a job.
+            b.ToTable(t => t.HasCheckConstraint(
+                "CK_Runs_PipelineXorJob",
+                "(\"PipelineId\" IS NOT NULL AND \"JobId\" IS NULL) OR (\"PipelineId\" IS NULL AND \"JobId\" IS NOT NULL)"));
+
+            // Partial unique indexes: at most one active (Queued or Running) run per pipeline / per job.
+            // NULLs are distinct in a unique index, so job runs do not collide with pipeline runs.
             b.HasIndex(r => r.PipelineId)
                 .IsUnique()
                 .HasFilter("\"Status\" IN ('Queued', 'Running')");
+
+            b.HasIndex(r => r.JobId)
+                .IsUnique()
+                .HasFilter("\"Status\" IN ('Queued', 'Running')")
+                .HasDatabaseName("IX_Runs_JobId_Active");
+
+            b.HasIndex(r => new { r.CreatedAt, r.Id })
+                .IsDescending(true, true);
         });
 
         // 5. RunStep
@@ -127,11 +152,90 @@ public class ShipitDbContext : DbContext
             b.HasIndex(t => new { t.Namespace, t.Deployment }).IsUnique();
         });
 
+        // 9. Job, JobTask, JobAllowEntry, RunTask
+        modelBuilder.Entity<Job>(b =>
+        {
+            b.HasKey(j => j.Id);
+            b.HasIndex(j => j.Name).IsUnique();
+            b.Property(j => j.GitBranch).HasDefaultValue("main");
+            b.Property(j => j.DockerfilePath).HasDefaultValue("Dockerfile");
+            b.Property(j => j.ContainerName).HasDefaultValue("app");
+
+            b.HasOne(j => j.GitCredential).WithMany().HasForeignKey(j => j.GitCredentialId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(j => j.RegistryCredential).WithMany().HasForeignKey(j => j.RegistryCredentialId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(j => j.Slave).WithMany().HasForeignKey(j => j.SlaveId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<JobTask>(b =>
+        {
+            b.HasKey(t => t.Id);
+            b.HasOne(t => t.Job).WithMany(j => j.Tasks).HasForeignKey(t => t.JobId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(t => new { t.JobId, t.Position }).IsUnique();
+        });
+
+        modelBuilder.Entity<JobAllowEntry>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Kind).HasConversion<string>();
+            b.HasIndex(e => new { e.Namespace, e.Kind, e.Name }).IsUnique();
+        });
+
+        modelBuilder.Entity<RunTask>(b =>
+        {
+            b.HasKey(t => t.Id);
+            b.Property(t => t.Status).HasConversion<string>();
+            b.HasOne(t => t.Run).WithMany(r => r.Tasks).HasForeignKey(t => t.RunId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(t => new { t.RunId, t.Position }).IsUnique();
+        });
+
         // 8. AppSetting
         modelBuilder.Entity<AppSetting>(b =>
         {
             b.HasKey(s => s.Key);
         });
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in ChangeTracker.Entries<Run>())
+        {
+            if (entry.State is EntityState.Modified or EntityState.Added &&
+                entry.Entity.Status == RunStatus.Success &&
+                entry.Entity.PipelineId != null)
+            {
+                var runId = entry.Entity.Id;
+                var pendingRunJob = await RunSteps.FirstOrDefaultAsync(
+                    s => s.RunId == runId && s.Name == StepName.RunJob && s.Status == StepStatus.Pending,
+                    cancellationToken);
+                if (pendingRunJob is not null)
+                {
+                    pendingRunJob.Status = StepStatus.Success;
+                }
+            }
+        }
+
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    public override int SaveChanges()
+    {
+        foreach (var entry in ChangeTracker.Entries<Run>())
+        {
+            if (entry.State is EntityState.Modified or EntityState.Added &&
+                entry.Entity.Status == RunStatus.Success &&
+                entry.Entity.PipelineId != null)
+            {
+                var runId = entry.Entity.Id;
+                var pendingRunJob = RunSteps.FirstOrDefault(
+                    s => s.RunId == runId && s.Name == StepName.RunJob && s.Status == StepStatus.Pending);
+                if (pendingRunJob is not null)
+                {
+                    pendingRunJob.Status = StepStatus.Success;
+                }
+            }
+        }
+
+        return base.SaveChanges();
     }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

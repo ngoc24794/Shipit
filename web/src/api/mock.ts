@@ -15,8 +15,21 @@ import type {
   DeployTargetInput,
   Run,
   RunDetail,
+  RunTask,
   LogLine,
-  RunStatus
+  RunStatus,
+  Job,
+  JobInput,
+  JobValidation,
+  JobPreview,
+  JobPreviewTask,
+  JobAllowEntry,
+  JobAllowEntryInput,
+  GetRunsParams,
+  PagedResult,
+  SearchGroup,
+  SearchItem,
+  SearchResponse
 } from './types'
 import { ApiError } from './client'
 
@@ -131,7 +144,9 @@ export class MockShipitApi implements ShipitApi {
   private runs: RunDetail[] = [
     {
       id: 1,
+      kind: 'pipeline',
       pipelineId: 1,
+      jobId: null,
       status: 'success',
       tag: 'a1b2c3d',
       image: '192.168.1.241/shipit-demo:a1b2c3d',
@@ -144,11 +159,14 @@ export class MockShipitApi implements ShipitApi {
         { name: 'build', status: 'success', startedAt: '2026-11-09T07:30:15Z', finishedAt: '2026-11-09T07:31:30Z' },
         { name: 'push', status: 'success', startedAt: '2026-11-09T07:31:30Z', finishedAt: '2026-11-09T07:31:55Z' },
         { name: 'deploy', status: 'success', startedAt: '2026-11-09T07:31:55Z', finishedAt: '2026-11-09T07:32:15Z' }
-      ]
+      ],
+      tasks: []
     },
     {
       id: 2,
+      kind: 'pipeline',
       pipelineId: 2,
+      jobId: null,
       status: 'failed',
       tag: 'e4f5a6b',
       image: null,
@@ -161,11 +179,14 @@ export class MockShipitApi implements ShipitApi {
         { name: 'build', status: 'failed', startedAt: '2026-11-09T08:00:20Z', finishedAt: '2026-11-09T08:01:20Z' },
         { name: 'push', status: 'skipped', startedAt: null, finishedAt: null },
         { name: 'deploy', status: 'skipped', startedAt: null, finishedAt: null }
-      ]
+      ],
+      tasks: []
     },
     {
       id: 3,
+      kind: 'pipeline',
       pipelineId: 1,
+      jobId: null,
       status: 'running',
       tag: '7c8d9e0',
       image: null,
@@ -178,11 +199,14 @@ export class MockShipitApi implements ShipitApi {
         { name: 'build', status: 'running', startedAt: '2026-11-09T08:45:15Z', finishedAt: null },
         { name: 'push', status: 'pending', startedAt: null, finishedAt: null },
         { name: 'deploy', status: 'pending', startedAt: null, finishedAt: null }
-      ]
+      ],
+      tasks: []
     },
     {
       id: 4,
+      kind: 'pipeline',
       pipelineId: 2,
+      jobId: null,
       status: 'queued',
       tag: null,
       image: null,
@@ -195,6 +219,52 @@ export class MockShipitApi implements ShipitApi {
         { name: 'build', status: 'pending', startedAt: null, finishedAt: null },
         { name: 'push', status: 'pending', startedAt: null, finishedAt: null },
         { name: 'deploy', status: 'pending', startedAt: null, finishedAt: null }
+      ],
+      tasks: []
+    },
+    {
+      id: 5,
+      kind: 'job',
+      jobId: 1,
+      pipelineId: null,
+      status: 'failed',
+      tag: 'c3d4e5f',
+      image: '192.168.1.241/avina-dbmigrator:c3d4e5f',
+      failureReason: 'Tác vụ 2 thất bại (exit code 1)',
+      createdAt: '2026-11-09T09:00:00Z',
+      startedAt: '2026-11-09T09:00:05Z',
+      finishedAt: '2026-11-09T09:02:10Z',
+      steps: [
+        { name: 'checkout', status: 'success', startedAt: '2026-11-09T09:00:05Z', finishedAt: '2026-11-09T09:00:15Z' },
+        { name: 'build', status: 'success', startedAt: '2026-11-09T09:00:15Z', finishedAt: '2026-11-09T09:01:00Z' },
+        { name: 'push', status: 'success', startedAt: '2026-11-09T09:01:00Z', finishedAt: '2026-11-09T09:01:20Z' },
+        { name: 'runjob', status: 'failed', startedAt: '2026-11-09T09:01:20Z', finishedAt: '2026-11-09T09:02:10Z' }
+      ],
+      tasks: [
+        {
+          position: 0,
+          label: 'Tạo schema database',
+          status: 'success',
+          exitCode: 0,
+          startedAt: '2026-11-09T09:01:20Z',
+          finishedAt: '2026-11-09T09:01:40Z'
+        },
+        {
+          position: 1,
+          label: 'Chạy migration dữ liệu',
+          status: 'failed',
+          exitCode: 1,
+          startedAt: '2026-11-09T09:01:40Z',
+          finishedAt: '2026-11-09T09:02:10Z'
+        },
+        {
+          position: 2,
+          label: 'Khởi tạo dữ liệu mẫu',
+          status: 'skipped',
+          exitCode: null,
+          startedAt: null,
+          finishedAt: null
+        }
       ]
     }
   ]
@@ -258,6 +328,101 @@ export class MockShipitApi implements ShipitApi {
     }
   ]
 
+  private jobAllowEntries: JobAllowEntry[] = [
+    {
+      id: 1,
+      namespace: 'avina-workspace',
+      kind: 'namespace',
+      name: 'avina-workspace',
+      createdAt: '2026-11-14T08:00:00Z'
+    },
+    {
+      id: 2,
+      namespace: 'avina-workspace',
+      kind: 'configmap',
+      name: 'avina-files-config',
+      createdAt: '2026-11-14T08:00:00Z'
+    },
+    {
+      id: 3,
+      namespace: 'avina-workspace',
+      kind: 'configmap',
+      name: 'avina-users-config',
+      createdAt: '2026-11-14T08:00:00Z'
+    },
+    {
+      id: 4,
+      namespace: 'avina-workspace',
+      kind: 'secret',
+      name: 'avina-files-secret',
+      createdAt: '2026-11-14T08:00:00Z'
+    },
+    {
+      id: 5,
+      namespace: 'avina-workspace',
+      kind: 'secret',
+      name: 'avina-users-secret',
+      createdAt: '2026-11-14T08:00:00Z'
+    },
+    {
+      id: 6,
+      namespace: 'avina-workspace',
+      kind: 'pullsecret',
+      name: 'registry-secret',
+      createdAt: '2026-11-14T08:00:00Z'
+    }
+  ]
+
+  private jobs: Job[] = [
+    {
+      id: 1,
+      name: 'avina-dbmigrator',
+      gitUrl: 'http://git.example/AvinaWorkspace',
+      gitBranch: 'main',
+      gitCredentialId: 2,
+      slaveId: 1,
+      dockerfilePath: 'docker/Dockerfile.dbmigrator',
+      buildContext: '.',
+      imageName: 'avina-dbmigrator',
+      registryHost: '192.168.1.241',
+      deployRegistryHost: null,
+      registryCredentialId: null,
+      namespace: 'avina-workspace',
+      containerName: 'dbmigrator',
+      serviceAccount: null,
+      imagePullSecrets: ['registry-secret'],
+      tasks: [
+        {
+          position: 0,
+          label: 'files',
+          args: ['migrate', '--module', 'files'],
+          envFromConfigMaps: ['avina-files-config'],
+          envFromSecrets: ['avina-files-secret'],
+          env: [
+            { name: 'ASPNETCORE_ENVIRONMENT', value: 'Staging' }
+          ],
+          timeoutSeconds: 1800,
+          backoffLimit: 0,
+          ttlSeconds: 3600
+        },
+        {
+          position: 1,
+          label: 'users',
+          args: ['migrate', '--module', 'users'],
+          envFromConfigMaps: ['avina-users-config'],
+          envFromSecrets: ['avina-users-secret'],
+          env: [
+            { name: 'ASPNETCORE_ENVIRONMENT', value: 'Staging' }
+          ],
+          timeoutSeconds: 1800,
+          backoffLimit: 0,
+          ttlSeconds: 3600
+        }
+      ],
+      lastRun: null
+    }
+  ]
+
   private sampleLogs: Record<number, LogLine[]> = {
     1: [
       { seq: 1, step: 'checkout', stream: 'system', text: 'Bắt đầu bước checkout mã nguồn...', at: '2026-11-09T07:30:05Z' },
@@ -281,7 +446,220 @@ export class MockShipitApi implements ShipitApi {
       { seq: 19, step: 'deploy', stream: 'stdout', text: 'Waiting for rollout to finish: 0 of 1 updated replicas are available...', at: '2026-11-09T07:32:05Z' },
       { seq: 20, step: 'deploy', stream: 'stdout', text: 'deployment "shipit-demo" successfully rolled out', at: '2026-11-09T07:32:14Z' },
       { seq: 21, step: 'deploy', stream: 'system', text: 'Lượt chạy hoàn tất thành công.', at: '2026-11-09T07:32:15Z' }
+    ],
+    5: [
+      { seq: 1, step: 'checkout', stream: 'system', text: 'Bắt đầu bước checkout mã nguồn...', at: '2026-11-09T09:00:05Z', taskPosition: null },
+      { seq: 2, step: 'checkout', stream: 'stdout', text: 'Cloning into \'avina-dbmigrator\'...', at: '2026-11-09T09:00:08Z', taskPosition: null },
+      { seq: 3, step: 'checkout', stream: 'stdout', text: 'HEAD is now at c3d4e5f feat: add migration scripts', at: '2026-11-09T09:00:14Z', taskPosition: null },
+      { seq: 4, step: 'checkout', stream: 'system', text: 'Checkout hoàn tất thành công.', at: '2026-11-09T09:00:15Z', taskPosition: null },
+      { seq: 5, step: 'build', stream: 'system', text: 'Bắt đầu build Docker image...', at: '2026-11-09T09:00:15Z', taskPosition: null },
+      { seq: 6, step: 'build', stream: 'stdout', text: 'Successfully built 7f8a9b0c', at: '2026-11-09T09:00:59Z', taskPosition: null },
+      { seq: 7, step: 'build', stream: 'system', text: 'Build image 192.168.1.241/avina-dbmigrator:c3d4e5f thành công.', at: '2026-11-09T09:01:00Z', taskPosition: null },
+      { seq: 8, step: 'push', stream: 'system', text: 'Đăng nhập và đẩy image lên registry...', at: '2026-11-09T09:01:00Z', taskPosition: null },
+      { seq: 9, step: 'push', stream: 'stdout', text: 'c3d4e5f: Pushed', at: '2026-11-09T09:01:19Z', taskPosition: null },
+      { seq: 10, step: 'push', stream: 'system', text: 'Đẩy image lên registry thành công.', at: '2026-11-09T09:01:20Z', taskPosition: null },
+      { seq: 11, step: 'runjob', stream: 'system', text: 'Khởi tạo cụm và chuẩn bị chạy tác vụ Job...', at: '2026-11-09T09:01:20Z', taskPosition: null },
+      { seq: 12, step: 'runjob', stream: 'system', text: 'Bắt đầu tác vụ 1: Tạo schema database', at: '2026-11-09T09:01:20Z', taskPosition: 0 },
+      { seq: 13, step: 'runjob', stream: 'stdout', text: 'Applying schema migrations...', at: '2026-11-09T09:01:25Z', taskPosition: 0 },
+      { seq: 14, step: 'runjob', stream: 'stdout', text: 'Schema migrations applied successfully (exit code 0)', at: '2026-11-09T09:01:39Z', taskPosition: 0 },
+      { seq: 15, step: 'runjob', stream: 'system', text: 'Tác vụ 1 hoàn tất thành công.', at: '2026-11-09T09:01:40Z', taskPosition: 0 },
+      { seq: 16, step: 'runjob', stream: 'system', text: 'Bắt đầu tác vụ 2: Chạy migration dữ liệu', at: '2026-11-09T09:01:40Z', taskPosition: 1 },
+      { seq: 17, step: 'runjob', stream: 'stdout', text: 'Running data migration 002_user_tenants...', at: '2026-11-09T09:01:50Z', taskPosition: 1 },
+      { seq: 18, step: 'runjob', stream: 'stderr', text: 'Error: column "tenant_id" does not exist in table "organizations" (exit code 1)', at: '2026-11-09T09:02:08Z', taskPosition: 1 },
+      { seq: 19, step: 'runjob', stream: 'system', text: 'Tác vụ 2 thất bại với exit code 1', at: '2026-11-09T09:02:10Z', taskPosition: 1 }
     ]
+  }
+
+  constructor() {
+    this.seedExtraData()
+  }
+
+  private seedExtraData(): void {
+    const namespaces = ['devops', 'avina-workspace', 'avina-billing', 'avina-portal']
+    const statuses: RunStatus[] = ['success', 'failed', 'cancelled']
+
+    const extraPipelineNames = [
+      'avina-auth-service',
+      'avina-billing-api',
+      'avina-portal-web',
+      'avina-gateway-proxy',
+      'avina-notify-worker',
+      'avina-report-engine',
+      'avina-search-indexer',
+      'avina-storage-sync',
+      'shipit-runner-agent',
+      'shipit-metrics-exporter'
+    ]
+
+    for (let i = 0; i < extraPipelineNames.length; i++) {
+      const id = i + 3
+      const name = extraPipelineNames[i]
+      const ns = namespaces[(i + 1) % namespaces.length]
+      const status = statuses[i % statuses.length]
+      this.pipelines.push({
+        id,
+        name,
+        gitUrl: `https://git.example.com/avina/${name}.git`,
+        gitBranch: i % 2 === 0 ? 'main' : 'release',
+        gitCredentialId: 2,
+        slaveId: (i % 2) + 1,
+        dockerfilePath: 'Dockerfile',
+        buildContext: null,
+        imageName: name,
+        registryHost: '192.168.1.241',
+        deployRegistryHost: null,
+        registryCredentialId: 3,
+        deployNamespace: ns,
+        deployDeployment: name,
+        deployContainer: 'app',
+        lastRun: {
+          id: 10 + i,
+          pipelineId: id,
+          kind: 'pipeline',
+          status,
+          tag: `b${id}c${i}d0`,
+          image: status === 'success' ? `192.168.1.241/${name}:b${id}c${i}d0` : null,
+          failureReason: status === 'failed' ? 'Docker build exited with code 1' : null,
+          createdAt: `2026-11-08T${String(23 - i).padStart(2, '0')}:00:00Z`,
+          startedAt: `2026-11-08T${String(23 - i).padStart(2, '0')}:00:05Z`,
+          finishedAt: `2026-11-08T${String(23 - i).padStart(2, '0')}:01:30Z`
+        }
+      })
+    }
+
+    const extraJobNames = [
+      'avina-seed-data',
+      'avina-cleanup-temp',
+      'avina-reindex-elastic',
+      'avina-sync-permissions',
+      'avina-export-audit',
+      'avina-rotate-keys',
+      'avina-archive-logs',
+      'avina-billing-reconcile',
+      'avina-cache-warmup',
+      'avina-schema-verify',
+      'avina-tenant-provision'
+    ]
+
+    for (let i = 0; i < extraJobNames.length; i++) {
+      const id = i + 2
+      const name = extraJobNames[i]
+      const ns = namespaces[(i + 1) % namespaces.length]
+      const status = statuses[(i + 1) % statuses.length]
+      this.jobs.push({
+        id,
+        name,
+        gitUrl: `http://git.example/${name}.git`,
+        gitBranch: 'main',
+        gitCredentialId: 2,
+        slaveId: (i % 2) + 1,
+        dockerfilePath: 'Dockerfile',
+        buildContext: '.',
+        imageName: name,
+        registryHost: '192.168.1.241',
+        deployRegistryHost: null,
+        registryCredentialId: null,
+        namespace: ns,
+        containerName: 'runner',
+        serviceAccount: null,
+        imagePullSecrets: ['registry-secret'],
+        tasks: [
+          {
+            position: 0,
+            label: 'Khởi tạo tác vụ',
+            args: ['run', '--step', 'init'],
+            envFromConfigMaps: ['avina-files-config'],
+            envFromSecrets: ['avina-files-secret'],
+            env: [{ name: 'ASPNETCORE_ENVIRONMENT', value: 'Staging' }],
+            timeoutSeconds: 900,
+            backoffLimit: 0,
+            ttlSeconds: 3600
+          }
+        ],
+        lastRun: {
+          id: 25 + i,
+          pipelineId: null,
+          jobId: id,
+          kind: 'job',
+          status,
+          tag: `j${id}a${i}f1`,
+          image: status === 'success' ? `192.168.1.241/${name}:j${id}a${i}f1` : null,
+          failureReason: status === 'failed' ? 'Job task failed with exit code 1' : null,
+          createdAt: `2026-11-08T${String(12 - (i % 12)).padStart(2, '0')}:30:00Z`,
+          startedAt: `2026-11-08T${String(12 - (i % 12)).padStart(2, '0')}:30:05Z`,
+          finishedAt: `2026-11-08T${String(12 - (i % 12)).padStart(2, '0')}:31:15Z`
+        }
+      })
+    }
+
+    const baseTime = new Date('2026-11-09T06:00:00Z').getTime()
+    for (let idx = 0; idx < 60; idx++) {
+      const id = idx + 6
+      const isJob = idx % 3 === 0
+      const status = statuses[idx % statuses.length]
+      const createdMs = baseTime - idx * 3600 * 1000
+      const startedMs = createdMs + 5000
+      const finishedMs = startedMs + (45 + (idx % 90)) * 1000
+      const createdAt = new Date(createdMs).toISOString()
+      const startedAt = new Date(startedMs).toISOString()
+      const finishedAt = new Date(finishedMs).toISOString()
+      const tag = `f${id.toString(16).padStart(6, '0')}`
+
+      if (isJob) {
+        const job = this.jobs[idx % this.jobs.length]
+        this.runs.push({
+          id,
+          kind: 'job',
+          pipelineId: null,
+          jobId: job.id,
+          status,
+          tag,
+          image: status === 'success' ? `192.168.1.241/${job.imageName}:${tag}` : null,
+          failureReason: status === 'failed' ? 'Tác vụ thất bại (exit code 1)' : null,
+          createdAt,
+          startedAt,
+          finishedAt,
+          steps: [
+            { name: 'checkout', status: 'success', startedAt, finishedAt },
+            { name: 'build', status: 'success', startedAt, finishedAt },
+            { name: 'push', status: 'success', startedAt, finishedAt },
+            { name: 'runjob', status: status === 'success' ? 'success' : 'failed', startedAt, finishedAt }
+          ],
+          tasks: [
+            {
+              position: 0,
+              label: job.tasks[0]?.label || 'Tác vụ 1',
+              status: status === 'success' ? 'success' : 'failed',
+              exitCode: status === 'success' ? 0 : 1,
+              startedAt,
+              finishedAt
+            }
+          ]
+        })
+      } else {
+        const pipeline = this.pipelines[idx % this.pipelines.length]
+        this.runs.push({
+          id,
+          kind: 'pipeline',
+          pipelineId: pipeline.id,
+          jobId: null,
+          status,
+          tag,
+          image: status === 'success' ? `192.168.1.241/${pipeline.imageName}:${tag}` : null,
+          failureReason: status === 'failed' ? 'Build failed' : null,
+          createdAt,
+          startedAt,
+          finishedAt,
+          steps: [
+            { name: 'checkout', status: 'success', startedAt, finishedAt },
+            { name: 'build', status: status === 'failed' ? 'failed' : 'success', startedAt, finishedAt },
+            { name: 'push', status: status === 'success' ? 'success' : 'skipped', startedAt: null, finishedAt: null },
+            { name: 'deploy', status: status === 'success' ? 'success' : 'skipped', startedAt: null, finishedAt: null }
+          ],
+          tasks: []
+        })
+      }
+    }
   }
 
   private checkAuth(): void {
@@ -691,7 +1069,9 @@ export class MockShipitApi implements ShipitApi {
 
     const newRun: RunDetail = {
       id: Date.now(),
+      kind: 'pipeline',
       pipelineId,
+      jobId: null,
       status: 'queued',
       tag: null,
       image: null,
@@ -704,11 +1084,16 @@ export class MockShipitApi implements ShipitApi {
         { name: 'build', status: 'pending', startedAt: null, finishedAt: null },
         { name: 'push', status: 'pending', startedAt: null, finishedAt: null },
         { name: 'deploy', status: 'pending', startedAt: null, finishedAt: null }
-      ]
+      ],
+      tasks: []
     }
     this.runs.unshift(newRun)
     pipeline.lastRun = newRun
     return newRun
+  }
+
+  async runJob(jobId: number): Promise<Run> {
+    return this.triggerJobRun(jobId)
   }
 
   async cancelRun(id: number): Promise<Run> {
@@ -741,6 +1126,16 @@ export class MockShipitApi implements ShipitApi {
           step.status = 'skipped'
         }
       }
+      if (run.tasks) {
+        for (const task of run.tasks) {
+          if (task.status === 'running') {
+            task.status = 'cancelled'
+            task.finishedAt = now
+          } else if (task.status === 'pending') {
+            task.status = 'skipped'
+          }
+        }
+      }
       const pipeline = this.pipelines.find((p) => p.id === run.pipelineId)
       if (pipeline && pipeline.lastRun?.id === run.id) {
         pipeline.lastRun = { ...pipeline.lastRun, ...run }
@@ -763,6 +1158,16 @@ export class MockShipitApi implements ShipitApi {
               step.status = 'skipped'
             }
           }
+          if (run.tasks) {
+            for (const task of run.tasks) {
+              if (task.status === 'running') {
+                task.status = 'cancelled'
+                task.finishedAt = stopTime
+              } else if (task.status === 'pending') {
+                task.status = 'skipped'
+              }
+            }
+          }
           const pipeline = this.pipelines.find((p) => p.id === run.pipelineId)
           if (pipeline && pipeline.lastRun?.id === run.id) {
             pipeline.lastRun = { ...pipeline.lastRun, ...run }
@@ -775,18 +1180,73 @@ export class MockShipitApi implements ShipitApi {
     return { ...run }
   }
 
-  async getRuns(params?: { pipelineId?: number; limit?: number }): Promise<Run[]> {
-    await delay()
-    this.checkAuth()
+  private filterAndSortRuns(params?: GetRunsParams): RunDetail[] {
     let list = [...this.runs]
     if (params?.pipelineId !== undefined) {
       list = list.filter((r) => r.pipelineId === params.pipelineId)
     }
-    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    if (params?.limit) {
-      list = list.slice(0, params.limit)
+    if (params?.jobId !== undefined) {
+      list = list.filter((r) => r.jobId === params.jobId)
     }
+    if (params?.kind) {
+      list = list.filter((r) => (r.kind ?? (r.jobId ? 'job' : 'pipeline')) === params.kind)
+    }
+    if (params?.status) {
+      list = list.filter((r) => r.status === params.status)
+    }
+    if (params?.q && params.q.trim() !== '') {
+      const q = params.q.trim().toLowerCase()
+      const qNum = q.startsWith('#') ? q.slice(1) : q
+      list = list.filter((r) => {
+        const pName = r.pipelineId
+          ? this.pipelines.find((p) => p.id === r.pipelineId)?.name ?? ''
+          : ''
+        const jName = r.jobId
+          ? this.jobs.find((j) => j.id === r.jobId)?.name ?? ''
+          : ''
+        return (
+          String(r.id).includes(qNum) ||
+          `#${r.id}`.includes(q) ||
+          pName.toLowerCase().includes(q) ||
+          jName.toLowerCase().includes(q) ||
+          (r.image ?? '').toLowerCase().includes(q) ||
+          (r.tag ?? '').toLowerCase().includes(q)
+        )
+      })
+    }
+    list.sort((a, b) => {
+      const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      return diff !== 0 ? diff : b.id - a.id
+    })
     return list
+  }
+
+  async getRuns(params?: GetRunsParams): Promise<Run[]> {
+    await delay()
+    this.checkAuth()
+    const filtered = this.filterAndSortRuns(params)
+    if (params?.page !== undefined || params?.pageSize !== undefined) {
+      const page = Math.max(1, params.page ?? 1)
+      const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20))
+      return filtered.slice((page - 1) * pageSize, page * pageSize)
+    }
+    if (params?.limit) {
+      return filtered.slice(0, params.limit)
+    }
+    return filtered
+  }
+
+  async getRunsPaged(params?: GetRunsParams): Promise<PagedResult<Run>> {
+    await delay()
+    this.checkAuth()
+    const filtered = this.filterAndSortRuns(params)
+    const page = Math.max(1, params?.page ?? 1)
+    const pageSize = Math.min(100, Math.max(1, params?.pageSize ?? 20))
+    const items = filtered.slice((page - 1) * pageSize, page * pageSize)
+    return {
+      items,
+      total: filtered.length
+    }
   }
 
   async getRun(id: number): Promise<RunDetail> {
@@ -843,5 +1303,682 @@ export class MockShipitApi implements ShipitApi {
       cancelled = true
       if (intervalId) clearInterval(intervalId)
     }
+  }
+
+  // --- Jobs ---
+
+  async getJobs(): Promise<Job[]> {
+    await delay()
+    this.checkAuth()
+    return JSON.parse(JSON.stringify(this.jobs))
+  }
+
+  async getJob(id: number): Promise<Job> {
+    await delay()
+    this.checkAuth()
+    const job = this.jobs.find((j) => j.id === id)
+    if (!job) throw new ApiError(404, 'Không tìm thấy Job')
+    return JSON.parse(JSON.stringify(job))
+  }
+
+  async validateJob(input: JobInput): Promise<JobValidation> {
+    await delay()
+    this.checkAuth()
+    const errors: Record<string, string[]> = {}
+
+    const name = (input.name || '').trim()
+    if (!name) {
+      errors.name = ['Vui lòng nhập tên Job']
+    } else if (name.length > 253 || !/^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$/.test(name)) {
+      errors.name = ['Tên Job phải tuân theo chuẩn DNS-1123 subdomain (1-253 ký tự, chữ thường, số, dấu gạch ngang hoặc chấm)']
+    }
+
+    if (!input.gitUrl || !input.gitUrl.trim()) {
+      errors.gitUrl = ['Vui lòng nhập địa chỉ Git URL']
+    }
+
+    if (!input.gitCredentialId) {
+      errors.gitCredentialId = ['Vui lòng chọn thông tin xác thực Git']
+    } else {
+      const cred = this.credentials.find((c) => c.id === input.gitCredentialId && c.kind === 'git_token')
+      if (!cred) {
+        errors.gitCredentialId = ['Thông tin xác thực Git không hợp lệ']
+      }
+    }
+
+    if (!input.slaveId) {
+      errors.slaveId = ['Vui lòng chọn máy build']
+    } else {
+      const slave = this.slaves.find((s) => s.id === input.slaveId)
+      if (!slave) {
+        errors.slaveId = ['Máy build không tồn tại']
+      }
+    }
+
+    if (!input.imageName || !input.imageName.trim()) {
+      errors.imageName = ['Vui lòng nhập tên Image']
+    }
+
+    if (!input.registryHost || !input.registryHost.trim()) {
+      errors.registryHost = ['Vui lòng nhập Host registry']
+    }
+
+    const ns = (input.namespace || '').trim()
+    if (!ns) {
+      errors.namespace = ['Vui lòng chọn Namespace']
+    } else {
+      const allowedNs = this.jobAllowEntries.some((e) => e.kind === 'namespace' && e.name === ns)
+      if (!allowedNs) {
+        errors.namespace = [`Namespace '${ns}' không nằm trong danh sách được phép`]
+      }
+    }
+
+    if (!input.containerName || !input.containerName.trim()) {
+      errors.containerName = ['Vui lòng nhập tên container']
+    }
+
+    if (input.buildContext) {
+      const buildContextErr = validateBuildContext(input.buildContext)
+      if (buildContextErr) {
+        errors.buildContext = [buildContextErr]
+      }
+    }
+
+    if (input.deployRegistryHost) {
+      const deployRegErr = validateDeployRegistryHost(input.deployRegistryHost)
+      if (deployRegErr) {
+        errors.deployRegistryHost = [deployRegErr]
+      }
+    }
+
+    if (input.imagePullSecrets && input.imagePullSecrets.length > 0) {
+      for (const secret of input.imagePullSecrets) {
+        const allowed = this.jobAllowEntries.some(
+          (e) => e.kind === 'pullsecret' && e.namespace === ns && e.name === secret
+        )
+        if (!allowed) {
+          errors.imagePullSecrets = [`ImagePullSecret '${secret}' không nằm trong allowlist của namespace '${ns}'`]
+        }
+      }
+    }
+
+    if (!input.tasks || input.tasks.length === 0) {
+      errors.tasks = ['Job phải có ít nhất một tác vụ']
+    } else {
+      input.tasks.forEach((t, i) => {
+        if (!t.label || !t.label.trim()) {
+          errors[`tasks[${i}].label`] = ['Vui lòng nhập nhãn tác vụ']
+        }
+        if (t.timeoutSeconds === undefined || t.timeoutSeconds === null || Number(t.timeoutSeconds) <= 0) {
+          errors[`tasks[${i}].timeoutSeconds`] = ['Thời gian timeout bắt buộc và phải lớn hơn 0']
+        }
+        if (t.envFromConfigMaps && t.envFromConfigMaps.length > 0) {
+          for (const cm of t.envFromConfigMaps) {
+            const allowed = this.jobAllowEntries.some(
+              (e) => e.kind === 'configmap' && e.namespace === ns && e.name === cm
+            )
+            if (!allowed) {
+              errors[`tasks[${i}].envFromConfigMaps`] = [`ConfigMap '${cm}' không nằm trong allowlist của namespace '${ns}'`]
+            }
+          }
+        }
+        if (t.envFromSecrets && t.envFromSecrets.length > 0) {
+          for (const sec of t.envFromSecrets) {
+            const allowed = this.jobAllowEntries.some(
+              (e) => e.kind === 'secret' && e.namespace === ns && e.name === sec
+            )
+            if (!allowed) {
+              errors[`tasks[${i}].envFromSecrets`] = [`Secret '${sec}' không nằm trong allowlist của namespace '${ns}'`]
+            }
+          }
+        }
+        if (t.env && t.env.length > 0) {
+          t.env.forEach((env, envIdx) => {
+            if (!env.name || !env.name.trim()) {
+              errors[`tasks[${i}].env[${envIdx}].name`] = ['Tên biến môi trường không được để trống']
+            }
+            if (env.secretName) {
+              const allowed = this.jobAllowEntries.some(
+                (e) => e.kind === 'secret' && e.namespace === ns && e.name === env.secretName
+              )
+              if (!allowed) {
+                errors[`tasks[${i}].env[${envIdx}].secretName`] = [
+                  `Secret '${env.secretName}' không nằm trong allowlist của namespace '${ns}'`
+                ]
+              }
+              if (!env.secretKey || !env.secretKey.trim()) {
+                errors[`tasks[${i}].env[${envIdx}].secretKey`] = ['Secret key không được để trống khi lấy từ Secret']
+              }
+            }
+          })
+        }
+      })
+    }
+
+    return {
+      valid: Object.keys(errors).length === 0,
+      errors
+    }
+  }
+
+  async previewJob(input: JobInput): Promise<JobPreview> {
+    await delay()
+    this.checkAuth()
+    const validation = await this.validateJob(input)
+    if (!validation.valid || Object.keys(validation.errors).length > 0) {
+      return {
+        errors: validation.errors,
+        tasks: []
+      }
+    }
+    const registry = input.deployRegistryHost || input.registryHost
+    const tasks: JobPreviewTask[] = (input.tasks || []).map((t, idx) => {
+      const position = idx
+      const lines = [
+        'apiVersion: batch/v1',
+        'kind: Job',
+        'metadata:',
+        `  name: ${input.name || 'job'}-${t.label || `task-${position}`}`,
+        `  namespace: ${input.namespace || 'default'}`,
+        '  labels:',
+        `    shipit/job-name: ${input.name || 'job'}`,
+        `    shipit/task: ${t.label || `task-${position}`}`,
+        'spec:',
+        `  backoffLimit: ${t.backoffLimit ?? 0}`,
+        `  activeDeadlineSeconds: ${t.timeoutSeconds ?? 1800}`,
+        `  ttlSecondsAfterFinished: ${t.ttlSeconds ?? 3600}`,
+        '  template:',
+        '    metadata:',
+        '      labels:',
+        `        shipit/job-name: ${input.name || 'job'}`,
+        `        shipit/task: ${t.label || `task-${position}`}`,
+        '    spec:',
+        '      restartPolicy: Never',
+        '      securityContext:',
+        '        runAsNonRoot: true',
+        '        runAsUser: 1654',
+        ...(input.serviceAccount ? [`      serviceAccountName: ${input.serviceAccount}`] : []),
+        ...(input.imagePullSecrets && input.imagePullSecrets.length > 0
+          ? [
+              '      imagePullSecrets:',
+              ...input.imagePullSecrets.map((s) => `        - name: ${s}`)
+            ]
+          : []),
+        '      containers:',
+        `        - name: ${input.containerName || 'container'}`,
+        `          image: ${registry ? `${registry}/` : ''}${input.imageName || 'image'}:<tag>`,
+        ...(t.args && t.args.length > 0
+          ? [
+              '          args:',
+              ...t.args.map((a) => `            - ${JSON.stringify(a)}`)
+            ]
+          : []),
+        ...((t.envFromConfigMaps && t.envFromConfigMaps.length > 0) || (t.envFromSecrets && t.envFromSecrets.length > 0)
+          ? [
+              '          envFrom:',
+              ...(t.envFromConfigMaps || []).map((cm) => `            - configMapRef:\n                name: ${cm}`),
+              ...(t.envFromSecrets || []).map((sec) => `            - secretRef:\n                name: ${sec}`)
+            ]
+          : []),
+        ...(t.env && t.env.length > 0
+          ? [
+              '          env:',
+              ...t.env.map((e) => {
+                if (e.secretName && e.secretKey) {
+                  return `            - name: ${e.name}\n              valueFrom:\n                secretKeyRef:\n                  name: ${e.secretName}\n                  key: ${e.secretKey}`
+                }
+                return `            - name: ${e.name}\n              value: ${JSON.stringify(e.value ?? '')}`
+              })
+            ]
+          : [])
+      ]
+      return {
+        position,
+        label: t.label || `task-${position}`,
+        yaml: lines.join('\n')
+      }
+    })
+    return {
+      errors: validation.errors,
+      tasks
+    }
+  }
+
+  async createJob(input: JobInput): Promise<Job> {
+    await delay()
+    this.checkAuth()
+
+    const validation = await this.validateJob(input)
+    if (!validation.valid) {
+      throw new ApiError(400, 'Dữ liệu Job không hợp lệ', {
+        title: 'Validation failed',
+        errors: validation.errors
+      })
+    }
+
+    if (this.jobs.some((j) => j.name === input.name)) {
+      throw new ApiError(409, `Job '${input.name}' đã tồn tại`, {
+        title: 'Job already exists',
+        detail: `Job '${input.name}' already exists.`,
+        errors: { name: ['Tên Job đã tồn tại'] }
+      })
+    }
+
+    const newJob: Job = {
+      id: this.jobs.length > 0 ? Math.max(...this.jobs.map((j) => j.id)) + 1 : 1,
+      name: input.name,
+      gitUrl: input.gitUrl,
+      gitBranch: input.gitBranch || 'main',
+      gitCredentialId: input.gitCredentialId,
+      slaveId: input.slaveId,
+      dockerfilePath: input.dockerfilePath || 'Dockerfile',
+      buildContext: normalizeBuildContext(input.buildContext),
+      imageName: input.imageName,
+      registryHost: input.registryHost,
+      deployRegistryHost: normalizeDeployRegistryHost(input.deployRegistryHost),
+      registryCredentialId: input.registryCredentialId ?? null,
+      namespace: input.namespace,
+      containerName: input.containerName,
+      serviceAccount: input.serviceAccount || null,
+      imagePullSecrets: input.imagePullSecrets || [],
+      tasks: (input.tasks || []).map((t, idx) => ({
+        position: idx,
+        label: t.label,
+        args: t.args || [],
+        envFromConfigMaps: t.envFromConfigMaps || [],
+        envFromSecrets: t.envFromSecrets || [],
+        env: t.env || [],
+        timeoutSeconds: t.timeoutSeconds ?? 1800,
+        backoffLimit: t.backoffLimit ?? 0,
+        ttlSeconds: t.ttlSeconds ?? 3600
+      })),
+      lastRun: null
+    }
+
+    this.jobs.push(newJob)
+    return JSON.parse(JSON.stringify(newJob))
+  }
+
+  async updateJob(id: number, input: JobInput): Promise<Job> {
+    await delay()
+    this.checkAuth()
+    const idx = this.jobs.findIndex((j) => j.id === id)
+    if (idx === -1) throw new ApiError(404, 'Không tìm thấy Job')
+
+    const validation = await this.validateJob(input)
+    if (!validation.valid) {
+      throw new ApiError(400, 'Dữ liệu Job không hợp lệ', {
+        title: 'Validation failed',
+        errors: validation.errors
+      })
+    }
+
+    if (this.jobs.some((j) => j.id !== id && j.name === input.name)) {
+      throw new ApiError(409, `Job '${input.name}' đã tồn tại`, {
+        title: 'Job already exists',
+        detail: `Job '${input.name}' already exists.`,
+        errors: { name: ['Tên Job đã tồn tại'] }
+      })
+    }
+
+    const current = this.jobs[idx]
+    const updated: Job = {
+      ...current,
+      name: input.name,
+      gitUrl: input.gitUrl,
+      gitBranch: input.gitBranch || 'main',
+      gitCredentialId: input.gitCredentialId,
+      slaveId: input.slaveId,
+      dockerfilePath: input.dockerfilePath || 'Dockerfile',
+      buildContext: normalizeBuildContext(input.buildContext),
+      imageName: input.imageName,
+      registryHost: input.registryHost,
+      deployRegistryHost: normalizeDeployRegistryHost(input.deployRegistryHost),
+      registryCredentialId: input.registryCredentialId ?? null,
+      namespace: input.namespace,
+      containerName: input.containerName,
+      serviceAccount: input.serviceAccount || null,
+      imagePullSecrets: input.imagePullSecrets || [],
+      tasks: (input.tasks || []).map((t, taskIdx) => ({
+        position: taskIdx,
+        label: t.label,
+        args: t.args || [],
+        envFromConfigMaps: t.envFromConfigMaps || [],
+        envFromSecrets: t.envFromSecrets || [],
+        env: t.env || [],
+        timeoutSeconds: t.timeoutSeconds ?? 1800,
+        backoffLimit: t.backoffLimit ?? 0,
+        ttlSeconds: t.ttlSeconds ?? 3600
+      }))
+    }
+
+    this.jobs[idx] = updated
+    return JSON.parse(JSON.stringify(updated))
+  }
+
+  async deleteJob(id: number): Promise<void> {
+    await delay()
+    this.checkAuth()
+    const job = this.jobs.find((j) => j.id === id)
+    if (!job) throw new ApiError(404, 'Không tìm thấy Job')
+
+    const activeRun = this.runs.find(
+      (r) => r.jobId === id && (r.status === 'running' || r.status === 'queued')
+    )
+    if (activeRun) {
+      throw new ApiError(409, 'Không thể xoá Job khi đang có lượt chạy hoạt động', {
+        title: 'Job has active run',
+        detail: 'Cannot delete job while it has an active run.'
+      })
+    }
+
+    this.jobs = this.jobs.filter((j) => j.id !== id)
+  }
+
+  async triggerJobRun(id: number): Promise<Run> {
+    await delay()
+    this.checkAuth()
+    const job = this.jobs.find((j) => j.id === id)
+    if (!job) throw new ApiError(404, 'Không tìm thấy Job')
+
+    const activeRun = this.runs.find(
+      (r) => r.jobId === id && (r.status === 'running' || r.status === 'queued')
+    )
+    if (activeRun) {
+      throw new ApiError(409, 'Job đang có lượt chạy hoạt động', {
+        title: 'Job already has active run',
+        detail: 'Job already has an active run.'
+      })
+    }
+
+    const nextId = this.runs.length > 0 ? Math.max(...this.runs.map((r) => r.id)) + 1 : 1
+    const tasks: RunTask[] =
+      job.tasks && job.tasks.length > 0
+        ? job.tasks.map((t, idx) => ({
+            position: t.position ?? idx,
+            label: t.label,
+            status: 'pending' as const,
+            exitCode: null,
+            startedAt: null,
+            finishedAt: null
+          }))
+        : [
+            {
+              position: 0,
+              label: 'Khởi tạo',
+              status: 'pending' as const,
+              exitCode: null,
+              startedAt: null,
+              finishedAt: null
+            }
+          ]
+
+    const newRun: RunDetail = {
+      id: nextId,
+      pipelineId: null,
+      jobId: id,
+      kind: 'job',
+      status: 'queued',
+      tag: null,
+      image: null,
+      failureReason: null,
+      createdAt: new Date().toISOString(),
+      startedAt: null,
+      finishedAt: null,
+      steps: [
+        { name: 'checkout', status: 'pending', startedAt: null, finishedAt: null },
+        { name: 'build', status: 'pending', startedAt: null, finishedAt: null },
+        { name: 'push', status: 'pending', startedAt: null, finishedAt: null },
+        { name: 'runjob', status: 'pending', startedAt: null, finishedAt: null }
+      ],
+      tasks
+    }
+
+    this.runs.unshift(newRun)
+    job.lastRun = {
+      id: newRun.id,
+      pipelineId: null,
+      jobId: id,
+      kind: 'job',
+      status: 'queued',
+      tag: null,
+      image: null,
+      failureReason: null,
+      createdAt: newRun.createdAt,
+      startedAt: null,
+      finishedAt: null
+    }
+
+    return JSON.parse(JSON.stringify(newRun))
+  }
+
+  // --- Job Allow Entries ---
+
+  async getJobAllowEntries(): Promise<JobAllowEntry[]> {
+    await delay()
+    this.checkAuth()
+    return [...this.jobAllowEntries].sort((a, b) => {
+      const cmpNs = a.namespace.localeCompare(b.namespace)
+      if (cmpNs !== 0) return cmpNs
+      const cmpKind = a.kind.localeCompare(b.kind)
+      if (cmpKind !== 0) return cmpKind
+      return a.name.localeCompare(b.name)
+    })
+  }
+
+  async createJobAllowEntry(input: JobAllowEntryInput): Promise<JobAllowEntry> {
+    await delay()
+    this.checkAuth()
+    const ns = (input.namespace || '').trim()
+    const kind = input.kind
+    const name = (input.name || '').trim()
+
+    const errors: Record<string, string[]> = {}
+    if (!ns) {
+      errors.namespace = ['Vui lòng nhập Namespace']
+    } else if (ns.length > 63 || !/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(ns)) {
+      errors.namespace = ['Namespace phải tuân theo chuẩn DNS-1123 label (1-63 ký tự)']
+    }
+
+    if (!kind) {
+      errors.kind = ['Vui lòng chọn loại cho phép']
+    }
+
+    if (!name) {
+      errors.name = ['Vui lòng nhập tên']
+    } else if (name.length > 253) {
+      errors.name = ['Tên tối đa 253 ký tự']
+    }
+
+    if (Object.keys(errors).length > 0) {
+      throw new ApiError(400, 'Dữ liệu allowlist không hợp lệ', {
+        title: 'Validation failed',
+        errors
+      })
+    }
+
+    const duplicate = this.jobAllowEntries.some(
+      (e) => e.namespace === ns && e.kind === kind && e.name === name
+    )
+    if (duplicate) {
+      throw new ApiError(409, `Mục allowlist '${kind}:${name}' trong namespace '${ns}' đã tồn tại`, {
+        title: 'Job allow entry already exists',
+        detail: `Job allow entry '${ns}/${kind}/${name}' already exists.`
+      })
+    }
+
+    const newEntry: JobAllowEntry = {
+      id: this.jobAllowEntries.length > 0 ? Math.max(...this.jobAllowEntries.map((e) => e.id)) + 1 : 1,
+      namespace: ns,
+      kind,
+      name,
+      createdAt: new Date().toISOString()
+    }
+
+    this.jobAllowEntries.push(newEntry)
+    return JSON.parse(JSON.stringify(newEntry))
+  }
+
+  async deleteJobAllowEntry(id: number): Promise<void> {
+    await delay()
+    this.checkAuth()
+    const entry = this.jobAllowEntries.find((e) => e.id === id)
+    if (!entry) throw new ApiError(404, 'Không tìm thấy mục allowlist')
+
+    // Check if in use by any Job
+    const usingJobs: string[] = []
+    for (const job of this.jobs) {
+      if (entry.kind === 'namespace' && job.namespace === entry.name) {
+        usingJobs.push(job.name)
+      } else if (entry.kind === 'pullsecret' && job.namespace === entry.namespace && job.imagePullSecrets.includes(entry.name)) {
+        usingJobs.push(job.name)
+      } else if (entry.kind === 'configmap' && job.namespace === entry.namespace && job.tasks.some((t) => t.envFromConfigMaps.includes(entry.name))) {
+        usingJobs.push(job.name)
+      } else if (entry.kind === 'secret' && job.namespace === entry.namespace) {
+        const inEnvFrom = job.tasks.some((t) => t.envFromSecrets.includes(entry.name))
+        const inEnv = job.tasks.some((t) => t.env.some((e) => e.secretName === entry.name))
+        if (inEnvFrom || inEnv) {
+          usingJobs.push(job.name)
+        }
+      }
+    }
+
+    if (usingJobs.length > 0) {
+      const uniqueNames = [...new Set(usingJobs)].map((n) => `'${n}'`).join(', ')
+      throw new ApiError(409, `Không thể xoá mục allowlist đang được Job sử dụng: ${uniqueNames}`, {
+        title: 'Mục allowlist đang được sử dụng',
+        detail: `Không thể xoá mục allowlist '${entry.name}' vì đang được Job sử dụng: ${uniqueNames}.`
+      })
+    }
+
+    this.jobAllowEntries = this.jobAllowEntries.filter((e) => e.id !== id)
+  }
+
+  async search(q: string, limit: number = 5, signal?: AbortSignal): Promise<SearchResponse> {
+    const checkAborted = () => {
+      if (signal?.aborted) {
+        const err = new Error('Yêu cầu tìm kiếm đã bị huỷ')
+        err.name = 'AbortError'
+        throw err
+      }
+    }
+
+    checkAborted()
+    await delay()
+    checkAborted()
+    this.checkAuth()
+
+    const trimmed = q.trim()
+    if (!trimmed) {
+      return { query: q, groups: [] }
+    }
+
+    const maxItems = Math.min(20, Math.max(1, Number.isFinite(limit) ? limit : 5))
+    const needle = trimmed.toLowerCase()
+    const matches = (...fields: Array<string | number | null | undefined>): boolean =>
+      fields.some((f) => f !== null && f !== undefined && String(f).toLowerCase().includes(needle))
+
+    const groups: SearchGroup[] = []
+
+    const runItems: SearchItem[] = [...this.runs]
+      .sort((a, b) => b.id - a.id)
+      .map((r) => {
+        const sourceName =
+          r.kind === 'job' || r.jobId
+            ? this.jobs.find((j) => j.id === r.jobId)?.name || `Job #${r.jobId ?? r.id}`
+            : this.pipelines.find((p) => p.id === r.pipelineId)?.name || `Pipeline #${r.pipelineId ?? r.id}`
+        return { r, sourceName }
+      })
+      .filter(({ r, sourceName }) => matches(`#${r.id}`, sourceName, r.image, r.tag, r.status))
+      .slice(0, maxItems)
+      .map(({ r, sourceName }) => ({
+        id: String(r.id),
+        title: `#${r.id} ${sourceName}`,
+        subtitle: [r.status, r.tag, r.image].filter(Boolean).join(' · ') || null,
+        path: `/runs/${r.id}`
+      }))
+    if (runItems.length > 0) {
+      groups.push({ kind: 'run', label: 'Lượt chạy', items: runItems })
+    }
+
+    const pipelineItems: SearchItem[] = this.pipelines
+      .filter((p) => matches(p.name, p.imageName, p.gitUrl, p.deployNamespace, p.deployDeployment))
+      .slice(0, maxItems)
+      .map((p) => ({
+        id: String(p.id),
+        title: p.name,
+        subtitle: `${p.imageName} · ${p.deployNamespace}/${p.deployDeployment}`,
+        path: `/pipelines/${p.id}/edit`
+      }))
+    if (pipelineItems.length > 0) {
+      groups.push({ kind: 'pipeline', label: 'Pipeline', items: pipelineItems })
+    }
+
+    const jobItems: SearchItem[] = this.jobs
+      .filter((j) => matches(j.name, j.imageName, j.namespace, j.gitUrl))
+      .slice(0, maxItems)
+      .map((j) => ({
+        id: String(j.id),
+        title: j.name,
+        subtitle: `${j.namespace} · ${j.imageName}`,
+        path: `/jobs/${j.id}`
+      }))
+    if (jobItems.length > 0) {
+      groups.push({ kind: 'job', label: 'Job', items: jobItems })
+    }
+
+    const slaveItems: SearchItem[] = this.slaves
+      .filter((s) => matches(s.name, s.host, s.user))
+      .slice(0, maxItems)
+      .map((s) => ({
+        id: String(s.id),
+        title: s.name,
+        subtitle: `${s.user}@${s.host}:${s.port ?? 22}`,
+        path: `/slaves/${s.id}/edit`
+      }))
+    if (slaveItems.length > 0) {
+      groups.push({ kind: 'slave', label: 'Máy build', items: slaveItems })
+    }
+
+    const credentialItems: SearchItem[] = this.credentials
+      .filter((c) => matches(c.name, c.kind, c.username))
+      .slice(0, maxItems)
+      .map((c) => ({
+        id: String(c.id),
+        title: c.name,
+        subtitle: c.username ? `${c.kind} · ${c.username}` : c.kind,
+        path: `/credentials/${c.id}/edit`
+      }))
+    if (credentialItems.length > 0) {
+      groups.push({ kind: 'credential', label: 'Thông tin xác thực', items: credentialItems })
+    }
+
+    const deployTargetItems: SearchItem[] = this.deployTargets
+      .filter((d) => matches(d.namespace, d.deployment))
+      .slice(0, maxItems)
+      .map((d) => ({
+        id: String(d.id),
+        title: `${d.namespace}/${d.deployment}`,
+        subtitle: 'Deployment được phép',
+        path: '/settings/allowlist?tab=deployment'
+      }))
+    if (deployTargetItems.length > 0) {
+      groups.push({ kind: 'deploy-target', label: 'Allowlist Deployment', items: deployTargetItems })
+    }
+
+    const jobAllowItems: SearchItem[] = this.jobAllowEntries
+      .filter((a) => matches(a.name, a.namespace, a.kind))
+      .slice(0, maxItems)
+      .map((a) => ({
+        id: String(a.id),
+        title: a.name,
+        subtitle: `${a.namespace} · ${a.kind}`,
+        path: '/settings/allowlist?tab=job'
+      }))
+    if (jobAllowItems.length > 0) {
+      groups.push({ kind: 'job-allow', label: 'Allowlist Job', items: jobAllowItems })
+    }
+
+    return { query: q, groups }
   }
 }

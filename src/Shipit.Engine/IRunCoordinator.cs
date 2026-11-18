@@ -10,7 +10,7 @@ public enum CancelResult
     AlreadyFinished,
 }
 
-/// <summary>Entry point used by the API to start and cancel pipeline runs.</summary>
+/// <summary>Entry point used by the API to start and cancel pipeline and job runs.</summary>
 public interface IRunCoordinator
 {
     /// <summary>
@@ -19,6 +19,13 @@ public interface IRunCoordinator
     /// <exception cref="PipelineNotFoundException">No such pipeline.</exception>
     /// <exception cref="RunConflictException">The pipeline already has an active run.</exception>
     Task<Run> TriggerAsync(long pipelineId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a queued run for a Job (with its pending steps and tasks) and schedules it.
+    /// </summary>
+    /// <exception cref="JobNotFoundException">No such job.</exception>
+    /// <exception cref="JobRunConflictException">The job already has an active run.</exception>
+    Task<Run> TriggerJobAsync(long jobId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Cancels a queued or currently executing run.

@@ -48,6 +48,9 @@ internal sealed class RunLogWriter : ILogSink
     /// <summary>Step the following lines belong to. Set by the runner before each step.</summary>
     public StepName CurrentStep { get; set; } = StepName.Checkout;
 
+    /// <summary>Position of the job task the following lines belong to; null for pipeline runs or non-task lines.</summary>
+    public int? CurrentTaskPosition { get; set; }
+
     public ValueTask WriteAsync(string line, LogStream stream, CancellationToken cancellationToken = default)
     {
         foreach (var part in (line ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
@@ -92,6 +95,7 @@ internal sealed class RunLogWriter : ILogSink
         {
             RunId = _runId,
             Step = CurrentStep,
+            TaskPosition = CurrentTaskPosition,
             Stream = stream,
             Text = text,
             At = _time.GetUtcNow().UtcDateTime,
