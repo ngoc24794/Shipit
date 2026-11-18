@@ -55,7 +55,7 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="h-dvh overflow-hidden flex flex-row bg-bg text-fg">
+  <div class="h-full overflow-hidden flex flex-row bg-bg text-fg">
     <AppToast />
 
     <!-- Sidebar (fixed vertical 232px) -->
@@ -139,9 +139,9 @@ async function handleLogout() {
         </div>
       </header>
 
-      <!-- Page Content (only scrolling region; min-w-[1024px] prevents layout wrapping) -->
-      <main class="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
-        <div class="min-w-[1024px] max-w-[1440px] w-full mx-auto p-6">
+      <!-- Page Content (never scrolls vertically; min-w-[1024px] prevents layout wrapping) -->
+      <main class="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex flex-col">
+        <div class="min-w-[1024px] max-w-[1440px] w-full mx-auto p-6 flex-1 min-h-0 flex flex-col">
           <slot />
         </div>
       </main>

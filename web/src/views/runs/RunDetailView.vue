@@ -385,9 +385,9 @@ onBeforeUnmount(() => {
       {{ statusAnnouncement }}
     </div>
 
-    <div class="space-y-6 max-w-[1280px] mx-auto w-full">
+    <div class="flex-1 min-h-0 flex flex-col gap-3 w-full">
       <!-- Back Button -->
-      <div>
+      <div class="shrink-0">
         <button
           type="button"
           class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-fg hover:text-fg transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring rounded-[4px] px-1 -mx-1"
@@ -431,9 +431,9 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Main Run Detail Content -->
-      <div v-else-if="run" class="space-y-6">
+      <div v-else-if="run" class="flex-1 min-h-0 flex flex-col gap-3">
         <!-- Header Banner -->
-        <div class="flex flex-row items-center justify-between gap-4 flex-nowrap pb-4 border-b border-border">
+        <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap pb-3 border-b border-border">
           <div class="space-y-1 min-w-0">
             <div class="flex items-center gap-3 flex-nowrap">
               <h1 class="text-2xl font-semibold text-fg tracking-tight truncate">
@@ -479,7 +479,7 @@ onBeforeUnmount(() => {
         <div
           v-if="failedTask || (run.status === 'failed' && run.failureReason)"
           role="alert"
-          class="p-4 rounded-[8px] border border-danger/40 border-l-4 border-l-danger bg-danger/10 text-danger text-sm space-y-1.5"
+          class="shrink-0 p-3.5 rounded-[8px] border border-danger/40 border-l-4 border-l-danger bg-danger/10 text-danger text-sm space-y-1"
         >
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-2.5 min-w-0">
@@ -519,7 +519,7 @@ onBeforeUnmount(() => {
         <div
           v-if="run.status === 'cancelled' && run.failureReason"
           role="note"
-          class="flex items-start gap-3 p-4 rounded-[8px] border border-warn/30 bg-warn/10 text-fg text-sm"
+          class="shrink-0 flex items-start gap-3 p-3.5 rounded-[8px] border border-warn/30 bg-warn/10 text-fg text-sm"
         >
           <CircleStop class="w-5 h-5 shrink-0 mt-0.5 text-warn" aria-hidden="true" />
           <div class="space-y-1">
@@ -531,7 +531,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Info Grid -->
-        <div class="grid grid-cols-4 gap-4">
+        <div class="shrink-0 grid grid-cols-4 gap-3">
           <!-- Tag / SHA -->
           <div class="p-3.5 rounded-[8px] bg-card border border-border flex items-start gap-3 min-w-0">
             <div class="p-2 rounded bg-muted text-muted-fg shrink-0">
@@ -620,23 +620,23 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Step Timeline Card -->
-        <div class="p-6 rounded-[8px] bg-card border border-border">
-          <h2 class="text-sm font-semibold text-fg mb-2">Tiến trình các bước</h2>
+        <div class="shrink-0 p-4 rounded-[8px] bg-card border border-border">
+          <h2 class="text-sm font-semibold text-fg mb-1">Tiến trình các bước</h2>
           <StepTimeline :steps="run.steps" :kind="isJobRun ? 'job' : 'pipeline'" />
         </div>
 
         <!-- Task Table Card (Job runs only) -->
-        <div v-if="isJobRun" class="p-6 rounded-[8px] bg-card border border-border space-y-3">
-          <h2 class="text-sm font-semibold text-fg">Danh sách tác vụ</h2>
+        <div v-if="isJobRun" class="shrink-0 max-h-[180px] p-4 rounded-[8px] bg-card border border-border flex flex-col gap-2 min-h-0">
+          <h2 class="text-sm font-semibold text-fg shrink-0">Danh sách tác vụ</h2>
           <TaskTable :tasks="run.tasks || []" @view-log="scrollToTaskLog" />
         </div>
 
         <!-- Log Viewer Section -->
-        <div class="space-y-2">
+        <div class="flex-1 min-h-[160px] flex flex-col gap-2">
           <div
             v-if="logTruncated"
             role="note"
-            class="text-xs px-3 py-1.5 rounded-[6px] bg-warn/10 text-warn border border-warn/30"
+            class="shrink-0 text-xs px-3 py-1.5 rounded-[6px] bg-warn/10 text-warn border border-warn/30"
           >
             Nhật ký vượt quá giới hạn, chỉ hiển thị {{ MAX_LOG_LINES.toLocaleString() }} dòng mới nhất.
           </div>

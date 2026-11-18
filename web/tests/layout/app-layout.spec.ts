@@ -70,7 +70,7 @@ describe('AppLayout Sidebar & Topbar', () => {
     expect(wrapper.findAll('h1')).toHaveLength(1)
   })
 
-  it('uses 100dvh fixed desktop shell with no responsive layout classes and main as only scrolling region', () => {
+  it('uses h-full fixed desktop shell with no vertical scroll on main', () => {
     const wrapper = mount(AppLayout, {
       global: {
         plugins: [createPinia(), router]
@@ -80,10 +80,11 @@ describe('AppLayout Sidebar & Topbar', () => {
       }
     })
 
-    const root = wrapper.find('div.h-dvh')
+    const root = wrapper.find('div.h-full')
     expect(root.exists()).toBe(true)
     expect(root.classes()).toContain('overflow-hidden')
     expect(root.classes()).toContain('flex-row')
+    expect(root.classes()).not.toContain('h-dvh')
     expect(root.classes().some((c) => c.startsWith('md:') || c.startsWith('sm:') || c.startsWith('lg:'))).toBe(false)
 
     const aside = wrapper.find('aside')
@@ -91,12 +92,16 @@ describe('AppLayout Sidebar & Topbar', () => {
 
     const main = wrapper.find('main')
     expect(main.exists()).toBe(true)
-    expect(main.classes()).toContain('overflow-y-auto')
+    expect(main.classes()).not.toContain('overflow-y-auto')
+    expect(main.classes()).not.toContain('overflow-y-scroll')
+    expect(main.classes()).toContain('overflow-y-hidden')
     expect(main.classes()).toContain('overflow-x-auto')
     expect(main.classes()).toContain('flex-1')
     expect(main.classes()).toContain('min-h-0')
 
     const innerContainer = main.find('div')
     expect(innerContainer.classes()).toContain('min-w-[1024px]')
+    expect(innerContainer.classes()).toContain('flex-1')
+    expect(innerContainer.classes()).toContain('min-h-0')
   })
 })

@@ -95,7 +95,7 @@ function getStatusBadge(status: StepStatus) {
 </script>
 
 <template>
-  <div class="w-full py-4">
+  <div class="w-full py-2">
     <ol class="flex flex-row items-center justify-between w-full gap-0">
       <li
         v-for="(step, index) in mappedSteps"

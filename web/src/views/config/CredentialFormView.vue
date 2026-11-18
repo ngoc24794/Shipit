@@ -165,9 +165,9 @@ onMounted(async () => {
 
 <template>
   <AppLayout>
-    <div class="space-y-6 max-w-3xl mx-auto pb-12">
-      <!-- Sticky Top Header Bar -->
-      <div class="sticky top-0 z-10 bg-bg/95 backdrop-blur-xs -mx-6 px-6 py-3 flex flex-row items-center justify-between gap-4 flex-nowrap border-b border-border">
+    <div class="h-full max-w-3xl w-full mx-auto flex flex-col min-h-0">
+      <!-- Top Header Bar -->
+      <div class="shrink-0 py-3 flex flex-row items-center justify-between gap-4 flex-nowrap border-b border-border">
         <div class="flex items-center gap-3 min-w-0">
           <button
             type="button"
@@ -239,7 +239,8 @@ onMounted(async () => {
       </div>
 
       <!-- Form -->
-      <form v-else class="p-6 rounded-[8px] border border-border bg-card space-y-5" @submit.prevent="handleSave">
+      <div v-else class="flex-1 min-h-0 overflow-y-auto py-4 pr-1">
+        <form class="p-6 rounded-[8px] border border-border bg-card space-y-5" @submit.prevent="handleSave">
         <!-- Name -->
         <AppField
           label="Tên thông tin xác thực"
@@ -348,7 +349,8 @@ onMounted(async () => {
             />
           </template>
         </AppField>
-      </form>
+        </form>
+      </div>
     </div>
   </AppLayout>
 </template>

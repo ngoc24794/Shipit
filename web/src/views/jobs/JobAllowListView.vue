@@ -175,10 +175,10 @@ async function handleDelete() {
 </script>
 
 <template>
-  <component :is="props.embedded ? 'div' : AppLayout">
-    <div class="space-y-6">
+  <component :is="props.embedded ? 'div' : AppLayout" :class="props.embedded ? 'flex-1 min-h-0 flex flex-col' : undefined">
+    <div class="flex-1 min-h-0 flex flex-col gap-4">
       <!-- Page Header -->
-      <div v-if="!props.embedded">
+      <div v-if="!props.embedded" class="shrink-0">
         <h1 class="text-2xl font-bold tracking-tight text-fg flex items-center gap-2.5">
           <ListChecks class="w-6 h-6 text-primary" aria-hidden="true" />
           <span>Allowlist Job</span>
@@ -189,7 +189,7 @@ async function handleDelete() {
       </div>
 
       <!-- Add New Entry Form Card -->
-      <div class="p-5 rounded-[8px] border border-border bg-card shadow-sm space-y-4">
+      <div class="shrink-0 p-5 rounded-[8px] border border-border bg-card shadow-sm space-y-4">
         <h2 class="text-sm font-semibold text-fg flex items-center gap-2">
           <Plus class="w-4 h-4 text-primary" aria-hidden="true" />
           <span>Thêm mục vào allowlist</span>

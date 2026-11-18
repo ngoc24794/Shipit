@@ -26,9 +26,9 @@ function selectTab(tab: AllowlistTab) {
 
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="flex-1 min-h-0 flex flex-col gap-5">
       <!-- Page Header -->
-      <div>
+      <div class="shrink-0">
         <h1 class="text-2xl font-bold tracking-tight text-fg flex items-center gap-2.5">
           <ShieldCheck class="w-6 h-6 text-primary" aria-hidden="true" />
           <span>Allowlist</span>
@@ -39,7 +39,7 @@ function selectTab(tab: AllowlistTab) {
       </div>
 
       <!-- Tabs -->
-      <div class="border-b border-border">
+      <div class="shrink-0 border-b border-border">
         <div role="tablist" aria-label="Phân loại Allowlist" class="flex items-center gap-1 -mb-px">
           <button
             id="tab-deployment"
@@ -85,6 +85,7 @@ function selectTab(tab: AllowlistTab) {
         id="panel-deployment"
         role="tabpanel"
         aria-labelledby="tab-deployment"
+        class="flex-1 min-h-0 flex flex-col"
       >
         <DeployTargetsView embedded />
       </div>
@@ -94,6 +95,7 @@ function selectTab(tab: AllowlistTab) {
         id="panel-job"
         role="tabpanel"
         aria-labelledby="tab-job"
+        class="flex-1 min-h-0 flex flex-col"
       >
         <JobAllowListView embedded />
       </div>
