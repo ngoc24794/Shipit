@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount as baseMount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import CredentialsView from '../../src/views/config/CredentialsView.vue'
 import CredentialFormView from '../../src/views/config/CredentialFormView.vue'
 import { useConfigCredentialsStore } from '../../src/stores/configCredentials'
@@ -12,12 +12,27 @@ import { router } from '../../src/router'
 describe('Credentials View, Form & Store', () => {
   let mockApi: MockShipitApi
   let pinia: ReturnType<typeof createPinia>
+  const mountedWrappers: VueWrapper[] = []
+
+  const mount: typeof baseMount = ((component: any, options?: any) => {
+    const w = baseMount(component, options)
+    mountedWrappers.push(w)
+    return w
+  }) as typeof baseMount
+
+  afterEach(() => {
+    while (mountedWrappers.length > 0) {
+      mountedWrappers.pop()?.unmount()
+    }
+    vi.restoreAllMocks()
+  })
 
   beforeEach(async () => {
     pinia = createPinia()
     setActivePinia(pinia)
     mockApi = new MockShipitApi()
     setApi(mockApi)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     const authStore = useAuthStore()
     authStore.user = { username: 'admin' }

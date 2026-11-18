@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { mount } from '@vue/test-utils'
+import { mount as baseMount, type VueWrapper } from '@vue/test-utils'
 import JobsView from '../../src/views/jobs/JobsView.vue'
 import { useJobsStore } from '../../src/stores/jobs'
 import { useToast } from '../../src/composables/useToast'
@@ -11,6 +11,20 @@ import { ApiError } from '../../src/api/client'
 
 describe('JobsView (Danh sách Job)', () => {
   let mockApi: MockShipitApi
+  const mountedWrappers: VueWrapper[] = []
+
+  const mount: typeof baseMount = ((component: any, options?: any) => {
+    const w = baseMount(component, options)
+    mountedWrappers.push(w)
+    return w
+  }) as typeof baseMount
+
+  afterEach(() => {
+    while (mountedWrappers.length > 0) {
+      mountedWrappers.pop()?.unmount()
+    }
+    vi.restoreAllMocks()
+  })
 
   beforeEach(async () => {
     document.body.innerHTML = ''

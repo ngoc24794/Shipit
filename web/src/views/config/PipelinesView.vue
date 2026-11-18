@@ -92,14 +92,14 @@ onMounted(() => {
   <AppLayout>
     <div class="space-y-6">
       <!-- Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-semibold text-fg tracking-tight">Cấu hình Pipeline</h1>
-          <p class="text-sm text-muted-fg mt-1">
+      <div class="flex flex-row items-center justify-between gap-4 flex-nowrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-semibold text-fg tracking-tight truncate">Cấu hình Pipeline</h1>
+          <p class="text-sm text-muted-fg mt-1 truncate">
             Danh sách pipeline build từ Git và deploy lên Kubernetes.
           </p>
         </div>
-        <AppButton @click="navigateToNew">
+        <AppButton class="shrink-0 whitespace-nowrap" @click="navigateToNew">
           <Plus class="w-4 h-4" aria-hidden="true" />
           <span>Thêm pipeline</span>
         </AppButton>
@@ -219,7 +219,7 @@ onMounted(() => {
                 @click="navigateToEdit(pipeline)"
               >
                 <Pencil class="w-3.5 h-3.5" aria-hidden="true" />
-                <span class="hidden sm:inline">Sửa</span>
+                <span>Sửa</span>
               </AppButton>
               <AppButton
                 variant="ghost"
@@ -229,7 +229,7 @@ onMounted(() => {
                 @click="promptDelete(pipeline)"
               >
                 <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
-                <span class="hidden sm:inline">Xoá</span>
+                <span>Xoá</span>
               </AppButton>
             </div>
           </td>

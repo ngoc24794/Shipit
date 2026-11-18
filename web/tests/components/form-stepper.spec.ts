@@ -10,7 +10,7 @@ import { router } from '../../src/router'
 
 describe('FormStepper & FormWizardLayout', () => {
   const sampleSteps: WizardStep[] = [
-    { id: 's1', label: 'Bước 1', status: 'complete' },
+    { id: 's1', label: 'Bước 1', status: 'visited' },
     { id: 's2', label: 'Bước 2', status: 'current' },
     { id: 's3', label: 'Bước 3', status: 'error' },
     { id: 's4', label: 'Bước 4', status: 'pending' }
@@ -37,7 +37,7 @@ describe('FormStepper & FormWizardLayout', () => {
 
     const buttons = wrapper.findAll('button')
     expect(buttons).toHaveLength(4)
-    expect(buttons[0].attributes('data-step-status')).toBe('complete')
+    expect(buttons[0].attributes('data-step-status')).toBe('visited')
     expect(buttons[1].attributes('aria-current')).toBe('step')
     expect(buttons[2].attributes('data-step-status')).toBe('error')
     expect(buttons[3].attributes('disabled')).toBeDefined()

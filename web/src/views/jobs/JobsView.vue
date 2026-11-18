@@ -91,19 +91,20 @@ async function handleDelete() {
   <AppLayout>
     <div class="space-y-6">
       <!-- Page Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-bold tracking-tight text-fg flex items-center gap-2.5">
-            <Boxes class="w-6 h-6 text-primary" aria-hidden="true" />
+      <div class="flex flex-row items-center justify-between gap-4 flex-nowrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-bold tracking-tight text-fg flex items-center gap-2.5 whitespace-nowrap">
+            <Boxes class="w-6 h-6 text-primary shrink-0" aria-hidden="true" />
             <span>Job</span>
           </h1>
-          <p class="text-sm text-muted-fg mt-1">
+          <p class="text-sm text-muted-fg mt-1 truncate">
             Danh sách job chạy tác vụ một lần trên Kubernetes.
           </p>
         </div>
 
         <AppButton
           variant="primary"
+          class="shrink-0 whitespace-nowrap"
           aria-label="Thêm Job mới"
           @click="navigateToNew"
         >
@@ -229,7 +230,7 @@ async function handleDelete() {
                 @click="navigateToEdit(job.id)"
               >
                 <Pencil class="w-3.5 h-3.5" aria-hidden="true" />
-                <span class="hidden sm:inline">Sửa</span>
+                <span>Sửa</span>
               </AppButton>
 
               <AppButton
@@ -241,7 +242,7 @@ async function handleDelete() {
                 @click="openDeleteConfirm(job)"
               >
                 <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
-                <span class="hidden sm:inline">Xoá</span>
+                <span>Xoá</span>
               </AppButton>
             </div>
           </td>

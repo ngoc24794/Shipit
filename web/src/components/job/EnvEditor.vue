@@ -91,7 +91,7 @@ function updateSecretKey(index: number, secretKey: string) {
       <div
         v-for="(row, idx) in modelValue"
         :key="idx"
-        class="p-2.5 rounded-[6px] bg-muted/30 border border-border flex flex-col md:flex-row items-stretch md:items-center gap-2.5"
+        class="p-2.5 rounded-[6px] bg-muted/30 border border-border flex flex-row items-center gap-2.5 flex-nowrap"
       >
         <!-- Variable Name -->
         <div class="flex-1 min-w-[140px]">
@@ -107,7 +107,7 @@ function updateSecretKey(index: number, secretKey: string) {
         </div>
 
         <!-- Source Selector: Direct value vs From Secret -->
-        <div class="w-full md:w-[150px] flex-shrink-0 relative">
+        <div class="w-[150px] flex-shrink-0 relative">
           <select
             :value="row.secretName !== undefined && row.secretName !== null ? 'secret' : 'value'"
             :disabled="disabled"
@@ -124,7 +124,7 @@ function updateSecretKey(index: number, secretKey: string) {
         </div>
 
         <!-- Value Input OR Secret Selection -->
-        <div class="flex-1 flex flex-col sm:flex-row items-center gap-2 min-w-[180px]">
+        <div class="flex-1 flex flex-row items-center gap-2 min-w-[180px]">
           <!-- Case A: Plain direct value -->
           <template v-if="row.secretName === undefined || row.secretName === null">
             <input
@@ -141,7 +141,7 @@ function updateSecretKey(index: number, secretKey: string) {
           <!-- Case B: From Secret (Secret name dropdown from allowlist + Secret key input) -->
           <!-- NOTE: Never displays or requests the secret's secret value! -->
           <template v-else>
-            <div class="w-full sm:w-1/2 relative">
+            <div class="w-1/2 relative">
               <select
                 :value="row.secretName || ''"
                 :disabled="disabled || secretOptions.length === 0"
@@ -159,7 +159,7 @@ function updateSecretKey(index: number, secretKey: string) {
               </div>
             </div>
 
-            <div class="w-full sm:w-1/2 relative flex items-center">
+            <div class="w-1/2 relative flex items-center">
               <input
                 type="text"
                 :value="row.secretKey || ''"

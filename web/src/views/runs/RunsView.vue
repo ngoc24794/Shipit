@@ -163,18 +163,18 @@ function navigateToRun(id: number) {
   <AppLayout>
     <div class="space-y-6 w-full">
       <!-- Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-semibold text-fg tracking-tight">Lượt chạy</h1>
-          <p class="text-sm text-muted-fg mt-0.5">
+      <div class="flex flex-row items-center justify-between gap-4 flex-nowrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-semibold text-fg tracking-tight truncate">Lượt chạy</h1>
+          <p class="text-sm text-muted-fg mt-0.5 truncate">
             Lịch sử và trạng thái các lượt chạy pipeline và job.
           </p>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
           <AppButton
             variant="primary"
-            class="w-full sm:w-auto"
+            class="whitespace-nowrap"
             @click="openTriggerDialog"
           >
             <Play class="w-4 h-4 fill-current" aria-hidden="true" />
@@ -184,7 +184,7 @@ function navigateToRun(id: number) {
       </div>
 
       <!-- Filters & Actions Bar -->
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card p-3 rounded-[8px] border border-border">
+      <div class="flex flex-row items-center justify-between gap-3 flex-nowrap bg-card p-3 rounded-[8px] border border-border">
         <div class="flex items-center gap-2 max-w-xs w-full">
           <Filter class="w-4 h-4 text-muted-fg shrink-0" aria-hidden="true" />
           <AppSelect
@@ -194,7 +194,7 @@ function navigateToRun(id: number) {
           />
         </div>
 
-        <div class="flex items-center justify-end gap-2">
+        <div class="flex items-center justify-end gap-2 shrink-0 whitespace-nowrap">
           <AppButton
             variant="ghost"
             size="sm"
@@ -203,7 +203,7 @@ function navigateToRun(id: number) {
             @click="manualRefresh"
           >
             <RotateCw class="w-4 h-4" aria-hidden="true" />
-            <span class="hidden sm:inline">Làm mới</span>
+            <span>Làm mới</span>
           </AppButton>
         </div>
       </div>

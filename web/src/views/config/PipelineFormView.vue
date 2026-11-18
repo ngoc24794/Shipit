@@ -70,8 +70,8 @@ function parseStepQuery(q: unknown): number {
 }
 
 const currentStep = ref(parseStepQuery(route.query.step))
-const highestVisitedStep = ref(currentStep.value)
-const completedSteps = ref<Set<number>>(new Set())
+const visitedSteps = ref<Set<number>>(new Set([currentStep.value]))
+const hasAttemptedSave = ref(false)
 const stepErrorFlags = ref<Set<number>>(new Set())
 
 watch(
@@ -80,9 +80,7 @@ watch(
     const parsed = parseStepQuery(val)
     if (parsed !== currentStep.value) {
       currentStep.value = parsed
-      if (parsed > highestVisitedStep.value) {
-        highestVisitedStep.value = parsed
-      }
+      visitedSteps.value = new Set([...visitedSteps.value, parsed])
     }
   }
 )
@@ -90,18 +88,15 @@ watch(
 function goToStep(index: number) {
   if (index < 0 || index >= STEP_DEFS.length) return
   currentStep.value = index
-  if (index > highestVisitedStep.value) {
-    highestVisitedStep.value = index
-  }
+  visitedSteps.value = new Set([...visitedSteps.value, index])
   router.replace({
     path: route.path,
     query: { ...route.query, step: String(index + 1) }
   })
 }
 
-function canNavigateTo(index: number): boolean {
-  if (isEditing.value) return true
-  return index <= highestVisitedStep.value
+function canNavigateTo(_index: number): boolean {
+  return true
 }
 
 const form = ref<{
@@ -270,16 +265,12 @@ function validateStep(stepIndex: number): boolean {
   formErrors.value = errors
   const hasError = (STEP_FIELDS[stepIndex] || []).some((f) => Boolean(errors[f]))
   const nextErrors = new Set(stepErrorFlags.value)
-  const nextCompleted = new Set(completedSteps.value)
   if (hasError) {
     nextErrors.add(stepIndex)
-    nextCompleted.delete(stepIndex)
   } else {
     nextErrors.delete(stepIndex)
-    nextCompleted.add(stepIndex)
   }
   stepErrorFlags.value = nextErrors
-  completedSteps.value = nextCompleted
   return !hasError
 }
 
@@ -292,7 +283,6 @@ function validateForm(): boolean {
 }
 
 function handleNext() {
-  if (!validateStep(currentStep.value)) return
   goToStep(currentStep.value + 1)
 }
 
@@ -304,8 +294,8 @@ const wizardSteps = computed<WizardStep[]>(() => {
   return STEP_DEFS.map((s, idx) => {
     let status: WizardStep['status'] = 'pending'
     if (idx === currentStep.value) status = 'current'
-    else if (stepErrorFlags.value.has(idx)) status = 'error'
-    else if (completedSteps.value.has(idx)) status = 'complete'
+    else if (hasAttemptedSave.value && stepErrorFlags.value.has(idx)) status = 'error'
+    else if (visitedSteps.value.has(idx)) status = 'visited'
     return { id: s.id, label: s.label, status }
   })
 })
@@ -334,6 +324,7 @@ function findLabel(options: Array<{ label: string; value: string | number }>, va
 }
 
 async function handleSave() {
+  hasAttemptedSave.value = true
   if (!validateForm()) return
 
   actionLoading.value = true
@@ -449,8 +440,6 @@ onMounted(async () => {
         deployDeployment: pipeline.deployDeployment,
         deployContainer: pipeline.deployContainer
       }
-      highestVisitedStep.value = STEP_DEFS.length - 1
-      completedSteps.value = new Set([0, 1, 2, 3])
     } else {
       form.value.gitCredentialId = gitCredentials.value[0]?.id ?? ''
       form.value.slaveId = slaveStore.slaves[0]?.id ?? ''
@@ -515,8 +504,8 @@ onMounted(async () => {
           </template>
         </AppField>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="sm:col-span-2">
+        <div class="grid grid-cols-3 gap-4">
+          <div class="col-span-2">
             <AppField label="Địa chỉ Git URL" required :error="formErrors.gitUrl">
               <template #default="{ id, error, ariaDescribedby }">
                 <AppInput
@@ -585,7 +574,7 @@ onMounted(async () => {
           </template>
         </AppField>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4">
           <AppField label="Đường dẫn Dockerfile" required :error="formErrors.dockerfilePath">
             <template #default="{ id, error, ariaDescribedby }">
               <AppInput
@@ -623,7 +612,7 @@ onMounted(async () => {
           <span>3. Registry</span>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4">
           <AppField
             label="Tên Image"
             required
@@ -694,7 +683,7 @@ onMounted(async () => {
           <span>4. Deploy (Kubernetes)</span>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="grid grid-cols-3 gap-4">
           <AppField label="Namespace" required :error="formErrors.deployNamespace">
             <template #default="{ id, error, ariaDescribedby }">
               <AppInput
@@ -774,7 +763,7 @@ onMounted(async () => {
           <span>Thông tin các bước đã đầy đủ. Kiểm tra lại trước khi lưu.</span>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4">
           <div class="p-4 rounded-[8px] border border-border bg-card space-y-2">
             <div class="flex items-center justify-between">
               <h2 class="text-sm font-semibold text-fg">1. Nguồn mã</h2>

@@ -100,14 +100,14 @@ onMounted(() => {
   <AppLayout>
     <div class="space-y-6">
       <!-- Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-semibold text-fg tracking-tight">Thông tin xác thực</h1>
-          <p class="text-sm text-muted-fg mt-1">
+      <div class="flex flex-row items-center justify-between gap-4 flex-nowrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-semibold text-fg tracking-tight truncate">Thông tin xác thực</h1>
+          <p class="text-sm text-muted-fg mt-1 truncate">
             Khoá SSH, token Git và tài khoản registry dùng khi build và deploy.
           </p>
         </div>
-        <AppButton @click="navigateToNew">
+        <AppButton class="shrink-0 whitespace-nowrap" @click="navigateToNew">
           <Plus class="w-4 h-4" aria-hidden="true" />
           <span>Thêm thông tin xác thực</span>
         </AppButton>
@@ -191,21 +191,22 @@ onMounted(() => {
               <AppButton
                 variant="ghost"
                 size="sm"
+                class="whitespace-nowrap shrink-0"
                 aria-label="Sửa thông tin xác thực"
                 @click="navigateToEdit(cred)"
               >
                 <Pencil class="w-3.5 h-3.5" aria-hidden="true" />
-                <span class="hidden sm:inline">Sửa</span>
+                <span>Sửa</span>
               </AppButton>
               <AppButton
                 variant="ghost"
                 size="sm"
-                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
+                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger whitespace-nowrap shrink-0"
                 aria-label="Xoá thông tin xác thực"
                 @click="promptDelete(cred)"
               >
                 <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
-                <span class="hidden sm:inline">Xoá</span>
+                <span>Xoá</span>
               </AppButton>
             </div>
           </td>

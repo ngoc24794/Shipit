@@ -167,7 +167,7 @@ onMounted(async () => {
   <AppLayout>
     <div class="space-y-6 max-w-3xl mx-auto pb-12">
       <!-- Sticky Top Header Bar -->
-      <div class="sticky top-0 z-10 bg-bg/95 backdrop-blur-xs -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border">
+      <div class="sticky top-0 z-10 bg-bg/95 backdrop-blur-xs -mx-6 px-6 py-3 flex flex-row items-center justify-between gap-4 flex-nowrap border-b border-border">
         <div class="flex items-center gap-3 min-w-0">
           <button
             type="button"

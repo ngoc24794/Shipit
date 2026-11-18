@@ -92,14 +92,14 @@ onMounted(() => {
   <AppLayout>
     <div class="space-y-6">
       <!-- Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-semibold text-fg tracking-tight">Máy build</h1>
-          <p class="text-sm text-muted-fg mt-1">
+      <div class="flex flex-row items-center justify-between gap-4 flex-nowrap">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-semibold text-fg tracking-tight truncate">Máy build</h1>
+          <p class="text-sm text-muted-fg mt-1 truncate">
             Danh sách máy build kết nối qua SSH để build Docker image.
           </p>
         </div>
-        <AppButton @click="navigateToNew">
+        <AppButton class="shrink-0 whitespace-nowrap" @click="navigateToNew">
           <Plus class="w-4 h-4" aria-hidden="true" />
           <span>Thêm máy build</span>
         </AppButton>
@@ -201,32 +201,34 @@ onMounted(() => {
               <AppButton
                 variant="ghost"
                 size="sm"
+                class="whitespace-nowrap shrink-0"
                 :loading="store.testingSlaveId === slave.id"
                 aria-label="Kiểm tra kết nối SSH"
                 title="Kiểm tra kết nối SSH"
                 @click="handleTestConnection(slave)"
               >
                 <Activity class="w-3.5 h-3.5" aria-hidden="true" />
-                <span class="hidden sm:inline">Kiểm tra kết nối</span>
+                <span>Kiểm tra kết nối</span>
               </AppButton>
               <AppButton
                 variant="ghost"
                 size="sm"
+                class="whitespace-nowrap shrink-0"
                 aria-label="Sửa máy build"
                 @click="navigateToEdit(slave)"
               >
                 <Pencil class="w-3.5 h-3.5" aria-hidden="true" />
-                <span class="hidden sm:inline">Sửa</span>
+                <span>Sửa</span>
               </AppButton>
               <AppButton
                 variant="ghost"
                 size="sm"
-                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
+                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger whitespace-nowrap shrink-0"
                 aria-label="Xoá máy build"
                 @click="promptDelete(slave)"
               >
                 <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
-                <span class="hidden sm:inline">Xoá</span>
+                <span>Xoá</span>
               </AppButton>
             </div>
           </td>

@@ -54,7 +54,7 @@ describe('AppLayout Sidebar & Topbar', () => {
     expect(asideText).toContain('Sẵn sàng')
   })
 
-  it('does not render an h1 inside the desktop topbar', () => {
+  it('does not render an h1 inside the topbar', () => {
     const wrapper = mount(AppLayout, {
       global: {
         plugins: [createPinia(), router]
@@ -64,13 +64,13 @@ describe('AppLayout Sidebar & Topbar', () => {
       }
     })
 
-    const desktopHeader = wrapper.findAll('header')[1]
-    expect(desktopHeader.exists()).toBe(true)
-    expect(desktopHeader.find('h1').exists()).toBe(false)
+    const header = wrapper.find('header')
+    expect(header.exists()).toBe(true)
+    expect(header.find('h1').exists()).toBe(false)
     expect(wrapper.findAll('h1')).toHaveLength(1)
   })
 
-  it('uses 100dvh shell with overflow-hidden and main as the only scrolling region', () => {
+  it('uses 100dvh fixed desktop shell with no responsive layout classes and main as only scrolling region', () => {
     const wrapper = mount(AppLayout, {
       global: {
         plugins: [createPinia(), router]
@@ -83,11 +83,20 @@ describe('AppLayout Sidebar & Topbar', () => {
     const root = wrapper.find('div.h-dvh')
     expect(root.exists()).toBe(true)
     expect(root.classes()).toContain('overflow-hidden')
+    expect(root.classes()).toContain('flex-row')
+    expect(root.classes().some((c) => c.startsWith('md:') || c.startsWith('sm:') || c.startsWith('lg:'))).toBe(false)
+
+    const aside = wrapper.find('aside')
+    expect(aside.classes().some((c) => c.startsWith('md:') || c.startsWith('sm:'))).toBe(false)
 
     const main = wrapper.find('main')
     expect(main.exists()).toBe(true)
     expect(main.classes()).toContain('overflow-y-auto')
+    expect(main.classes()).toContain('overflow-x-auto')
     expect(main.classes()).toContain('flex-1')
     expect(main.classes()).toContain('min-h-0')
+
+    const innerContainer = main.find('div')
+    expect(innerContainer.classes()).toContain('min-w-[1024px]')
   })
 })

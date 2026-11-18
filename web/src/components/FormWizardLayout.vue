@@ -44,10 +44,10 @@ const emit = defineEmits<{
 
 <template>
   <AppLayout>
-    <div class="h-[calc(100dvh-3rem-2rem)] sm:h-[calc(100dvh-3rem-3rem)] max-w-4xl mx-auto flex flex-col">
+    <div class="h-[calc(100dvh-3rem-3rem)] max-w-4xl mx-auto flex flex-col">
       <!-- Top Header & Stepper (Fixed) -->
       <div class="shrink-0 space-y-3 pb-3 border-b border-border">
-        <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center justify-between gap-4 flex-nowrap">
           <div class="flex items-center gap-3 min-w-0">
             <router-link
               :to="backTo"

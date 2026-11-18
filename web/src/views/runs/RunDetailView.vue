@@ -433,13 +433,13 @@ onBeforeUnmount(() => {
       <!-- Main Run Detail Content -->
       <div v-else-if="run" class="space-y-6">
         <!-- Header Banner -->
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border">
+        <div class="flex flex-row items-center justify-between gap-4 flex-nowrap pb-4 border-b border-border">
           <div class="space-y-1 min-w-0">
-            <div class="flex items-center gap-3 flex-wrap">
+            <div class="flex items-center gap-3 flex-nowrap">
               <h1 class="text-2xl font-semibold text-fg tracking-tight truncate">
                 {{ displayName }}
               </h1>
-              <span class="font-mono text-xl text-muted-fg font-medium whitespace-nowrap">
+              <span class="font-mono text-xl text-muted-fg font-medium whitespace-nowrap shrink-0">
                 #{{ run.id }}
               </span>
               <StatusBadge :status="run.status" size="md" />
@@ -531,7 +531,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Info Grid -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="grid grid-cols-4 gap-4">
           <!-- Tag / SHA -->
           <div class="p-3.5 rounded-[8px] bg-card border border-border flex items-start gap-3 min-w-0">
             <div class="p-2 rounded bg-muted text-muted-fg shrink-0">
@@ -620,13 +620,13 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Step Timeline Card -->
-        <div class="p-4 sm:p-6 rounded-[8px] bg-card border border-border">
+        <div class="p-6 rounded-[8px] bg-card border border-border">
           <h2 class="text-sm font-semibold text-fg mb-2">Tiến trình các bước</h2>
           <StepTimeline :steps="run.steps" :kind="isJobRun ? 'job' : 'pipeline'" />
         </div>
 
         <!-- Task Table Card (Job runs only) -->
-        <div v-if="isJobRun" class="p-4 sm:p-6 rounded-[8px] bg-card border border-border space-y-3">
+        <div v-if="isJobRun" class="p-6 rounded-[8px] bg-card border border-border space-y-3">
           <h2 class="text-sm font-semibold text-fg">Danh sách tác vụ</h2>
           <TaskTable :tasks="run.tasks || []" @view-log="scrollToTaskLog" />
         </div>
