@@ -399,9 +399,9 @@ public class PipelineRunnerTests
         var run = await env.GetRunAsync(runId);
         Assert.Equal(RunStatus.Success, run.Status);
 
-        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker build"));
+        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("DOCKER_BUILDKIT=1 docker build"));
         var expectedWorkDir = RemoteCommandBuilder.WorkDirFor(runId);
-        Assert.Equal($"docker build -f '{expectedWorkDir}/docker/Dockerfile.demo' -t 'registry.example.com/shipit-demo:abc1234' '{expectedWorkDir}'", buildCmd.CommandText);
+        Assert.Equal($"DOCKER_BUILDKIT=1 docker build -f '{expectedWorkDir}/docker/Dockerfile.demo' -t 'registry.example.com/shipit-demo:abc1234' '{expectedWorkDir}'", buildCmd.CommandText);
     }
 
     [Fact]
@@ -419,9 +419,9 @@ public class PipelineRunnerTests
         var run = await env.GetRunAsync(runId);
         Assert.Equal(RunStatus.Success, run.Status);
 
-        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker build"));
+        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("DOCKER_BUILDKIT=1 docker build"));
         var expectedWorkDir = RemoteCommandBuilder.WorkDirFor(runId);
-        Assert.Equal($"docker build -f '{expectedWorkDir}/docker/Dockerfile.demo' -t 'registry.example.com/shipit-demo:abc1234' '{expectedWorkDir}/src/app'", buildCmd.CommandText);
+        Assert.Equal($"DOCKER_BUILDKIT=1 docker build -f '{expectedWorkDir}/docker/Dockerfile.demo' -t 'registry.example.com/shipit-demo:abc1234' '{expectedWorkDir}/src/app'", buildCmd.CommandText);
     }
 
     [Fact]
@@ -439,9 +439,9 @@ public class PipelineRunnerTests
         var run = await env.GetRunAsync(runId);
         Assert.Equal(RunStatus.Success, run.Status);
 
-        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker build"));
+        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("DOCKER_BUILDKIT=1 docker build"));
         var expectedWorkDir = RemoteCommandBuilder.WorkDirFor(runId);
-        Assert.Equal($"docker build -f '{expectedWorkDir}/docker/Dockerfile.demo' -t 'registry.example.com/shipit-demo:abc1234' '{expectedWorkDir}/docker'", buildCmd.CommandText);
+        Assert.Equal($"DOCKER_BUILDKIT=1 docker build -f '{expectedWorkDir}/docker/Dockerfile.demo' -t 'registry.example.com/shipit-demo:abc1234' '{expectedWorkDir}/docker'", buildCmd.CommandText);
     }
 
     [Fact]
@@ -465,7 +465,7 @@ public class PipelineRunnerTests
         Assert.Equal($"{hostA}/shipit-demo:abc1234", run.Image);
 
         // docker build and docker push use host A
-        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker build"));
+        var buildCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("DOCKER_BUILDKIT=1 docker build"));
         Assert.Contains($"-t '{hostA}/shipit-demo:abc1234'", buildCmd.CommandText);
 
         var pushCmd = ssh.ExecutedCommands.Single(c => c.CommandText.StartsWith("docker push"));
