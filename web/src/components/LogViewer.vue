@@ -293,7 +293,7 @@ const statusMessage = computed(() => {
       role="log"
       aria-live="off"
       tabindex="0"
-      class="h-[480px] overflow-y-auto overflow-x-auto p-4 font-mono text-[13px] leading-relaxed select-text focus-visible:outline-2 focus-visible:outline-ring"
+      class="h-[clamp(280px,52dvh,560px)] overflow-y-auto overflow-x-auto p-4 font-mono text-[13px] leading-relaxed select-text focus-visible:outline-2 focus-visible:outline-ring"
       @scroll="handleScroll"
     >
       <!-- Grouped View (For Job Runs) -->

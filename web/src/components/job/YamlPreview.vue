@@ -97,7 +97,7 @@ async function copyYaml() {
     </div>
 
     <!-- Content area: Code preview -->
-    <div class="relative min-h-[160px] max-h-[480px] overflow-auto bg-[#0F172A] p-4 font-mono text-xs text-slate-100">
+    <div class="relative min-h-[160px] max-h-[min(480px,50dvh)] overflow-auto bg-[#0F172A] p-4 font-mono text-xs text-slate-100">
       <div v-if="loading" class="flex items-center justify-center py-12 text-muted-fg gap-2">
         <Loader2 class="w-5 h-5 animate-spin" aria-hidden="true" />
         <span>Đang tạo bản xem trước YAML...</span>

@@ -449,28 +449,28 @@ async function handleSave() {
   <AppLayout>
     <div class="space-y-8 max-w-4xl mx-auto pb-12">
       <!-- Top header with back link -->
-      <div class="flex items-center justify-between border-b border-border pb-4">
-        <div class="flex items-center gap-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+        <div class="flex items-center gap-3 min-w-0">
           <button
             type="button"
             aria-label="Quay lại danh sách Job"
-            class="p-2 rounded-[6px] text-muted-fg hover:text-fg hover:bg-muted transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+            class="p-2 rounded-[6px] text-muted-fg hover:text-fg hover:bg-muted transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring shrink-0"
             @click="router.push('/jobs')"
           >
             <ArrowLeft class="w-5 h-5" aria-hidden="true" />
           </button>
-          <div>
-            <h1 class="text-xl font-bold tracking-tight text-fg flex items-center gap-2">
-              <Boxes class="w-5 h-5 text-primary" aria-hidden="true" />
-              <span>{{ isEditing ? `Cấu hình Job: ${form.name}` : 'Tạo Job mới' }}</span>
+          <div class="min-w-0">
+            <h1 class="text-xl font-bold tracking-tight text-fg flex items-center gap-2 truncate">
+              <Boxes class="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
+              <span class="truncate">{{ isEditing ? `Cấu hình Job: ${form.name}` : 'Tạo Job mới' }}</span>
             </h1>
-            <p class="text-xs text-muted-fg mt-0.5">
+            <p class="text-xs text-muted-fg mt-0.5 truncate">
               {{ isEditing ? 'Chỉnh sửa thông số và danh sách tác vụ của Job' : 'Cấu hình nguồn mã, máy build, nơi chạy và các tác vụ k8s' }}
             </p>
           </div>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 shrink-0 whitespace-nowrap">
           <AppButton
             variant="secondary"
             aria-label="Huỷ thao tác"

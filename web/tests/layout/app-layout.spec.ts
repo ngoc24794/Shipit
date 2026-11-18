@@ -69,4 +69,25 @@ describe('AppLayout Sidebar & Topbar', () => {
     expect(desktopHeader.find('h1').exists()).toBe(false)
     expect(wrapper.findAll('h1')).toHaveLength(1)
   })
+
+  it('uses 100dvh shell with overflow-hidden and main as the only scrolling region', () => {
+    const wrapper = mount(AppLayout, {
+      global: {
+        plugins: [createPinia(), router]
+      },
+      slots: {
+        default: '<h1>Lượt chạy</h1>'
+      }
+    })
+
+    const root = wrapper.find('div.h-dvh')
+    expect(root.exists()).toBe(true)
+    expect(root.classes()).toContain('overflow-hidden')
+
+    const main = wrapper.find('main')
+    expect(main.exists()).toBe(true)
+    expect(main.classes()).toContain('overflow-y-auto')
+    expect(main.classes()).toContain('flex-1')
+    expect(main.classes()).toContain('min-h-0')
+  })
 })

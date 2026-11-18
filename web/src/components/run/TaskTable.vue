@@ -30,9 +30,9 @@ function formatDuration(startedAt?: string | null, finishedAt?: string | null): 
 </script>
 
 <template>
-  <div class="w-full overflow-x-auto rounded-[8px] border border-border bg-card">
+  <div class="w-full max-h-[360px] overflow-auto rounded-[8px] border border-border bg-card">
     <table class="w-full text-left text-sm tabular-nums border-collapse">
-      <thead class="bg-muted/80 backdrop-blur-xs text-xs font-semibold text-muted-fg uppercase tracking-wider border-b border-border">
+      <thead class="sticky top-0 z-10 bg-muted/90 backdrop-blur-xs text-xs font-semibold text-muted-fg border-b border-border">
         <tr>
           <th scope="col" class="py-2.5 px-4 w-16">#</th>
           <th scope="col" class="py-2.5 px-4">Tác vụ</th>
