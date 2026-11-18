@@ -209,8 +209,8 @@ const statusMessage = computed(() => {
 <template>
   <div class="flex flex-col w-full rounded-[8px] overflow-hidden border border-border bg-[var(--log-bg,#090D16)] text-slate-200">
     <!-- Toolbar -->
-    <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-slate-900/90 border-b border-slate-800 text-xs select-none">
-      <div class="flex items-center gap-2 flex-wrap">
+    <div class="flex flex-nowrap items-center justify-between gap-2 px-4 py-2 bg-slate-900/90 border-b border-slate-800 text-xs select-none">
+      <div class="flex items-center gap-2 flex-nowrap min-w-0">
         <span class="font-mono text-slate-400">Nhật ký thực thi ({{ lines.length }} dòng)</span>
 
         <!-- Task Filter Dropdown for Grouped Job Mode -->

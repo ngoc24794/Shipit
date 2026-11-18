@@ -154,8 +154,8 @@ onMounted(() => {
       <!-- Quick Add Form -->
       <div class="bg-card border border-border rounded-[8px] p-4 shadow-sm">
         <h3 class="text-sm font-semibold text-fg mb-3">Thêm deployment nhanh</h3>
-        <form @submit.prevent="handleAdd" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
-          <div class="sm:col-span-5">
+        <form @submit.prevent="handleAdd" class="grid grid-cols-12 gap-3 items-start">
+          <div class="col-span-5">
             <AppField
               label="Namespace"
               required
@@ -173,7 +173,7 @@ onMounted(() => {
             </AppField>
           </div>
 
-          <div class="sm:col-span-5">
+          <div class="col-span-5">
             <AppField
               label="Deployment"
               required
@@ -191,7 +191,7 @@ onMounted(() => {
             </AppField>
           </div>
 
-          <div class="sm:col-span-2 sm:pt-6 flex">
+          <div class="col-span-2 pt-6 flex">
             <AppButton
               type="submit"
               :loading="actionLoading"

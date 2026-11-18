@@ -183,7 +183,7 @@ function onNumberInput(field: 'timeoutSeconds' | 'backoffLimit' | 'ttlSeconds', 
       </AppField>
 
       <!-- Row 3: ConfigMap & Secret envFrom from allowlist -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="grid grid-cols-2 gap-4">
         <AppField
           label="Nguồn ConfigMap (envFrom)"
           description="Chỉ liệt kê ConfigMap thuộc allowlist của namespace đã chọn"
@@ -243,7 +243,7 @@ function onNumberInput(field: 'timeoutSeconds' | 'backoffLimit' | 'ttlSeconds', 
       </AppField>
 
       <!-- Row 5: Timeout, BackoffLimit, TTL -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-border/50">
+      <div class="grid grid-cols-3 gap-4 pt-2 border-t border-border/50">
         <AppField
           label="Thời gian tối đa (giây)"
           :required="true"

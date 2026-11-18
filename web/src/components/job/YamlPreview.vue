@@ -57,7 +57,7 @@ async function copyYaml() {
 <template>
   <div class="rounded-[8px] border border-border bg-card overflow-hidden">
     <!-- Top toolbar: Tabs & Copy button -->
-    <div class="px-4 py-2.5 bg-muted/40 border-b border-border flex flex-wrap items-center justify-between gap-2 select-none">
+    <div class="px-4 py-2.5 bg-muted/40 border-b border-border flex flex-nowrap items-center justify-between gap-2 select-none">
       <!-- Tabs per task -->
       <div v-if="tasks.length > 0" class="flex items-center gap-1.5 overflow-x-auto max-w-full py-1">
         <button

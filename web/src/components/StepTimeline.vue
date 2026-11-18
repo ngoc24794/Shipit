@@ -96,19 +96,19 @@ function getStatusBadge(status: StepStatus) {
 
 <template>
   <div class="w-full py-4">
-    <ol class="flex flex-col md:flex-row items-start md:items-center justify-between w-full gap-4 md:gap-0">
+    <ol class="flex flex-row items-center justify-between w-full gap-0">
       <li
         v-for="(step, index) in mappedSteps"
         :key="step.name"
         :data-step-name="step.name"
         :data-step-status="step.status"
-        class="relative flex flex-row md:flex-col items-center md:items-center flex-1 w-full gap-3 md:gap-2"
+        class="relative flex flex-col items-center flex-1 min-w-0 gap-2"
       >
-        <!-- Connecting line on desktop -->
+        <!-- Connecting line -->
         <div
           v-if="index < mappedSteps.length - 1"
           aria-hidden="true"
-          class="hidden md:block absolute top-5 left-[50%] w-full h-0.5 -z-0 transition-colors"
+          class="block absolute top-5 left-[50%] w-full h-0.5 -z-0 transition-colors"
           :class="[
             step.status === 'failed' || mappedSteps[index + 1]?.status === 'failed'
               ? 'bg-danger/40'
@@ -135,7 +135,7 @@ function getStatusBadge(status: StepStatus) {
         </div>
 
         <!-- Step Info -->
-        <div class="flex flex-col md:items-center text-left md:text-center min-w-0">
+        <div class="flex flex-col items-center text-center min-w-0">
           <div class="flex items-center gap-1.5 font-medium text-sm text-fg">
             <span class="whitespace-nowrap">{{ step.label }}</span>
             <component

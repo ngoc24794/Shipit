@@ -195,7 +195,7 @@ async function handleDelete() {
           <span>Thêm mục vào allowlist</span>
         </h2>
 
-        <form class="grid grid-cols-1 md:grid-cols-4 gap-4 items-start" @submit.prevent="handleAdd">
+        <form class="grid grid-cols-4 gap-4 items-start" @submit.prevent="handleAdd">
           <!-- Namespace -->
           <AppField
             label="Namespace"
@@ -347,7 +347,7 @@ async function handleDelete() {
               @click="openDeleteConfirm(entry)"
             >
               <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
-              <span class="hidden sm:inline">Xoá</span>
+              <span class="whitespace-nowrap">Xoá</span>
             </AppButton>
           </td>
         </tr>

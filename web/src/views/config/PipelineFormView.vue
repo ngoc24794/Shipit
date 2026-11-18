@@ -515,8 +515,8 @@ onMounted(async () => {
           </template>
         </AppField>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="sm:col-span-2">
+        <div class="grid grid-cols-3 gap-4">
+          <div class="col-span-2">
             <AppField label="Địa chỉ Git URL" required :error="formErrors.gitUrl">
               <template #default="{ id, error, ariaDescribedby }">
                 <AppInput
@@ -585,7 +585,7 @@ onMounted(async () => {
           </template>
         </AppField>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4">
           <AppField label="Đường dẫn Dockerfile" required :error="formErrors.dockerfilePath">
             <template #default="{ id, error, ariaDescribedby }">
               <AppInput
@@ -623,7 +623,7 @@ onMounted(async () => {
           <span>3. Registry</span>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4">
           <AppField
             label="Tên Image"
             required
@@ -694,7 +694,7 @@ onMounted(async () => {
           <span>4. Deploy (Kubernetes)</span>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="grid grid-cols-3 gap-4">
           <AppField label="Namespace" required :error="formErrors.deployNamespace">
             <template #default="{ id, error, ariaDescribedby }">
               <AppInput
@@ -774,7 +774,7 @@ onMounted(async () => {
           <span>Thông tin các bước đã đầy đủ. Kiểm tra lại trước khi lưu.</span>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4">
           <div class="p-4 rounded-[8px] border border-border bg-card space-y-2">
             <div class="flex items-center justify-between">
               <h2 class="text-sm font-semibold text-fg">1. Nguồn mã</h2>

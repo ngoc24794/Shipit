@@ -614,7 +614,7 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
           <p class="text-xs text-muted-fg mt-0.5">Tên Job và thông tin kho mã nguồn Git</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4">
           <AppField
             label="Tên Job"
             :required="true"
@@ -697,7 +697,7 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
             <p class="text-xs text-muted-fg mt-0.5">Máy build, Dockerfile và registry lưu Docker image</p>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="grid grid-cols-2 gap-4">
             <AppField
               label="Máy build"
               :required="true"
@@ -805,7 +805,7 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
             <ChevronRight v-else class="w-4 h-4 text-muted-fg shrink-0" aria-hidden="true" />
           </button>
 
-          <div v-show="showAdvanced" class="px-6 pb-5 pt-3 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div v-show="showAdvanced" class="px-6 pb-5 pt-3 border-t border-border grid grid-cols-2 gap-4">
             <AppField
               label="Build context"
               description="Thư mục context khi build (. là gốc repository)"
@@ -850,7 +850,7 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
           <p class="text-xs text-muted-fg mt-0.5">Cấu hình namespace Kubernetes, container và pull secret (chỉ từ allowlist)</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4">
           <AppField
             label="Namespace"
             :required="true"
@@ -951,9 +951,9 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
           {{ formErrors.tasks[0] }}
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+        <div class="grid grid-cols-12 gap-4 items-start">
           <!-- Task Selector List -->
-          <div class="md:col-span-4 rounded-[8px] border border-border bg-card p-2 space-y-1">
+          <div class="col-span-4 rounded-[8px] border border-border bg-card p-2 space-y-1">
             <button
               v-for="(task, idx) in form.tasks"
               :key="idx"
@@ -977,7 +977,7 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
           </div>
 
           <!-- Active Task Editor -->
-          <div class="md:col-span-8">
+          <div class="col-span-8">
             <TaskCard
               v-if="form.tasks[activeTaskIndex]"
               :key="activeTaskIndex"
@@ -1027,7 +1027,7 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
         </div>
 
         <!-- Summary Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-2 gap-4">
           <div class="p-4 rounded-[8px] border border-border bg-card space-y-1.5 text-xs">
             <div class="flex items-center justify-between">
               <h3 class="font-semibold text-fg">1. Nguồn mã</h3>
@@ -1051,7 +1051,7 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
 
         <!-- Validate & Preview Toolbar -->
         <div class="p-4 rounded-[8px] border border-border bg-card space-y-4">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex flex-row items-center justify-between gap-3 flex-nowrap">
             <div>
               <h2 class="text-sm font-semibold text-fg">Kiểm tra & Xem trước YAML</h2>
               <p class="text-xs text-muted-fg mt-0.5">Kiểm tra tính hợp lệ và xem trước manifest Kubernetes Job YAML.</p>
