@@ -104,11 +104,11 @@ export function useDataTable<T>(options: UseDataTableOptions<T>) {
   // Server state
   const serverItems = ref<T[]>([]) as Ref<T[]>
   const serverTotal = ref(0)
-  const serverPaginated = ref(true)
   const serverLoading = ref(false)
   const serverError = ref<string | null>(null)
 
   let isSyncingFromUrl = false
+  let pendingUrlPushes = 0
   let fetchSeq = 0
 
   function buildNextQuery(): Record<string, string | string[] | undefined> {
@@ -166,7 +166,13 @@ export function useDataTable<T>(options: UseDataTableOptions<T>) {
     if (!syncUrl || !router || !route || isSyncingFromUrl) return
     const nextQuery = buildNextQuery()
     if (!queriesEqual(route.query, nextQuery)) {
-      router.replace({ query: nextQuery }).catch(() => {})
+      pendingUrlPushes++
+      router
+        .replace({ query: nextQuery })
+        .catch(() => {})
+        .finally(() => {
+          pendingUrlPushes = Math.max(0, pendingUrlPushes - 1)
+        })
     }
   }
 
@@ -174,6 +180,7 @@ export function useDataTable<T>(options: UseDataTableOptions<T>) {
     watch(
       () => route.query,
       () => {
+        if (pendingUrlPushes > 0) return
         isSyncingFromUrl = true
         try {
           const nextQ = readQueryString(qKey)
@@ -333,11 +340,6 @@ export function useDataTable<T>(options: UseDataTableOptions<T>) {
       const start = (page.value - 1) * pageSize.value
       return clientSorted.value.slice(start, start + pageSize.value)
     }
-    if (!serverPaginated.value) {
-      // Legacy server returned all items without X-Total-Count header
-      const start = (page.value - 1) * pageSize.value
-      return serverItems.value.slice(start, start + pageSize.value)
-    }
     return serverItems.value
   })
 
@@ -379,7 +381,6 @@ export function useDataTable<T>(options: UseDataTableOptions<T>) {
       if (seq !== fetchSeq) return
       serverItems.value = result.items
       serverTotal.value = result.total
-      serverPaginated.value = result.serverPaginated !== false
     } catch (err: any) {
       if (seq !== fetchSeq) return
       serverError.value = err?.message || 'Không thể tải dữ liệu'

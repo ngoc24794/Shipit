@@ -19,6 +19,7 @@ tags:
   - name: deploy-targets
   - name: jobs
   - name: job-allow-entries
+  - name: search
 paths:
   /healthz:
     get:
@@ -312,6 +313,26 @@ paths:
           in: query
           required: false
           schema: { type: integer, format: int64 }
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string, enum: [pipeline, job] }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [queued, running, success, failed, cancelled] }
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
         - name: limit
           in: query
           required: false
@@ -319,11 +340,16 @@ paths:
       responses:
         '200':
           description: Runs
+          headers:
+            X-Total-Count:
+              description: Total number of matching runs before pagination
+              schema: { type: integer, format: int64 }
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Run' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
   /api/runs/{id}:
     parameters:
@@ -578,6 +604,26 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { description: Job allow entry not found }
         '409': { $ref: '#/components/responses/Conflict' }
+  /api/search:
+    get:
+      tags: [search]
+      summary: Global search across runs, pipelines, jobs, slaves, credentials, deploy targets and job allow entries
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 20, default: 5 }
+      responses:
+        '200':
+          description: Grouped search results (empty groups omitted)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 components:
   securitySchemes:
     sessionCookie:
@@ -991,5 +1037,32 @@ components:
         tasks:
           type: array
           items: { $ref: '#/components/schemas/JobPreviewTask' }
+    SearchItem:
+      type: object
+      required: [id, title, path]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        subtitle: { type: string, nullable: true }
+        path: { type: string }
+    SearchGroup:
+      type: object
+      required: [kind, label, items]
+      properties:
+        kind:
+          type: string
+          enum: [run, pipeline, job, slave, credential, deploy-target, job-allow]
+        label: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SearchItem' }
+    SearchResponse:
+      type: object
+      required: [query, groups]
+      properties:
+        query: { type: string }
+        groups:
+          type: array
+          items: { $ref: '#/components/schemas/SearchGroup' }
 security:
   - sessionCookie: []

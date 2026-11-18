@@ -16,6 +16,7 @@ import {
 import { useAuthStore } from '../stores/auth'
 import { useTheme } from '../composables/useTheme'
 import AppToast from '../components/AppToast.vue'
+import GlobalSearch from '../components/search/GlobalSearch.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -105,6 +106,7 @@ async function handleLogout() {
     <div class="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
       <!-- Topbar (48px) -->
       <header class="flex shrink-0 items-center justify-end h-12 px-6 bg-card border-b border-border z-10">
+        <GlobalSearch />
         <div class="flex items-center gap-4 flex-nowrap whitespace-nowrap">
           <!-- Theme Toggle -->
           <button
@@ -141,7 +143,7 @@ async function handleLogout() {
 
       <!-- Page Content (never scrolls vertically; min-w-[1024px] prevents layout wrapping) -->
       <main class="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex flex-col">
-        <div class="min-w-[1024px] max-w-[1440px] w-full mx-auto p-6 flex-1 min-h-0 flex flex-col">
+        <div class="min-w-[1024px] w-full p-5 flex-1 min-h-0 flex flex-col">
           <slot />
         </div>
       </main>

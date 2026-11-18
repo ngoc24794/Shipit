@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount as baseMount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import RunsView from '../../src/views/runs/RunsView.vue'
@@ -11,6 +11,13 @@ import { useRunsStore } from '../../src/stores/runs'
 describe('RunsView (Danh sách lượt chạy)', () => {
   let mockApi: MockShipitApi
   let router: any
+  const mountedWrappers: VueWrapper[] = []
+
+  const mount: typeof baseMount = ((component: any, options?: any) => {
+    const w = baseMount(component, options)
+    mountedWrappers.push(w)
+    return w
+  }) as typeof baseMount
 
   beforeEach(async () => {
     setActivePinia(createPinia())
@@ -31,6 +38,9 @@ describe('RunsView (Danh sách lượt chạy)', () => {
   })
 
   afterEach(() => {
+    while (mountedWrappers.length > 0) {
+      mountedWrappers.pop()?.unmount()
+    }
     vi.restoreAllMocks()
     vi.useRealTimers()
   })
@@ -108,8 +118,7 @@ describe('RunsView (Danh sách lượt chạy)', () => {
   it('displays EmptyState when runs list is empty', async () => {
     vi.spyOn(mockApi, 'getRunsPaged').mockResolvedValue({
       items: [],
-      total: 0,
-      serverPaginated: true
+      total: 0
     })
 
     const wrapper = mount(RunsView, {
@@ -324,13 +333,13 @@ describe('RunsView (Danh sách lượt chạy)', () => {
     ]
     getRunsPagedSpy.mockResolvedValue({
       items: completedRuns,
-      total: 2,
-      serverPaginated: true
+      total: 2
     })
 
     // Advance another 3 seconds to fetch completed runs
     await vi.advanceTimersByTimeAsync(3050)
     await flushPromises()
+    await wrapper.vm.$nextTick()
 
     const callCountAfterComplete = getRunsPagedSpy.mock.calls.length
 

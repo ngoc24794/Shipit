@@ -132,12 +132,11 @@ describe('useDataTable', () => {
     expect(table.pageSize.value).toBe(20)
   })
 
-  it('supports server mode with X-Total-Count and legacy client-slice fallback', async () => {
+  it('supports server mode with X-Total-Count', async () => {
     const allItems = makeItems(25)
     const fetchFn = vi.fn(async ({ page, pageSize }) => ({
       items: allItems.slice((page - 1) * pageSize, page * pageSize),
-      total: allItems.length,
-      serverPaginated: true
+      total: allItems.length
     }))
 
     let table!: ReturnType<typeof useDataTable<Item>>
@@ -169,16 +168,5 @@ describe('useDataTable', () => {
       expect.objectContaining({ page: 2, pageSize: 10 })
     )
     expect(table.items.value[0].id).toBe(11)
-
-    // Legacy server fallback (serverPaginated: false -> returns all 25 items)
-    fetchFn.mockResolvedValueOnce({
-      items: allItems,
-      total: allItems.length,
-      serverPaginated: false
-    })
-    table.setPage(3)
-    await flushPromises()
-    expect(table.items.value).toHaveLength(5)
-    expect(table.items.value[0].id).toBe(21)
   })
 })

@@ -24,7 +24,8 @@ import type {
   JobAllowEntry,
   JobAllowEntryInput,
   GetRunsParams,
-  PagedResult
+  PagedResult,
+  SearchResponse
 } from './types'
 
 export class ApiError extends Error {
@@ -121,6 +122,9 @@ export interface ShipitApi {
     onEnd: (status: RunStatus) => void,
     onError?: (err: Error) => void
   ): () => void
+
+  // Search
+  search(q: string, limit?: number, signal?: AbortSignal): Promise<SearchResponse>
 }
 
 export class HttpShipitApi implements ShipitApi {
@@ -364,13 +368,9 @@ export class HttpShipitApi implements ShipitApi {
       `/api/runs${this.buildRunsQuery(params)}`
     )
     const rawHeader = response.headers?.get('X-Total-Count')
-    if (rawHeader !== null && rawHeader !== undefined && rawHeader !== '') {
-      const parsed = Number.parseInt(rawHeader, 10)
-      if (!Number.isNaN(parsed) && parsed >= 0) {
-        return { items: data, total: parsed, serverPaginated: true }
-      }
-    }
-    return { items: data, total: data.length, serverPaginated: false }
+    const parsed = rawHeader ? Number.parseInt(rawHeader, 10) : Number.NaN
+    const total = !Number.isNaN(parsed) && parsed >= 0 ? parsed : data.length
+    return { items: data, total }
   }
 
   async getRun(id: number): Promise<RunDetail> {
@@ -499,5 +499,12 @@ export class HttpShipitApi implements ShipitApi {
     await this.request<void>(`/api/job-allow-entries/${id}`, {
       method: 'DELETE'
     })
+  }
+
+  async search(q: string, limit: number = 5, signal?: AbortSignal): Promise<SearchResponse> {
+    const params = new URLSearchParams()
+    params.set('q', q)
+    params.set('limit', String(limit))
+    return this.request<SearchResponse>(`/api/search?${params.toString()}`, { signal })
   }
 }

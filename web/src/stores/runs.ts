@@ -90,7 +90,7 @@ export const useRunsStore = defineStore('runs', () => {
       const list = await api.getRuns(params)
       runs.value = list
       totalRuns.value = list.length
-      return { items: list, total: list.length, serverPaginated: false }
+      return { items: list, total: list.length }
     } catch (err: any) {
       error.value = err.message || 'Không thể tải danh sách lượt chạy'
       throw err
@@ -123,9 +123,9 @@ export const useRunsStore = defineStore('runs', () => {
       const list = await api.getRuns(params)
       runs.value = list
       totalRuns.value = list.length
-      return { items: list, total: list.length, serverPaginated: false }
+      return { items: list, total: list.length }
     } catch {
-      return { items: runs.value, total: totalRuns.value, serverPaginated: true }
+      return { items: runs.value, total: totalRuns.value }
     }
   }
 

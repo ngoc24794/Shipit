@@ -419,6 +419,9 @@ namespace Shipit.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"Status\" IN ('Queued', 'Running')");
 
+                    b.HasIndex("CreatedAt", "Id")
+                        .IsDescending();
+
                     b.ToTable("Runs", t =>
                         {
                             t.HasCheckConstraint("CK_Runs_PipelineXorJob", "(\"PipelineId\" IS NOT NULL AND \"JobId\" IS NULL) OR (\"PipelineId\" IS NULL AND \"JobId\" IS NOT NULL)");

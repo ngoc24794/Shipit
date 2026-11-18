@@ -223,7 +223,6 @@ describe('All Data Views - Search, Filter, Sort, Pagination', () => {
 
     const withHeader = await client.getRunsPaged({ page: 2, pageSize: 20, q: 'demo', kind: 'pipeline', status: 'success' })
     expect(withHeader.total).toBe(134)
-    expect(withHeader.serverPaginated).toBe(true)
     expect(fetchMock.mock.calls[0][0]).toContain('page=2')
     expect(fetchMock.mock.calls[0][0]).toContain('pageSize=20')
     expect(fetchMock.mock.calls[0][0]).toContain('q=demo')
@@ -232,6 +231,5 @@ describe('All Data Views - Search, Filter, Sort, Pagination', () => {
 
     const withoutHeader = await client.getRunsPaged({ page: 1, pageSize: 20 })
     expect(withoutHeader.total).toBe(1)
-    expect(withoutHeader.serverPaginated).toBe(false)
   })
 })

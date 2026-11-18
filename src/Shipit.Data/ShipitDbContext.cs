@@ -109,6 +109,9 @@ public class ShipitDbContext : DbContext
                 .IsUnique()
                 .HasFilter("\"Status\" IN ('Queued', 'Running')")
                 .HasDatabaseName("IX_Runs_JobId_Active");
+
+            b.HasIndex(r => new { r.CreatedAt, r.Id })
+                .IsDescending(true, true);
         });
 
         // 5. RunStep

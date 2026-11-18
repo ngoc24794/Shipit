@@ -174,6 +174,12 @@ public sealed record ProblemDto(string Title, string? Detail = null, IReadOnlyDi
 
 public sealed record ReadinessDto(bool Ready, string Database, int PendingMigrations);
 
+public sealed record SearchItemDto(string Id, string Title, string? Subtitle, string Path);
+
+public sealed record SearchGroupDto(string Kind, string Label, IReadOnlyList<SearchItemDto> Items);
+
+public sealed record SearchResponseDto(string Query, IReadOnlyList<SearchGroupDto> Groups);
+
 /// <summary>Converts between domain enums and the strings used in the contract.</summary>
 internal static class Wire
 {
