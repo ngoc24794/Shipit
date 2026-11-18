@@ -458,40 +458,44 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Failed Task Banner for Job Runs -->
+        <!-- Unified Failure Alert (Failed Task + Failure Reason) -->
         <div
-          v-if="failedTask"
+          v-if="failedTask || (run.status === 'failed' && run.failureReason)"
           role="alert"
-          class="flex items-center justify-between p-4 rounded-[8px] border border-danger/30 bg-danger/10 text-danger text-sm"
+          class="p-4 rounded-[8px] border border-danger/40 border-l-4 border-l-danger bg-danger/10 text-danger text-sm space-y-1.5"
         >
-          <div class="flex items-center gap-2">
-            <AlertTriangle class="w-5 h-5 shrink-0" aria-hidden="true" />
-            <span class="font-semibold">
-              Tác vụ {{ failedTask.position + 1 }} thất bại (exit code {{ failedTask.exitCode ?? 1 }})
-            </span>
-          </div>
-          <button
-            type="button"
-            class="text-xs font-medium underline hover:text-danger/80 cursor-pointer focus-visible:outline-2 focus-visible:outline-ring rounded px-1"
-            @click="scrollToTaskLog(failedTask.position)"
-          >
-            Xem log tác vụ
-          </button>
-        </div>
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <AlertTriangle class="w-5 h-5 shrink-0" aria-hidden="true" />
+              <div v-if="failedTask" class="font-semibold">
+                <span>Tác vụ {{ failedTask.position + 1 }} thất bại (exit code {{ failedTask.exitCode ?? 1 }})</span>
+                <span v-if="failedTask.label" class="ml-1.5 font-mono text-xs text-fg/80 font-normal">
+                  ({{ failedTask.label }})
+                </span>
+              </div>
+              <h4 v-else class="font-semibold">Lý do thất bại</h4>
+            </div>
 
-        <!-- Failure Reason Alert -->
-        <div
-          v-if="run.status === 'failed' && run.failureReason"
-          role="alert"
-          class="flex items-start gap-3 p-4 rounded-[8px] border border-danger/30 bg-danger/10 text-danger text-sm"
-        >
-          <AlertTriangle class="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
-          <div class="space-y-1">
-            <h4 class="font-semibold">Lý do thất bại</h4>
-            <p class="text-fg/90 leading-relaxed">
-              {{ formatFailureReason(run.failureReason) }}
-            </p>
+            <button
+              v-if="failedTask"
+              type="button"
+              class="text-xs font-semibold underline hover:text-danger/80 cursor-pointer focus-visible:outline-2 focus-visible:outline-ring rounded px-1.5 py-0.5 shrink-0"
+              @click="scrollToTaskLog(failedTask.position)"
+            >
+              Xem log tác vụ
+            </button>
           </div>
+
+          <p
+            v-if="
+              run.status === 'failed' &&
+              run.failureReason &&
+              (!failedTask || !formatFailureReason(run.failureReason).toLowerCase().includes(`tác vụ ${failedTask.position + 1}`))
+            "
+            class="text-fg/90 leading-relaxed pl-7"
+          >
+            {{ formatFailureReason(run.failureReason) }}
+          </p>
         </div>
 
         <!-- Cancelled Reason Alert -->
@@ -610,7 +614,7 @@ onBeforeUnmount(() => {
     <!-- Confirm Cancel Dialog -->
     <ConfirmDialog
       v-model="showCancelDialog"
-      :title="`Dừng lần chạy #${run?.id}?`"
+      :title="`Dừng lượt chạy #${run?.id}?`"
       message="Các bước đang chạy sẽ bị ngắt và Shipit sẽ dọn dẹp máy build. Deployment đã được cập nhật trước đó sẽ không bị hoàn tác."
       confirm-text="Dừng"
       cancel-text="Huỷ"

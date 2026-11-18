@@ -236,7 +236,7 @@ const statusMessage = computed(() => {
           role="status"
           class="ml-2 px-2 py-0.5 rounded text-[11px] font-medium"
           :class="[
-            status === 'success' ? 'bg-primary/20 text-primary border border-primary/40' : '',
+            status === 'success' ? 'bg-success/20 text-success border border-success/40' : '',
             status === 'failed' ? 'bg-danger/20 text-danger border border-danger/40' : '',
             status === 'running' ? 'bg-info/20 text-info border border-info/40' : 'text-slate-400'
           ]"
@@ -269,7 +269,7 @@ const statusMessage = computed(() => {
           class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] text-xs font-medium bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors cursor-pointer"
           @click="copyLogs"
         >
-          <Check v-if="copied" class="w-3.5 h-3.5 text-primary" aria-hidden="true" />
+          <Check v-if="copied" class="w-3.5 h-3.5 text-success" aria-hidden="true" />
           <Copy v-else class="w-3.5 h-3.5" aria-hidden="true" />
           <span>Sao chép</span>
         </button>

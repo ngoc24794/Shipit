@@ -418,9 +418,9 @@ onMounted(() => {
       <!-- Header -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 class="text-xl font-semibold text-fg">Cấu hình Pipeline</h2>
+          <h1 class="text-2xl font-semibold text-fg tracking-tight">Cấu hình Pipeline</h1>
           <p class="text-sm text-muted-fg mt-1">
-            Quản lý các pipeline CI/CD: tự động kéo mã nguồn, đóng gói Docker image và deploy lên Kubernetes.
+            Danh sách pipeline build từ Git và deploy lên Kubernetes.
           </p>
         </div>
         <AppButton @click="openAddDialog">
@@ -454,7 +454,7 @@ onMounted(() => {
       <EmptyState
         v-else-if="!store.loading && store.pipelines.length === 0"
         title="Chưa có pipeline"
-        description="Tạo pipeline đầu tiên để tự động hoá quy trình build và triển khai ứng dụng."
+        description="Chưa có pipeline nào được cấu hình."
         :icon="Workflow"
       >
         <template #action>
@@ -469,37 +469,51 @@ onMounted(() => {
       <AppTable v-else>
         <template #header>
           <tr>
-            <th scope="col" class="py-3">Tên pipeline</th>
-            <th scope="col" class="py-3">Nguồn Git</th>
-            <th scope="col" class="py-3">Máy build</th>
-            <th scope="col" class="py-3">Image Docker</th>
-            <th scope="col" class="py-3">Đích Deploy</th>
-            <th scope="col" class="py-3">Lượt chạy gần nhất</th>
-            <th scope="col" class="py-3 text-right">Thao tác</th>
+            <th scope="col" class="py-3 !px-3 whitespace-nowrap">Tên pipeline</th>
+            <th scope="col" class="py-3 !px-3 whitespace-nowrap">Nguồn Git</th>
+            <th scope="col" class="py-3 !px-3 whitespace-nowrap">Máy build</th>
+            <th scope="col" class="py-3 !px-3 whitespace-nowrap">Image Docker</th>
+            <th scope="col" class="py-3 !px-3 whitespace-nowrap">Đích Deploy</th>
+            <th scope="col" class="py-3 !px-3 whitespace-nowrap">Lượt chạy gần nhất</th>
+            <th scope="col" class="py-3 !px-3 text-right whitespace-nowrap">Thao tác</th>
           </tr>
         </template>
 
         <tr v-for="pipeline in store.pipelines" :key="pipeline.id">
-          <td class="font-medium text-fg">
+          <td class="!px-3 font-medium text-fg min-w-[160px]">
             <div class="flex items-center gap-2">
               <Workflow class="w-4 h-4 text-muted-fg flex-shrink-0" aria-hidden="true" />
-              <span>{{ pipeline.name }}</span>
+              <span class="break-words">{{ pipeline.name }}</span>
             </div>
           </td>
-          <td class="font-mono text-xs text-muted-fg">
-            <span class="text-fg">{{ pipeline.gitUrl }}</span>
-            <span class="text-primary font-semibold">@{{ pipeline.gitBranch || 'main' }}</span>
+          <td
+            class="!px-3 font-mono text-xs text-muted-fg max-w-[135px]"
+            :title="`${pipeline.gitUrl}@${pipeline.gitBranch || 'main'}`"
+          >
+            <div class="truncate">
+              <span class="text-fg">{{ pipeline.gitUrl }}</span>
+              <span class="text-primary font-semibold">@{{ pipeline.gitBranch || 'main' }}</span>
+            </div>
           </td>
-          <td class="text-xs text-fg">
+          <td
+            class="!px-3 text-xs text-fg whitespace-nowrap max-w-[85px] truncate"
+            :title="getSlaveName(pipeline.slaveId)"
+          >
             {{ getSlaveName(pipeline.slaveId) }}
           </td>
-          <td class="font-mono text-xs text-fg">
+          <td
+            class="!px-3 font-mono text-xs text-fg max-w-[120px] truncate"
+            :title="`${pipeline.registryHost}/${pipeline.imageName}`"
+          >
             {{ pipeline.registryHost }}/{{ pipeline.imageName }}
           </td>
-          <td class="font-mono text-xs text-muted-fg">
+          <td
+            class="!px-3 font-mono text-xs text-muted-fg max-w-[95px] truncate"
+            :title="`${pipeline.deployNamespace}/${pipeline.deployDeployment}`"
+          >
             <span class="text-fg">{{ pipeline.deployNamespace }}</span>/{{ pipeline.deployDeployment }}
           </td>
-          <td>
+          <td class="!px-3 whitespace-nowrap">
             <StatusBadge
               v-if="pipeline.lastRun"
               :status="pipeline.lastRun.status"
@@ -507,11 +521,12 @@ onMounted(() => {
             />
             <span v-else class="text-muted-fg text-xs">—</span>
           </td>
-          <td class="text-right">
-            <div class="inline-flex items-center gap-1">
+          <td class="!px-3 text-right whitespace-nowrap">
+            <div class="inline-flex items-center justify-end gap-1 whitespace-nowrap">
               <AppButton
                 variant="primary"
                 size="sm"
+                class="whitespace-nowrap shrink-0"
                 :loading="store.triggeringId === pipeline.id"
                 aria-label="Chạy ngay"
                 title="Kích hoạt chạy pipeline ngay"
@@ -523,6 +538,7 @@ onMounted(() => {
               <AppButton
                 variant="ghost"
                 size="sm"
+                class="whitespace-nowrap shrink-0"
                 aria-label="Sửa pipeline"
                 @click="openEditDialog(pipeline)"
               >
@@ -532,7 +548,7 @@ onMounted(() => {
               <AppButton
                 variant="ghost"
                 size="sm"
-                class="text-danger hover:text-danger hover:bg-danger/10"
+                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger whitespace-nowrap shrink-0"
                 aria-label="Xoá pipeline"
                 @click="promptDelete(pipeline)"
               >
@@ -626,7 +642,7 @@ onMounted(() => {
                 :id="id"
                 v-model="form.gitCredentialId"
                 :options="gitCredentialOptions"
-                placeholder="-- Chọn Token Git --"
+                placeholder="Chọn Token Git"
                 :disabled="gitCredentials.length === 0"
                 :error="error"
                 :aria-describedby="ariaDescribedby"
@@ -643,7 +659,7 @@ onMounted(() => {
           </div>
 
           <AppField
-            label="Máy build (Slave)"
+            label="Máy build"
             required
             :error="formErrors.slaveId"
           >
@@ -652,7 +668,7 @@ onMounted(() => {
                 :id="id"
                 v-model="form.slaveId"
                 :options="slaveOptions"
-                placeholder="-- Chọn máy build --"
+                placeholder="Chọn máy build"
                 :disabled="slaveStore.slaves.length === 0"
                 :error="error"
                 :aria-describedby="ariaDescribedby"

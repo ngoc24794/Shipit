@@ -217,9 +217,9 @@ onMounted(() => {
       <!-- Header -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 class="text-xl font-semibold text-fg">Thông tin xác thực</h2>
+          <h1 class="text-2xl font-semibold text-fg tracking-tight">Thông tin xác thực</h1>
           <p class="text-sm text-muted-fg mt-1">
-            Quản lý khoá SSH, git token và thông tin đăng nhập registry phục vụ build và deploy.
+            Khoá SSH, token Git và tài khoản registry dùng khi build và deploy.
           </p>
         </div>
         <AppButton @click="openAddDialog">
@@ -253,7 +253,7 @@ onMounted(() => {
       <EmptyState
         v-else-if="!store.loading && store.credentials.length === 0"
         title="Chưa có thông tin xác thực"
-        description="Tạo thông tin xác thực như khoá SSH, token Git hoặc tài khoản Docker registry để bắt đầu kết nối máy build."
+        description="Thêm khoá SSH, token Git hoặc tài khoản Docker registry."
         :icon="KeyRound"
       >
         <template #action>
@@ -293,7 +293,7 @@ onMounted(() => {
             {{ cred.username || '—' }}
           </td>
           <td>
-            <span class="inline-flex items-center gap-1.5 text-xs text-primary font-medium">
+            <span class="inline-flex items-center gap-1.5 text-xs text-success font-medium">
               <CheckCircle2 class="w-3.5 h-3.5" aria-hidden="true" />
               <span>Đã lưu giá trị</span>
             </span>
@@ -315,7 +315,7 @@ onMounted(() => {
               <AppButton
                 variant="ghost"
                 size="sm"
-                class="text-danger hover:text-danger hover:bg-danger/10"
+                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
                 aria-label="Xoá thông tin xác thực"
                 @click="promptDelete(cred)"
               >
@@ -413,7 +413,7 @@ onMounted(() => {
                 v-model="form.value"
                 rows="4"
                 autocomplete="new-password"
-                :placeholder="isEditing ? 'Đã lưu — để trống để giữ nguyên' : '-----BEGIN OPENSSH PRIVATE KEY-----\n...'"
+                :placeholder="isEditing ? 'Đã lưu, để trống để giữ nguyên' : '-----BEGIN OPENSSH PRIVATE KEY-----\n...'"
                 :aria-invalid="error ? 'true' : undefined"
                 :aria-describedby="ariaDescribedby"
                 :class="[
@@ -462,7 +462,7 @@ onMounted(() => {
     <ConfirmDialog
       v-model="isConfirmOpen"
       title="Xoá thông tin xác thực"
-      :message="`Bạn có chắc chắn muốn xoá thông tin xác thực &quot;${deletingCredential?.name}&quot;? Hành động này không thể hoàn tác.`"
+      :message="`Xoá thông tin xác thực &quot;${deletingCredential?.name}&quot;? Thao tác này không thể hoàn tác.`"
       confirm-text="Xoá thông tin xác thực"
       cancel-text="Huỷ"
       :loading="deleteLoading"

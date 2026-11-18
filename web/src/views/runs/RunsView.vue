@@ -161,13 +161,13 @@ function navigateToRun(id: number) {
 
 <template>
   <AppLayout>
-    <div class="space-y-6 max-w-[1280px] mx-auto w-full">
+    <div class="space-y-6 w-full">
       <!-- Header -->
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 class="text-2xl font-semibold text-fg tracking-tight">Lượt chạy</h1>
           <p class="text-sm text-muted-fg mt-0.5">
-            Lịch sử và tiến trình các lượt chạy CI/CD trong hệ thống
+            Lịch sử và trạng thái các lượt chạy pipeline và job.
           </p>
         </div>
 
@@ -208,10 +208,9 @@ function navigateToRun(id: number) {
         </div>
       </div>
 
-      <!-- Loading State -->
-      <div v-if="runsStore.loading && runsStore.runs.length === 0" class="py-12 flex justify-center items-center text-muted-fg">
-        <RotateCw class="w-6 h-6 animate-spin mr-2" aria-hidden="true" />
-        <span>Đang tải danh sách lượt chạy...</span>
+      <!-- Loading State (Skeleton) -->
+      <div v-if="runsStore.loading && runsStore.runs.length === 0" class="rounded-[8px] border border-border bg-card p-4 space-y-3" aria-busy="true" aria-label="Đang tải danh sách lượt chạy">
+        <div v-for="i in 5" :key="i" class="h-9 rounded bg-muted/70 animate-pulse" />
       </div>
 
       <!-- Error State -->
@@ -228,7 +227,7 @@ function navigateToRun(id: number) {
       <EmptyState
         v-else-if="runsStore.runs.length === 0"
         title="Chưa có lượt chạy nào"
-        description="Chưa có lượt chạy nào được thực hiện hoặc không khớp với bộ lọc đã chọn."
+        description="Chưa có lượt chạy nào hoặc không có kết quả khớp bộ lọc."
         :icon="PlayCircle"
       >
         <template #action>
@@ -352,7 +351,7 @@ function navigateToRun(id: number) {
           <AppField
             label="Chọn Pipeline"
             required
-            description="Lượt chạy sẽ được xếp hàng và thực hiện ngay khi slave sẵn sàng"
+            description="Lượt chạy được xếp hàng và chạy khi máy build sẵn sàng."
             :error="triggerError"
           >
             <template #default="{ id, error, ariaDescribedby }">
@@ -360,7 +359,7 @@ function navigateToRun(id: number) {
                 :id="id"
                 v-model="triggerPipelineId"
                 :options="triggerPipelineOptions"
-                placeholder="-- Chọn một pipeline --"
+                placeholder="Chọn pipeline"
                 :error="error"
                 :aria-describedby="ariaDescribedby"
               />

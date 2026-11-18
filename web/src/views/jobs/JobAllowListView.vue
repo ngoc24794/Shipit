@@ -19,6 +19,10 @@ import { useToast } from '../../composables/useToast'
 import type { JobAllowEntry, JobAllowKind } from '../../api/types'
 import { ApiError } from '../../api/client'
 
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), {
+  embedded: false
+})
+
 const store = useJobsAllowStore()
 const toast = useToast()
 
@@ -171,17 +175,16 @@ async function handleDelete() {
 </script>
 
 <template>
-  <AppLayout>
+  <component :is="props.embedded ? 'div' : AppLayout">
     <div class="space-y-6">
       <!-- Page Header -->
-      <div>
+      <div v-if="!props.embedded">
         <h1 class="text-2xl font-bold tracking-tight text-fg flex items-center gap-2.5">
           <ListChecks class="w-6 h-6 text-primary" aria-hidden="true" />
           <span>Allowlist Job</span>
         </h1>
         <p class="text-sm text-muted-fg mt-1">
-          Cấu hình các namespace, ConfigMap, Secret và ImagePullSecret được phép sử dụng trong Job.
-          Hệ thống chỉ lưu và sử dụng tên tham chiếu, không bao giờ lưu hoặc hiển thị giá trị bí mật.
+          Danh sách namespace, ConfigMap, Secret và ImagePullSecret mà Job được phép dùng. Shipit chỉ lưu tên tham chiếu, không lưu giá trị bí mật.
         </p>
       </div>
 
@@ -272,7 +275,7 @@ async function handleDelete() {
       <EmptyState
         v-else-if="store.entries.length === 0"
         title="Chưa có mục nào trong allowlist"
-        description="Thêm namespace, ConfigMap hoặc Secret đầu tiên để cho phép Job tham chiếu và chạy."
+        description="Thêm namespace, ConfigMap hoặc Secret để Job có thể tham chiếu."
       >
         <template #icon>
           <ShieldAlert class="w-10 h-10 text-muted-fg" aria-hidden="true" />
@@ -282,20 +285,20 @@ async function handleDelete() {
       <AppTable v-else>
         <template #header>
           <tr>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
               Namespace
             </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
               Loại
             </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
               Tên tài nguyên
             </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg">
+            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
               Ngày tạo
             </th>
-            <th scope="col" class="text-right py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-fg">
-              Hành động
+            <th scope="col" class="text-right py-3 px-4 text-xs font-semibold text-muted-fg">
+              Thao tác
             </th>
           </tr>
         </template>
@@ -339,11 +342,11 @@ async function handleDelete() {
               size="sm"
               aria-label="Xoá mục khỏi allowlist"
               title="Xoá mục"
-              class="hover:text-danger"
+              class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
               :disabled="deleteLoading"
               @click="openDeleteConfirm(entry)"
             >
-              <Trash2 class="w-3.5 h-3.5 text-danger" aria-hidden="true" />
+              <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
               <span class="hidden sm:inline">Xoá</span>
             </AppButton>
           </td>
@@ -354,7 +357,7 @@ async function handleDelete() {
       <ConfirmDialog
         v-model="isConfirmOpen"
         title="Xoá mục khỏi allowlist"
-        :message="`Bạn có chắc chắn muốn xoá mục &quot;${deletingEntry?.kind}:${deletingEntry?.name}&quot; khỏi allowlist không?`"
+        :message="`Xoá mục &quot;${deletingEntry?.kind}:${deletingEntry?.name}&quot; khỏi allowlist?`"
         confirm-text="Xoá mục"
         cancel-text="Huỷ"
         :loading="deleteLoading"
@@ -362,5 +365,5 @@ async function handleDelete() {
         @confirm="handleDelete"
       />
     </div>
-  </AppLayout>
+  </component>
 </template>

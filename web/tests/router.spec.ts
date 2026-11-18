@@ -39,4 +39,40 @@ describe('Router Guards', () => {
 
     expect(router.currentRoute.value.path).toBe('/')
   })
+
+  it('redirects /deploy-targets to /settings/allowlist?tab=deployment', async () => {
+    const mockApi = new MockShipitApi()
+    setApi(mockApi)
+
+    const authStore = useAuthStore()
+    authStore.user = { username: 'admin' }
+    authStore.initialized = true
+
+    await router.push('/deploy-targets')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/settings/allowlist')
+    expect(router.currentRoute.value.query.tab).toBe('deployment')
+  })
+
+  it('redirects /settings/job-allow and /job-allow to /settings/allowlist?tab=job', async () => {
+    const mockApi = new MockShipitApi()
+    setApi(mockApi)
+
+    const authStore = useAuthStore()
+    authStore.user = { username: 'admin' }
+    authStore.initialized = true
+
+    await router.push('/settings/job-allow')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/settings/allowlist')
+    expect(router.currentRoute.value.query.tab).toBe('job')
+
+    await router.push('/job-allow')
+    await router.isReady()
+
+    expect(router.currentRoute.value.path).toBe('/settings/allowlist')
+    expect(router.currentRoute.value.query.tab).toBe('job')
+  })
 })

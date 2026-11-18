@@ -222,9 +222,9 @@ onMounted(() => {
       <!-- Header -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 class="text-xl font-semibold text-fg">Máy build (Slave)</h2>
+          <h1 class="text-2xl font-semibold text-fg tracking-tight">Máy build</h1>
           <p class="text-sm text-muted-fg mt-1">
-            Cấu hình các máy chủ thực hiện tác vụ build Docker image và kết nối triển khai.
+            Danh sách máy build kết nối qua SSH để build Docker image.
           </p>
         </div>
         <AppButton @click="openAddDialog">
@@ -258,7 +258,7 @@ onMounted(() => {
       <EmptyState
         v-else-if="!store.loading && store.slaves.length === 0"
         title="Chưa có máy build"
-        description="Thêm máy build chạy SSH để thực thi các bước checkout, build image và push vào registry."
+        description="Thêm máy build SSH để checkout mã nguồn, build image và push lên registry."
         :icon="Server"
       >
         <template #action>
@@ -304,7 +304,7 @@ onMounted(() => {
             <div v-if="store.testResults[slave.id]" class="flex items-center gap-1.5">
               <CheckCircle2
                 v-if="store.testResults[slave.id].ok"
-                class="w-4 h-4 text-primary flex-shrink-0"
+                class="w-4 h-4 text-success flex-shrink-0"
                 aria-hidden="true"
               />
               <XCircle
@@ -315,7 +315,7 @@ onMounted(() => {
               <span
                 :class="[
                   'truncate max-w-[200px]',
-                  store.testResults[slave.id].ok ? 'text-primary' : 'text-danger'
+                  store.testResults[slave.id].ok ? 'text-success' : 'text-danger'
                 ]"
                 :title="store.testResults[slave.id].message"
               >
@@ -349,7 +349,7 @@ onMounted(() => {
               <AppButton
                 variant="ghost"
                 size="sm"
-                class="text-danger hover:text-danger hover:bg-danger/10"
+                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
                 aria-label="Xoá máy build"
                 @click="promptDelete(slave)"
               >
@@ -475,7 +475,7 @@ onMounted(() => {
               :id="id"
               v-model="form.sshCredentialId"
               :options="sshCredentialOptions"
-              placeholder="-- Chọn khoá SSH --"
+              placeholder="Chọn khoá SSH"
               :disabled="sshCredentials.length === 0"
               :error="error"
               :aria-describedby="ariaDescribedby"
@@ -502,7 +502,7 @@ onMounted(() => {
     <ConfirmDialog
       v-model="isConfirmOpen"
       title="Xoá máy build"
-      :message="`Bạn có chắc chắn muốn xoá máy build &quot;${deletingSlave?.name}&quot;? Hành động này không thể hoàn tác.`"
+      :message="`Xoá máy build &quot;${deletingSlave?.name}&quot;? Thao tác này không thể hoàn tác.`"
       confirm-text="Xoá máy build"
       cancel-text="Huỷ"
       :loading="deleteLoading"

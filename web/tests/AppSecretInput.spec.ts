@@ -36,7 +36,7 @@ describe('AppSecretInput', () => {
 
     const input = wrapper.find('input')
     expect(input.element.value).toBe('')
-    expect(input.attributes('placeholder')).toBe('Đã lưu — để trống để giữ nguyên')
+    expect(input.attributes('placeholder')).toBe('Đã lưu, để trống để giữ nguyên')
   })
 
   it('emits update:modelValue when user inputs text', async () => {

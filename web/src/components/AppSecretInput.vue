@@ -37,7 +37,7 @@ const effectivePlaceholder = computed(() => {
   if (props.placeholder !== undefined) {
     return props.placeholder
   }
-  return props.hasExistingValue ? 'Đã lưu — để trống để giữ nguyên' : 'Nhập giá trị bí mật'
+  return props.hasExistingValue ? 'Đã lưu, để trống để giữ nguyên' : 'Nhập giá trị bí mật'
 })
 
 function toggleVisibility() {

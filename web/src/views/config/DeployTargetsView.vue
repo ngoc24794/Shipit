@@ -18,6 +18,10 @@ import { useToast } from '../../composables/useToast'
 import type { DeployTarget } from '../../api/types'
 import { ApiError } from '../../api/client'
 
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), {
+  embedded: false
+})
+
 const store = useConfigDeployTargetsStore()
 const toast = useToast()
 
@@ -127,13 +131,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppLayout>
+  <component :is="props.embedded ? 'div' : AppLayout">
     <div class="space-y-6">
       <!-- Header -->
-      <div>
-        <h2 class="text-xl font-semibold text-fg">Deployment được phép</h2>
+      <div v-if="!props.embedded">
+        <h1 class="text-2xl font-semibold text-fg tracking-tight">Deployment được phép</h1>
         <p class="text-sm text-muted-fg mt-1">
-          Quản lý danh sách namespace và deployment mà Shipit được phép triển khai cập nhật container image.
+          Danh sách namespace và Deployment mà Shipit được phép cập nhật image.
         </p>
       </div>
 
@@ -225,7 +229,7 @@ onMounted(() => {
       <EmptyState
         v-else-if="!store.loading && store.deployTargets.length === 0"
         title="Chưa có deployment được phép"
-        description="Thêm namespace và deployment ở biểu mẫu phía trên để bắt đầu cấu hình pipeline."
+        description="Thêm namespace và deployment ở biểu mẫu trên."
         :icon="ShieldCheck"
       />
 
@@ -234,16 +238,16 @@ onMounted(() => {
         <AppTable>
           <template #header>
             <tr>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg uppercase tracking-wider">
+              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg">
                 Namespace
               </th>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg uppercase tracking-wider">
+              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg">
                 Deployment
               </th>
-              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg uppercase tracking-wider">
+              <th scope="col" class="py-3 px-4 text-left text-xs font-semibold text-muted-fg">
                 Ngày thêm
               </th>
-              <th scope="col" class="py-3 px-4 text-right text-xs font-semibold text-muted-fg uppercase tracking-wider">
+              <th scope="col" class="py-3 px-4 text-right text-xs font-semibold text-muted-fg">
                 Thao tác
               </th>
             </tr>
@@ -268,10 +272,11 @@ onMounted(() => {
                 <AppButton
                   variant="ghost"
                   size="sm"
+                  class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
                   :aria-label="`Xoá deployment ${target.namespace}/${target.deployment}`"
                   @click="openDeleteConfirm(target)"
                 >
-                  <Trash2 class="w-4 h-4 text-danger" aria-hidden="true" />
+                  <Trash2 class="w-4 h-4" aria-hidden="true" />
                 </AppButton>
               </td>
             </tr>
@@ -283,7 +288,7 @@ onMounted(() => {
       <ConfirmDialog
         v-model="isConfirmOpen"
         title="Xoá deployment được phép"
-        :message="`Bạn có chắc chắn muốn xoá deployment '${deletingTarget?.namespace}/${deletingTarget?.deployment}' khỏi danh sách được phép không?`"
+        :message="`Xoá deployment &quot;${deletingTarget?.namespace}/${deletingTarget?.deployment}&quot; khỏi danh sách được phép?`"
         confirm-text="Xoá deployment"
         :loading="deleteLoading"
         :danger="true"
@@ -291,5 +296,5 @@ onMounted(() => {
         @cancel="isConfirmOpen = false"
       />
     </div>
-  </AppLayout>
+  </component>
 </template>
