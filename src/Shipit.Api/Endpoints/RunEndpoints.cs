@@ -32,9 +32,68 @@ internal static class RunEndpoints
             }
         });
 
-        app.MapGet("/api/runs", async (long? pipelineId, long? jobId, int? limit, ShipitDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/runs", async (
+            long? pipelineId,
+            long? jobId,
+            string? kind,
+            string? status,
+            string? q,
+            int? page,
+            int? pageSize,
+            int? limit,
+            HttpContext http,
+            ShipitDbContext db,
+            CancellationToken ct) =>
         {
-            var take = Math.Clamp(limit ?? 50, 1, 200);
+            var errors = new FieldErrors();
+            bool? isJobKind = null;
+            if (!string.IsNullOrWhiteSpace(kind))
+            {
+                switch (kind.Trim().ToLowerInvariant())
+                {
+                    case "pipeline":
+                        isJobKind = false;
+                        break;
+                    case "job":
+                        isJobKind = true;
+                        break;
+                    default:
+                        errors.Add("kind", "Loại run không hợp lệ. Giá trị hợp lệ: pipeline, job.");
+                        break;
+                }
+            }
+
+            RunStatus? parsedStatus = null;
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                switch (status.Trim().ToLowerInvariant())
+                {
+                    case "queued":
+                        parsedStatus = RunStatus.Queued;
+                        break;
+                    case "running":
+                        parsedStatus = RunStatus.Running;
+                        break;
+                    case "success":
+                        parsedStatus = RunStatus.Success;
+                        break;
+                    case "failed":
+                        parsedStatus = RunStatus.Failed;
+                        break;
+                    case "cancelled":
+                        parsedStatus = RunStatus.Cancelled;
+                        break;
+                    default:
+                        errors.Add("status", "Trạng thái run không hợp lệ. Giá trị hợp lệ: queued, running, success, failed, cancelled.");
+                        break;
+                }
+            }
+
+            if (errors.Any)
+            {
+                return errors.ToResult();
+            }
+
             var query = db.Runs.AsNoTracking();
             if (pipelineId is not null)
             {
@@ -44,8 +103,40 @@ internal static class RunEndpoints
             {
                 query = query.Where(r => r.JobId == jobId);
             }
+            if (isJobKind is true)
+            {
+                query = query.Where(r => r.JobId != null);
+            }
+            else if (isJobKind is false)
+            {
+                query = query.Where(r => r.PipelineId != null);
+            }
+            if (parsedStatus is not null)
+            {
+                query = query.Where(r => r.Status == parsedStatus.Value);
+            }
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                query = SearchHelpers.FilterRunsByQuery(query, q);
+            }
 
-            var runs = await query.OrderByDescending(r => r.Id).Take(take).ToListAsync(ct);
+            var totalCount = await query.CountAsync(ct);
+            http.Response.Headers["X-Total-Count"] = totalCount.ToString();
+
+            var ordered = query.OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id);
+            List<Run> runs;
+            if (page is not null)
+            {
+                var pageNumber = Math.Max(1, page.Value);
+                var size = Math.Clamp(pageSize ?? 20, 1, 100);
+                runs = await ordered.Skip((pageNumber - 1) * size).Take(size).ToListAsync(ct);
+            }
+            else
+            {
+                var take = Math.Clamp(limit ?? 50, 1, 200);
+                runs = await ordered.Take(take).ToListAsync(ct);
+            }
+
             return Results.Ok(runs.Select(r => r.ToDto()));
         });
 
