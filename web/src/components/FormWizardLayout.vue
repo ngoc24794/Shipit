@@ -44,9 +44,9 @@ const emit = defineEmits<{
 
 <template>
   <AppLayout>
-    <div class="h-full max-w-4xl w-full mx-auto flex flex-col min-h-0">
+    <div class="flex-1 w-full flex flex-col min-h-0 gap-4">
       <!-- Top Header & Stepper (Fixed) -->
-      <div class="shrink-0 space-y-3 pb-3 border-b border-border">
+      <div class="shrink-0 space-y-3">
         <div class="flex items-center justify-between gap-4 flex-nowrap">
           <div class="flex items-center gap-3 min-w-0">
             <router-link
@@ -57,7 +57,7 @@ const emit = defineEmits<{
               <ArrowLeft class="w-5 h-5" aria-hidden="true" />
             </router-link>
             <div class="min-w-0">
-              <nav aria-label="Breadcrumb" class="text-xs text-muted-fg flex items-center gap-1.5">
+              <nav aria-label="Breadcrumb" class="text-xs text-muted-fg flex items-center gap-1.5 whitespace-nowrap">
                 <router-link :to="backTo" class="hover:text-fg hover:underline">
                   {{ breadcrumbParent }}
                 </router-link>
@@ -85,87 +85,89 @@ const emit = defineEmits<{
         />
       </div>
 
-      <!-- Loading Skeleton -->
-      <div v-if="loading" class="flex-1 min-h-0 overflow-y-auto py-4">
-        <div class="p-6 rounded-[8px] border border-border bg-card space-y-4" aria-busy="true">
+      <!-- Main Wizard Panel (Full Width & Remaining Height, Seamless to Footer) -->
+      <div class="flex-1 min-h-0 flex flex-col rounded-[8px] border border-border bg-card overflow-hidden">
+        <!-- Loading Skeleton -->
+        <div v-if="loading" class="flex-1 min-h-0 overflow-y-auto p-6 space-y-4" aria-busy="true">
           <div v-for="i in 4" :key="i" class="h-10 rounded bg-muted/70 animate-pulse" />
         </div>
-      </div>
 
-      <!-- Not Found -->
-      <div v-else-if="notFound" class="flex-1 min-h-0 overflow-y-auto py-8">
-        <div class="p-8 rounded-[8px] border border-border bg-card text-center space-y-4">
-          <div class="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-fg mx-auto">
-            <FileQuestion class="w-6 h-6" aria-hidden="true" />
+        <!-- Not Found -->
+        <div v-else-if="notFound" class="flex-1 min-h-0 overflow-y-auto p-8 flex items-center justify-center">
+          <div class="text-center space-y-4">
+            <div class="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-fg mx-auto">
+              <FileQuestion class="w-6 h-6" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 class="text-base font-semibold text-fg">{{ notFoundTitle }}</h2>
+              <p class="text-sm text-muted-fg mt-1">{{ notFoundDescription }}</p>
+            </div>
+            <AppButton variant="secondary" @click="emit('cancel')">
+              <ArrowLeft class="w-4 h-4" aria-hidden="true" />
+              <span>Quay lại danh sách</span>
+            </AppButton>
           </div>
-          <div>
-            <h2 class="text-base font-semibold text-fg">{{ notFoundTitle }}</h2>
-            <p class="text-sm text-muted-fg mt-1">{{ notFoundDescription }}</p>
+        </div>
+
+        <!-- Step Content & Bottom Action Footer -->
+        <template v-else>
+          <div class="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col">
+            <slot />
           </div>
-          <AppButton variant="secondary" @click="emit('cancel')">
-            <ArrowLeft class="w-4 h-4" aria-hidden="true" />
-            <span>Quay lại danh sách</span>
-          </AppButton>
-        </div>
-      </div>
 
-      <!-- Step Content (Internal Scroll Only) -->
-      <div v-else class="flex-1 min-h-0 overflow-y-auto py-4 pr-1">
-        <slot />
-      </div>
-
-      <!-- Bottom Action Footer (Fixed) -->
-      <div
-        v-if="!loading && !notFound"
-        class="shrink-0 pt-3 border-t border-border bg-bg flex items-center justify-between gap-3"
-      >
-        <div class="flex items-center gap-2">
-          <AppButton
-            type="button"
-            variant="ghost"
-            :disabled="saving"
-            @click="emit('cancel')"
+          <!-- Bottom Action Footer (Full-Width, Seamless with Panel) -->
+          <div
+            class="shrink-0 px-6 py-3.5 border-t border-border bg-card flex items-center justify-between gap-3 flex-nowrap"
           >
-            Huỷ
-          </AppButton>
-          <AppButton
-            v-if="currentStep > 0"
-            type="button"
-            variant="secondary"
-            :disabled="saving"
-            @click="emit('prev')"
-          >
-            <ArrowLeft class="w-4 h-4" aria-hidden="true" />
-            <span>Quay lại</span>
-          </AppButton>
-        </div>
+            <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
+              <AppButton
+                type="button"
+                variant="ghost"
+                :disabled="saving"
+                @click="emit('cancel')"
+              >
+                Huỷ
+              </AppButton>
+              <AppButton
+                v-if="currentStep > 0"
+                type="button"
+                variant="secondary"
+                :disabled="saving"
+                @click="emit('prev')"
+              >
+                <ArrowLeft class="w-4 h-4" aria-hidden="true" />
+                <span>Quay lại</span>
+              </AppButton>
+            </div>
 
-        <div class="flex items-center gap-2">
-          <slot name="footer-extra" />
+            <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
+              <slot name="footer-extra" />
 
-          <AppButton
-            v-if="currentStep < steps.length - 1"
-            type="button"
-            variant="primary"
-            :disabled="saving || disabled"
-            @click="emit('next')"
-          >
-            <span>Tiếp tục</span>
-            <ArrowRight class="w-4 h-4" aria-hidden="true" />
-          </AppButton>
+              <AppButton
+                v-if="currentStep < steps.length - 1"
+                type="button"
+                variant="primary"
+                :disabled="saving || disabled"
+                @click="emit('next')"
+              >
+                <span>Tiếp tục</span>
+                <ArrowRight class="w-4 h-4" aria-hidden="true" />
+              </AppButton>
 
-          <AppButton
-            v-else
-            type="button"
-            variant="primary"
-            :loading="saving"
-            :disabled="saving || disabled"
-            @click="emit('save')"
-          >
-            <Save class="w-4 h-4" aria-hidden="true" />
-            <span>{{ saveLabel }}</span>
-          </AppButton>
-        </div>
+              <AppButton
+                v-else
+                type="button"
+                variant="primary"
+                :loading="saving"
+                :disabled="saving || disabled"
+                @click="emit('save')"
+              >
+                <Save class="w-4 h-4" aria-hidden="true" />
+                <span>{{ saveLabel }}</span>
+              </AppButton>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
   </AppLayout>

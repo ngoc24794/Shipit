@@ -141,7 +141,7 @@ async function handleLogout() {
 
       <!-- Page Content (never scrolls vertically; min-w-[1024px] prevents layout wrapping) -->
       <main class="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex flex-col">
-        <div class="min-w-[1024px] max-w-[1440px] w-full mx-auto p-6 flex-1 min-h-0 flex flex-col">
+        <div class="min-w-[1024px] w-full p-5 flex-1 min-h-0 flex flex-col">
           <slot />
         </div>
       </main>

@@ -595,98 +595,106 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
       <Boxes class="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
     </template>
 
-    <form class="space-y-6" @submit.prevent="handleSave">
+    <form class="flex-1 min-h-0 flex flex-col" @submit.prevent="handleSave">
       <!-- Step 1: Nguồn mã -->
-      <section v-if="currentStep === 0" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+      <section v-if="currentStep === 0" class="space-y-5">
         <div class="border-b border-border pb-3">
           <h2 class="text-base font-semibold text-fg">1. Nguồn mã</h2>
           <p class="text-xs text-muted-fg mt-0.5">Tên Job và thông tin kho mã nguồn Git</p>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <AppField
-            label="Tên Job"
-            :required="true"
-            description="Tên định danh (DNS-1123, chữ thường, số, dấu chấm hoặc gạch ngang)"
-            :error="formErrors.name?.[0]"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.name"
-                placeholder="VD: avina-dbmigrator"
-                :disabled="saveLoading"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
+        <div class="grid grid-cols-12 gap-5">
+          <div class="col-span-6">
+            <AppField
+              label="Tên Job"
+              :required="true"
+              description="Tên định danh (DNS-1123, chữ thường, số, dấu chấm hoặc gạch ngang)"
+              :error="formErrors.name?.[0]"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.name"
+                  placeholder="VD: avina-dbmigrator"
+                  :disabled="saveLoading"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
 
-          <AppField
-            label="Git URL"
-            :required="true"
-            description="Địa chỉ repository (HTTPS hoặc SSH)"
-            :error="formErrors.gitUrl?.[0]"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.gitUrl"
-                placeholder="http://git.example/AvinaWorkspace"
-                :disabled="saveLoading"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
+          <div class="col-span-6">
+            <AppField
+              label="Token Git"
+              :required="true"
+              description="Token truy cập Git (chỉ lọc credential loại Git Token)"
+              :error="formErrors.gitCredentialId?.[0]"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppSelect
+                  :id="id"
+                  v-model="form.gitCredentialId"
+                  :options="gitCredentialOptions"
+                  placeholder="Chọn Token Git"
+                  :disabled="saveLoading"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
 
-          <AppField
-            label="Nhánh Git"
-            description="Mặc định 'main'"
-            :error="formErrors.gitBranch?.[0]"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.gitBranch"
-                placeholder="main"
-                :disabled="saveLoading"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
+          <div class="col-span-9">
+            <AppField
+              label="Git URL"
+              :required="true"
+              description="Địa chỉ repository (HTTPS hoặc SSH)"
+              :error="formErrors.gitUrl?.[0]"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.gitUrl"
+                  placeholder="http://git.example/AvinaWorkspace"
+                  :disabled="saveLoading"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
 
-          <AppField
-            label="Token Git"
-            :required="true"
-            description="Token truy cập Git (chỉ lọc credential loại Git Token)"
-            :error="formErrors.gitCredentialId?.[0]"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppSelect
-                :id="id"
-                v-model="form.gitCredentialId"
-                :options="gitCredentialOptions"
-                placeholder="Chọn Token Git"
-                :disabled="saveLoading"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
+          <div class="col-span-3">
+            <AppField
+              label="Nhánh Git"
+              description="Mặc định 'main'"
+              :error="formErrors.gitBranch?.[0]"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.gitBranch"
+                  placeholder="main"
+                  :disabled="saveLoading"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
         </div>
       </section>
 
       <!-- Step 2: Build image -->
-      <section v-else-if="currentStep === 1" class="space-y-4">
-        <div class="p-6 rounded-[8px] border border-border bg-card space-y-5">
-          <div class="border-b border-border pb-3">
-            <h2 class="text-base font-semibold text-fg">2. Build image</h2>
-            <p class="text-xs text-muted-fg mt-0.5">Máy build, Dockerfile và registry lưu Docker image</p>
-          </div>
+      <section v-else-if="currentStep === 1" class="space-y-5">
+        <div class="border-b border-border pb-3">
+          <h2 class="text-base font-semibold text-fg">2. Build image</h2>
+          <p class="text-xs text-muted-fg mt-0.5">Máy build, Dockerfile và registry lưu Docker image</p>
+        </div>
 
-          <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-12 gap-5">
+          <div class="col-span-4">
             <AppField
               label="Máy build"
               :required="true"
@@ -705,7 +713,9 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
                 />
               </template>
             </AppField>
+          </div>
 
+          <div class="col-span-4">
             <AppField
               label="Đường dẫn Dockerfile"
               description="Đường dẫn tương đối trong repo. Mặc định 'Dockerfile'"
@@ -722,7 +732,9 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
                 />
               </template>
             </AppField>
+          </div>
 
+          <div class="col-span-4">
             <AppField
               label="Tên Image"
               :required="true"
@@ -740,7 +752,9 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
                 />
               </template>
             </AppField>
+          </div>
 
+          <div class="col-span-6">
             <AppField
               label="Registry host"
               :required="true"
@@ -758,7 +772,9 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
                 />
               </template>
             </AppField>
+          </div>
 
+          <div class="col-span-6">
             <AppField
               label="Registry credential"
               description="Thông tin đăng nhập Docker registry (tuỳ chọn)"
@@ -779,11 +795,11 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
         </div>
 
         <!-- Collapsible Advanced Build Options -->
-        <div class="rounded-[8px] border border-border bg-card overflow-hidden">
+        <div class="rounded-[8px] border border-border bg-bg/40 overflow-hidden">
           <button
             type="button"
             :aria-expanded="showAdvanced"
-            class="w-full flex items-center justify-between px-6 py-3.5 text-left hover:bg-muted/40 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+            class="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-muted/40 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
             @click="showAdvanced = !showAdvanced"
           >
             <div>
@@ -794,35 +810,130 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
             <ChevronRight v-else class="w-4 h-4 text-muted-fg shrink-0" aria-hidden="true" />
           </button>
 
-          <div v-show="showAdvanced" class="px-6 pb-5 pt-3 border-t border-border grid grid-cols-2 gap-4">
+          <div v-show="showAdvanced" class="px-5 pb-5 pt-3 border-t border-border grid grid-cols-12 gap-5">
+            <div class="col-span-6">
+              <AppField
+                label="Build context"
+                description="Thư mục context khi build (. là gốc repository)"
+                :error="formErrors.buildContext?.[0]"
+              >
+                <template #default="{ id, error, ariaDescribedby }">
+                  <AppInput
+                    :id="id"
+                    v-model="form.buildContext"
+                    placeholder="."
+                    :disabled="saveLoading"
+                    :error="error"
+                    :aria-describedby="ariaDescribedby"
+                  />
+                </template>
+              </AppField>
+            </div>
+
+            <div class="col-span-6">
+              <AppField
+                label="Deploy registry host"
+                description="Host registry đặt vào k8s Job spec (tuỳ chọn, để trống dùng Registry host)"
+                :error="formErrors.deployRegistryHost?.[0]"
+              >
+                <template #default="{ id, error, ariaDescribedby }">
+                  <AppInput
+                    :id="id"
+                    v-model="form.deployRegistryHost"
+                    placeholder="VD: registry.local:5000"
+                    :disabled="saveLoading"
+                    :error="error"
+                    :aria-describedby="ariaDescribedby"
+                  />
+                </template>
+              </AppField>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 3: Nơi chạy -->
+      <section v-else-if="currentStep === 2" class="space-y-5">
+        <div class="border-b border-border pb-3">
+          <h2 class="text-base font-semibold text-fg">3. Nơi chạy</h2>
+          <p class="text-xs text-muted-fg mt-0.5">Cấu hình namespace Kubernetes, container và pull secret (chỉ từ allowlist)</p>
+        </div>
+
+        <div class="grid grid-cols-12 gap-5">
+          <div class="col-span-4">
             <AppField
-              label="Build context"
-              description="Thư mục context khi build (. là gốc repository)"
-              :error="formErrors.buildContext?.[0]"
+              label="Namespace"
+              :required="true"
+              description="Namespace được phép chạy Job (chọn từ allowlist)"
+              :error="formErrors.namespace?.[0]"
             >
               <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
+                <AppSelect
                   :id="id"
-                  v-model="form.buildContext"
-                  placeholder="."
+                  v-model="form.namespace"
+                  :options="namespaceOptions"
+                  placeholder="Chọn Namespace"
                   :disabled="saveLoading"
                   :error="error"
                   :aria-describedby="ariaDescribedby"
                 />
               </template>
             </AppField>
+          </div>
 
+          <div class="col-span-4">
             <AppField
-              label="Deploy registry host"
-              description="Host registry đặt vào k8s Job spec (tuỳ chọn, để trống dùng Registry host)"
-              :error="formErrors.deployRegistryHost?.[0]"
+              label="Tên container"
+              :required="true"
+              description="Tên container trong k8s Pod spec"
+              :error="formErrors.containerName?.[0]"
             >
               <template #default="{ id, error, ariaDescribedby }">
                 <AppInput
                   :id="id"
-                  v-model="form.deployRegistryHost"
-                  placeholder="VD: registry.local:5000"
+                  v-model="form.containerName"
+                  placeholder="VD: dbmigrator"
                   :disabled="saveLoading"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
+
+          <div class="col-span-4">
+            <AppField
+              label="Service Account"
+              description="ServiceAccount trong namespace (tuỳ chọn)"
+              :error="formErrors.serviceAccount?.[0]"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.serviceAccount"
+                  placeholder="default"
+                  :disabled="saveLoading"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
+
+          <div class="col-span-12">
+            <AppField
+              label="ImagePullSecrets"
+              description="Secret kéo ảnh từ registry (chỉ liệt kê từ allowlist của namespace đã chọn)"
+              :error="formErrors.imagePullSecrets?.[0]"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AllowlistMultiSelect
+                  :id="id"
+                  v-model="form.imagePullSecrets"
+                  :options="currentPullSecretOptions"
+                  placeholder="Chọn pullSecret từ allowlist..."
+                  empty-text="Chưa có pullSecret nào trong allowlist của namespace này"
+                  :disabled="saveLoading || !form.namespace"
                   :error="error"
                   :aria-describedby="ariaDescribedby"
                 />
@@ -832,92 +943,9 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
         </div>
       </section>
 
-      <!-- Step 3: Nơi chạy -->
-      <section v-else-if="currentStep === 2" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
-        <div class="border-b border-border pb-3">
-          <h2 class="text-base font-semibold text-fg">3. Nơi chạy</h2>
-          <p class="text-xs text-muted-fg mt-0.5">Cấu hình namespace Kubernetes, container và pull secret (chỉ từ allowlist)</p>
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <AppField
-            label="Namespace"
-            :required="true"
-            description="Namespace được phép chạy Job (chọn từ allowlist)"
-            :error="formErrors.namespace?.[0]"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppSelect
-                :id="id"
-                v-model="form.namespace"
-                :options="namespaceOptions"
-                placeholder="Chọn Namespace"
-                :disabled="saveLoading"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
-
-          <AppField
-            label="Tên container"
-            :required="true"
-            description="Tên container trong k8s Pod spec"
-            :error="formErrors.containerName?.[0]"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.containerName"
-                placeholder="VD: dbmigrator"
-                :disabled="saveLoading"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
-
-          <AppField
-            label="ImagePullSecrets"
-            description="Secret kéo ảnh từ registry (chỉ liệt kê từ allowlist của namespace đã chọn)"
-            :error="formErrors.imagePullSecrets?.[0]"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AllowlistMultiSelect
-                :id="id"
-                v-model="form.imagePullSecrets"
-                :options="currentPullSecretOptions"
-                placeholder="Chọn pullSecret từ allowlist..."
-                empty-text="Chưa có pullSecret nào trong allowlist của namespace này"
-                :disabled="saveLoading || !form.namespace"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
-
-          <AppField
-            label="Service Account"
-            description="ServiceAccount trong namespace (tuỳ chọn)"
-            :error="formErrors.serviceAccount?.[0]"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.serviceAccount"
-                placeholder="default"
-                :disabled="saveLoading"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
-        </div>
-      </section>
-
       <!-- Step 4: Tác vụ (chỉ sửa một tác vụ một lần) -->
-      <section v-else-if="currentStep === 3" class="space-y-4">
-        <div class="flex items-center justify-between gap-3">
+      <section v-else-if="currentStep === 3" class="flex-1 min-h-0 flex flex-col gap-4">
+        <div class="shrink-0 flex items-center justify-between gap-3">
           <div>
             <h2 class="text-base font-semibold text-fg">4. Tác vụ ({{ form.tasks.length }})</h2>
             <p class="text-xs text-muted-fg mt-0.5">Chọn một tác vụ bên trái để chỉnh sửa chi tiết.</p>
@@ -936,13 +964,13 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
           </AppButton>
         </div>
 
-        <div v-if="formErrors.tasks" class="text-xs text-danger font-medium">
+        <div v-if="formErrors.tasks" class="shrink-0 text-xs text-danger font-medium">
           {{ formErrors.tasks[0] }}
         </div>
 
-        <div class="grid grid-cols-12 gap-4 items-start">
+        <div class="flex-1 min-h-0 grid grid-cols-12 gap-4 items-stretch">
           <!-- Task Selector List -->
-          <div class="col-span-4 rounded-[8px] border border-border bg-card p-2 space-y-1">
+          <div class="col-span-3 rounded-[8px] border border-border bg-bg/40 p-2 space-y-1 overflow-y-auto">
             <button
               v-for="(task, idx) in form.tasks"
               :key="idx"
@@ -966,7 +994,7 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
           </div>
 
           <!-- Active Task Editor -->
-          <div class="col-span-8">
+          <div class="col-span-9 min-h-0 overflow-y-auto pr-1">
             <TaskCard
               v-if="form.tasks[activeTaskIndex]"
               :key="activeTaskIndex"
@@ -991,11 +1019,11 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
       </section>
 
       <!-- Step 5: Xem lại và kiểm tra -->
-      <section v-else class="space-y-4">
+      <section v-else class="flex-1 min-h-0 flex flex-col gap-4">
         <div
           v-if="reviewErrorItems.length > 0"
           role="alert"
-          class="p-4 rounded-[8px] border border-danger/40 border-l-4 border-l-danger bg-danger/10 text-sm space-y-2"
+          class="shrink-0 p-4 rounded-[8px] border border-danger/40 border-l-4 border-l-danger bg-danger/10 text-sm space-y-2"
         >
           <div class="flex items-center gap-2 font-semibold text-danger">
             <AlertCircle class="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -1016,8 +1044,8 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
         </div>
 
         <!-- Summary Cards -->
-        <div class="grid grid-cols-2 gap-4">
-          <div class="p-4 rounded-[8px] border border-border bg-card space-y-1.5 text-xs">
+        <div class="shrink-0 grid grid-cols-2 gap-4">
+          <div class="p-4 rounded-[8px] border border-border bg-bg/40 space-y-1.5 text-xs">
             <div class="flex items-center justify-between">
               <h3 class="font-semibold text-fg">1. Nguồn mã</h3>
               <button type="button" class="text-primary hover:underline cursor-pointer" @click="goToStep(0)">Sửa</button>
@@ -1027,7 +1055,7 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
             <div class="text-muted-fg">Token Git: <span class="text-fg">{{ findOptionLabel(gitCredentialOptions, form.gitCredentialId) }}</span></div>
           </div>
 
-          <div class="p-4 rounded-[8px] border border-border bg-card space-y-1.5 text-xs">
+          <div class="p-4 rounded-[8px] border border-border bg-bg/40 space-y-1.5 text-xs">
             <div class="flex items-center justify-between">
               <h3 class="font-semibold text-fg">2. Build image & 3. Nơi chạy</h3>
               <button type="button" class="text-primary hover:underline cursor-pointer" @click="goToStep(1)">Sửa</button>
@@ -1039,8 +1067,8 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
         </div>
 
         <!-- Validate & Preview Toolbar -->
-        <div class="p-4 rounded-[8px] border border-border bg-card space-y-4">
-          <div class="flex flex-row items-center justify-between gap-3 flex-nowrap">
+        <div class="flex-1 min-h-0 flex flex-col gap-3 p-4 rounded-[8px] border border-border bg-bg/40">
+          <div class="shrink-0 flex flex-row items-center justify-between gap-3 flex-nowrap">
             <div>
               <h2 class="text-sm font-semibold text-fg">Kiểm tra & Xem trước YAML</h2>
               <p class="text-xs text-muted-fg mt-0.5">Kiểm tra tính hợp lệ và xem trước manifest Kubernetes Job YAML.</p>
@@ -1076,6 +1104,7 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
           </div>
 
           <YamlPreview
+            class="flex-1 min-h-0"
             :tasks="previewTasks"
             :loading="previewLoading"
             :errors="formErrors"

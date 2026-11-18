@@ -479,33 +479,56 @@ onMounted(async () => {
       <Workflow class="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
     </template>
 
-    <form class="space-y-6" @submit.prevent="handleSave">
+    <form class="flex-1 min-h-0 flex flex-col" @submit.prevent="handleSave">
       <!-- Step 1: Nguồn mã -->
-      <section v-if="currentStep === 0" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+      <section v-if="currentStep === 0" class="space-y-5">
         <div class="flex items-center gap-2 text-base font-semibold text-fg border-b border-border pb-3">
           <GitBranch class="w-4 h-4 text-primary" aria-hidden="true" />
           <span>1. Nguồn mã</span>
         </div>
 
-        <AppField
-          label="Tên pipeline"
-          required
-          description="Tên đại diện cho quy trình build và deploy."
-          :error="formErrors.name"
-        >
-          <template #default="{ id, error, ariaDescribedby }">
-            <AppInput
-              :id="id"
-              v-model="form.name"
-              placeholder="Ví dụ: shipit-demo-pipeline"
-              :error="error"
-              :aria-describedby="ariaDescribedby"
-            />
-          </template>
-        </AppField>
+        <div class="grid grid-cols-12 gap-5">
+          <div class="col-span-6">
+            <AppField
+              label="Tên pipeline"
+              required
+              description="Tên đại diện cho quy trình build và deploy."
+              :error="formErrors.name"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.name"
+                  placeholder="Ví dụ: shipit-demo-pipeline"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
 
-        <div class="grid grid-cols-3 gap-4">
-          <div class="col-span-2">
+          <div class="col-span-6">
+            <AppField
+              label="Token Git"
+              required
+              description="Thông tin xác thực loại Token Git có quyền đọc kho mã nguồn."
+              :error="formErrors.gitCredentialId"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppSelect
+                  :id="id"
+                  v-model="form.gitCredentialId"
+                  :options="gitCredentialOptions"
+                  placeholder="Chọn Token Git"
+                  :disabled="gitCredentials.length === 0"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
+
+          <div class="col-span-9">
             <AppField label="Địa chỉ Git URL" required :error="formErrors.gitUrl">
               <template #default="{ id, error, ariaDescribedby }">
                 <AppInput
@@ -518,7 +541,8 @@ onMounted(async () => {
               </template>
             </AppField>
           </div>
-          <div>
+
+          <div class="col-span-3">
             <AppField label="Nhánh (Branch)" required :error="formErrors.gitBranch">
               <template #default="{ id, error, ariaDescribedby }">
                 <AppInput
@@ -532,201 +556,202 @@ onMounted(async () => {
             </AppField>
           </div>
         </div>
-
-        <AppField
-          label="Token Git"
-          required
-          description="Thông tin xác thực loại Token Git có quyền đọc kho mã nguồn."
-          :error="formErrors.gitCredentialId"
-        >
-          <template #default="{ id, error, ariaDescribedby }">
-            <AppSelect
-              :id="id"
-              v-model="form.gitCredentialId"
-              :options="gitCredentialOptions"
-              placeholder="Chọn Token Git"
-              :disabled="gitCredentials.length === 0"
-              :error="error"
-              :aria-describedby="ariaDescribedby"
-            />
-          </template>
-        </AppField>
       </section>
 
       <!-- Step 2: Build -->
-      <section v-else-if="currentStep === 1" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+      <section v-else-if="currentStep === 1" class="space-y-5">
         <div class="flex items-center gap-2 text-base font-semibold text-fg border-b border-border pb-3">
           <Hammer class="w-4 h-4 text-primary" aria-hidden="true" />
           <span>2. Build (Docker)</span>
         </div>
 
-        <AppField label="Máy build" required :error="formErrors.slaveId">
-          <template #default="{ id, error, ariaDescribedby }">
-            <AppSelect
-              :id="id"
-              v-model="form.slaveId"
-              :options="slaveOptions"
-              placeholder="Chọn máy build"
-              :disabled="slaveStore.slaves.length === 0"
-              :error="error"
-              :aria-describedby="ariaDescribedby"
-            />
-          </template>
-        </AppField>
+        <div class="grid grid-cols-12 gap-5">
+          <div class="col-span-4">
+            <AppField label="Máy build" required :error="formErrors.slaveId">
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppSelect
+                  :id="id"
+                  v-model="form.slaveId"
+                  :options="slaveOptions"
+                  placeholder="Chọn máy build"
+                  :disabled="slaveStore.slaves.length === 0"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <AppField label="Đường dẫn Dockerfile" required :error="formErrors.dockerfilePath">
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.dockerfilePath"
-                placeholder="Dockerfile"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
+          <div class="col-span-4">
+            <AppField label="Đường dẫn Dockerfile" required :error="formErrors.dockerfilePath">
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.dockerfilePath"
+                  placeholder="Dockerfile"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
 
-          <AppField
-            label="Thư mục context build"
-            description="Tuỳ chọn. Đường dẫn trong repo dùng làm context khi build. Nhập `.` để dùng gốc repo. Để trống để dùng thư mục chứa Dockerfile."
-            :error="formErrors.buildContext"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.buildContext"
-                placeholder=". (gốc repo)"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
+          <div class="col-span-4">
+            <AppField
+              label="Thư mục context build"
+              description="Tuỳ chọn. Đường dẫn trong repo dùng làm context khi build. Nhập `.` để dùng gốc repo. Để trống để dùng thư mục chứa Dockerfile."
+              :error="formErrors.buildContext"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.buildContext"
+                  placeholder=". (gốc repo)"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
         </div>
       </section>
 
       <!-- Step 3: Registry -->
-      <section v-else-if="currentStep === 2" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+      <section v-else-if="currentStep === 2" class="space-y-5">
         <div class="flex items-center gap-2 text-base font-semibold text-fg border-b border-border pb-3">
           <Package class="w-4 h-4 text-primary" aria-hidden="true" />
           <span>3. Registry</span>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <AppField
-            label="Tên Image"
-            required
-            description="Chỉ gồm chữ thường, số và ký tự . _ - /"
-            :error="formErrors.imageName"
-          >
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.imageName"
-                placeholder="Ví dụ: shipit-demo"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
+        <div class="grid grid-cols-12 gap-5">
+          <div class="col-span-4">
+            <AppField
+              label="Tên Image"
+              required
+              description="Chỉ gồm chữ thường, số và ký tự . _ - /"
+              :error="formErrors.imageName"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.imageName"
+                  placeholder="Ví dụ: shipit-demo"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
 
-          <AppField label="Máy chủ Registry" required :error="formErrors.registryHost">
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.registryHost"
-                placeholder="Ví dụ: 192.168.1.241:5000"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
+          <div class="col-span-4">
+            <AppField label="Máy chủ Registry" required :error="formErrors.registryHost">
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.registryHost"
+                  placeholder="Ví dụ: 192.168.1.241:5000"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
+
+          <div class="col-span-4">
+            <AppField
+              label="Thông tin xác thực Registry"
+              description="Chỉ chọn khi registry yêu cầu đăng nhập."
+              :error="formErrors.registryCredentialId"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppSelect
+                  :id="id"
+                  v-model="form.registryCredentialId"
+                  :options="registryCredentialOptions"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
+
+          <div class="col-span-6">
+            <AppField
+              label="Host registry khi deploy"
+              description="Tuỳ chọn. Dùng khi cụm k8s gọi registry bằng tên khác với máy build (ví dụ máy build dùng avina.ai:5000, cụm dùng registry.local:5000). Để trống để dùng chung Máy chủ Registry."
+              :error="formErrors.deployRegistryHost"
+            >
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.deployRegistryHost"
+                  placeholder="giống Máy chủ Registry"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
         </div>
-
-        <AppField
-          label="Thông tin xác thực Registry"
-          description="Chỉ chọn khi registry yêu cầu đăng nhập. Để trống nếu registry không cần xác thực."
-          :error="formErrors.registryCredentialId"
-        >
-          <template #default="{ id, error, ariaDescribedby }">
-            <AppSelect
-              :id="id"
-              v-model="form.registryCredentialId"
-              :options="registryCredentialOptions"
-              :error="error"
-              :aria-describedby="ariaDescribedby"
-            />
-          </template>
-        </AppField>
-
-        <AppField
-          label="Host registry khi deploy"
-          description="Tuỳ chọn. Dùng khi cụm k8s gọi registry bằng tên khác với máy build (ví dụ máy build dùng avina.ai:5000, cụm dùng registry.local:5000). Để trống để dùng chung Máy chủ Registry."
-          :error="formErrors.deployRegistryHost"
-        >
-          <template #default="{ id, error, ariaDescribedby }">
-            <AppInput
-              :id="id"
-              v-model="form.deployRegistryHost"
-              placeholder="giống Máy chủ Registry"
-              :error="error"
-              :aria-describedby="ariaDescribedby"
-            />
-          </template>
-        </AppField>
       </section>
 
       <!-- Step 4: Deploy -->
-      <section v-else-if="currentStep === 3" class="p-6 rounded-[8px] border border-border bg-card space-y-5">
+      <section v-else-if="currentStep === 3" class="space-y-5">
         <div class="flex items-center gap-2 text-base font-semibold text-fg border-b border-border pb-3">
           <Rocket class="w-4 h-4 text-primary" aria-hidden="true" />
           <span>4. Deploy (Kubernetes)</span>
         </div>
 
-        <div class="grid grid-cols-3 gap-4">
-          <AppField label="Namespace" required :error="formErrors.deployNamespace">
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.deployNamespace"
-                placeholder="devops"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-                list="allowed-namespaces-list"
-              />
-              <datalist id="allowed-namespaces-list">
-                <option v-for="ns in allowedNamespaces" :key="ns" :value="ns" />
-              </datalist>
-            </template>
-          </AppField>
+        <div class="grid grid-cols-12 gap-5">
+          <div class="col-span-4">
+            <AppField label="Namespace" required :error="formErrors.deployNamespace">
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.deployNamespace"
+                  placeholder="devops"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                  list="allowed-namespaces-list"
+                />
+                <datalist id="allowed-namespaces-list">
+                  <option v-for="ns in allowedNamespaces" :key="ns" :value="ns" />
+                </datalist>
+              </template>
+            </AppField>
+          </div>
 
-          <AppField label="Deployment" required :error="formErrors.deployDeployment">
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.deployDeployment"
-                placeholder="shipit-demo"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-                list="allowed-deployments-list"
-              />
-              <datalist id="allowed-deployments-list">
-                <option v-for="dep in allowedDeployments" :key="dep" :value="dep" />
-              </datalist>
-            </template>
-          </AppField>
+          <div class="col-span-4">
+            <AppField label="Deployment" required :error="formErrors.deployDeployment">
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.deployDeployment"
+                  placeholder="shipit-demo"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                  list="allowed-deployments-list"
+                />
+                <datalist id="allowed-deployments-list">
+                  <option v-for="dep in allowedDeployments" :key="dep" :value="dep" />
+                </datalist>
+              </template>
+            </AppField>
+          </div>
 
-          <AppField label="Container" required :error="formErrors.deployContainer">
-            <template #default="{ id, error, ariaDescribedby }">
-              <AppInput
-                :id="id"
-                v-model="form.deployContainer"
-                placeholder="app"
-                :error="error"
-                :aria-describedby="ariaDescribedby"
-              />
-            </template>
-          </AppField>
+          <div class="col-span-4">
+            <AppField label="Container" required :error="formErrors.deployContainer">
+              <template #default="{ id, error, ariaDescribedby }">
+                <AppInput
+                  :id="id"
+                  v-model="form.deployContainer"
+                  placeholder="app"
+                  :error="error"
+                  :aria-describedby="ariaDescribedby"
+                />
+              </template>
+            </AppField>
+          </div>
         </div>
       </section>
 

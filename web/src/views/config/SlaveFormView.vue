@@ -204,9 +204,9 @@ onMounted(async () => {
 
 <template>
   <AppLayout>
-    <div class="h-full max-w-3xl w-full mx-auto flex flex-col min-h-0">
+    <div class="flex-1 w-full flex flex-col min-h-0 gap-4">
       <!-- Top Header Bar -->
-      <div class="shrink-0 py-3 flex flex-row items-center justify-between gap-4 flex-nowrap border-b border-border">
+      <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap">
         <div class="flex items-center gap-3 min-w-0">
           <button
             type="button"
@@ -217,7 +217,7 @@ onMounted(async () => {
             <ArrowLeft class="w-5 h-5" aria-hidden="true" />
           </button>
           <div class="min-w-0">
-            <nav aria-label="Breadcrumb" class="text-xs text-muted-fg flex items-center gap-1.5">
+            <nav aria-label="Breadcrumb" class="text-xs text-muted-fg flex items-center gap-1.5 whitespace-nowrap">
               <router-link to="/slaves" class="hover:text-fg hover:underline">
                 Máy build
               </router-link>
@@ -266,161 +266,175 @@ onMounted(async () => {
       </div>
 
       <!-- Loading -->
-      <div v-if="pageLoading" class="p-8 rounded-[8px] border border-border bg-card space-y-4" aria-busy="true">
+      <div v-if="pageLoading" class="flex-1 min-h-0 p-6 rounded-[8px] border border-border bg-card space-y-4 overflow-y-auto" aria-busy="true">
         <div v-for="i in 4" :key="i" class="h-10 rounded bg-muted/70 animate-pulse" />
       </div>
 
       <!-- Not Found -->
       <div
         v-else-if="notFound"
-        class="p-8 rounded-[8px] border border-border bg-card text-center space-y-4"
+        class="flex-1 min-h-0 p-8 rounded-[8px] border border-border bg-card flex items-center justify-center"
       >
-        <div class="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-fg mx-auto">
-          <FileQuestion class="w-6 h-6" aria-hidden="true" />
+        <div class="text-center space-y-4">
+          <div class="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-fg mx-auto">
+            <FileQuestion class="w-6 h-6" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 class="text-base font-semibold text-fg">Không tìm thấy máy build</h2>
+            <p class="text-sm text-muted-fg mt-1">Máy build bạn tìm kiếm không tồn tại hoặc đã bị xoá.</p>
+          </div>
+          <AppButton variant="secondary" @click="router.push('/slaves')">
+            <ArrowLeft class="w-4 h-4" aria-hidden="true" />
+            <span>Quay lại danh sách</span>
+          </AppButton>
         </div>
-        <div>
-          <h2 class="text-base font-semibold text-fg">Không tìm thấy máy build</h2>
-          <p class="text-sm text-muted-fg mt-1">Máy build bạn tìm kiếm không tồn tại hoặc đã bị xoá.</p>
-        </div>
-        <AppButton variant="secondary" @click="router.push('/slaves')">
-          <ArrowLeft class="w-4 h-4" aria-hidden="true" />
-          <span>Quay lại danh sách</span>
-        </AppButton>
       </div>
 
       <!-- Form -->
-      <div v-else class="flex-1 min-h-0 overflow-y-auto py-4 pr-1">
-        <form class="p-6 rounded-[8px] border border-border bg-card space-y-5" @submit.prevent="handleSave">
-        <!-- Test connection result banner when editing -->
-        <div
-          v-if="testResult"
-          role="status"
-          :class="[
-            'flex items-center gap-2.5 p-3 rounded-[6px] border text-xs',
-            testResult.ok
-              ? 'bg-success/10 border-success/30 text-success'
-              : 'bg-danger/10 border-danger/30 text-danger'
-          ]"
-        >
-          <CheckCircle2 v-if="testResult.ok" class="w-4 h-4 shrink-0" aria-hidden="true" />
-          <XCircle v-else class="w-4 h-4 shrink-0" aria-hidden="true" />
-          <span>{{ testResult.message }}</span>
-        </div>
+      <form
+        v-else
+        class="flex-1 min-h-0 rounded-[8px] border border-border bg-card flex flex-col overflow-hidden"
+        @submit.prevent="handleSave"
+      >
+        <div class="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
+          <!-- Test connection result banner when editing -->
+          <div
+            v-if="testResult"
+            role="status"
+            :class="[
+              'flex items-center gap-2.5 p-3 rounded-[6px] border text-xs',
+              testResult.ok
+                ? 'bg-success/10 border-success/30 text-success'
+                : 'bg-danger/10 border-danger/30 text-danger'
+            ]"
+          >
+            <CheckCircle2 v-if="testResult.ok" class="w-4 h-4 shrink-0" aria-hidden="true" />
+            <XCircle v-else class="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>{{ testResult.message }}</span>
+          </div>
 
-        <!-- Warning when no SSH key credentials exist -->
-        <div
-          v-if="sshCredentials.length === 0"
-          role="alert"
-          class="flex items-start gap-3 p-3 rounded-[6px] bg-warn/10 border border-warn/30 text-warn text-xs"
-        >
-          <AlertTriangle class="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <div>
-            <span>Chưa có thông tin xác thực loại <strong>Khoá SSH</strong>. Vui lòng </span>
-            <router-link
-              to="/credentials/new"
-              class="underline font-semibold hover:text-fg focus-visible:outline-2 focus-visible:outline-ring"
-            >
-              tạo thông tin xác thực
-            </router-link>
-            <span> trước khi cấu hình máy build.</span>
+          <!-- Warning when no SSH key credentials exist -->
+          <div
+            v-if="sshCredentials.length === 0"
+            role="alert"
+            class="flex items-start gap-3 p-3 rounded-[6px] bg-warn/10 border border-warn/30 text-warn text-xs"
+          >
+            <AlertTriangle class="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div>
+              <span>Chưa có thông tin xác thực loại <strong>Khoá SSH</strong>. Vui lòng </span>
+              <router-link
+                to="/credentials/new"
+                class="underline font-semibold hover:text-fg focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                tạo thông tin xác thực
+              </router-link>
+              <span> trước khi cấu hình máy build.</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-12 gap-5">
+            <!-- Name -->
+            <div class="col-span-4">
+              <AppField
+                label="Tên máy build"
+                required
+                :error="formErrors.name"
+              >
+                <template #default="{ id, error, ariaDescribedby }">
+                  <AppInput
+                    :id="id"
+                    v-model="form.name"
+                    placeholder="Ví dụ: slave-staging-01"
+                    :error="error"
+                    :aria-describedby="ariaDescribedby"
+                  />
+                </template>
+              </AppField>
+            </div>
+
+            <!-- Host -->
+            <div class="col-span-5">
+              <AppField
+                label="Địa chỉ máy chủ (Host / IP)"
+                required
+                :error="formErrors.host"
+              >
+                <template #default="{ id, error, ariaDescribedby }">
+                  <AppInput
+                    :id="id"
+                    v-model="form.host"
+                    placeholder="Ví dụ: 192.168.1.49"
+                    :error="error"
+                    :aria-describedby="ariaDescribedby"
+                  />
+                </template>
+              </AppField>
+            </div>
+
+            <!-- Port -->
+            <div class="col-span-3">
+              <AppField
+                label="Cổng (Port)"
+                required
+                :error="formErrors.port"
+              >
+                <template #default="{ id, error, ariaDescribedby }">
+                  <AppInput
+                    :id="id"
+                    v-model="form.port"
+                    type="number"
+                    placeholder="22"
+                    :error="error"
+                    :aria-describedby="ariaDescribedby"
+                  />
+                </template>
+              </AppField>
+            </div>
+
+            <!-- User -->
+            <div class="col-span-6">
+              <AppField
+                label="Người dùng SSH (User)"
+                required
+                description="Tài khoản hệ điều hành trên máy build có quyền chạy Docker."
+                :error="formErrors.user"
+              >
+                <template #default="{ id, error, ariaDescribedby }">
+                  <AppInput
+                    :id="id"
+                    v-model="form.user"
+                    placeholder="Ví dụ: devops"
+                    :error="error"
+                    :aria-describedby="ariaDescribedby"
+                  />
+                </template>
+              </AppField>
+            </div>
+
+            <!-- SSH Credential Select -->
+            <div class="col-span-6">
+              <AppField
+                label="Khoá xác thực SSH"
+                required
+                description="Chỉ chấp nhận các thông tin xác thực loại Khoá SSH."
+                :error="formErrors.sshCredentialId"
+              >
+                <template #default="{ id, error, ariaDescribedby }">
+                  <AppSelect
+                    :id="id"
+                    v-model="form.sshCredentialId"
+                    :options="sshCredentialOptions"
+                    placeholder="Chọn khoá SSH"
+                    :disabled="sshCredentials.length === 0"
+                    :error="error"
+                    :aria-describedby="ariaDescribedby"
+                  />
+                </template>
+              </AppField>
+            </div>
           </div>
         </div>
-
-        <!-- Name -->
-        <AppField
-          label="Tên máy build"
-          required
-          :error="formErrors.name"
-        >
-          <template #default="{ id, error, ariaDescribedby }">
-            <AppInput
-              :id="id"
-              v-model="form.name"
-              placeholder="Ví dụ: slave-staging-01"
-              :error="error"
-              :aria-describedby="ariaDescribedby"
-            />
-          </template>
-        </AppField>
-
-        <!-- Host and Port grid -->
-        <div class="grid grid-cols-3 gap-4">
-          <div class="col-span-2">
-            <AppField
-              label="Địa chỉ máy chủ (Host / IP)"
-              required
-              :error="formErrors.host"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.host"
-                  placeholder="Ví dụ: 192.168.1.49"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-          </div>
-          <div>
-            <AppField
-              label="Cổng (Port)"
-              required
-              :error="formErrors.port"
-            >
-              <template #default="{ id, error, ariaDescribedby }">
-                <AppInput
-                  :id="id"
-                  v-model="form.port"
-                  type="number"
-                  placeholder="22"
-                  :error="error"
-                  :aria-describedby="ariaDescribedby"
-                />
-              </template>
-            </AppField>
-          </div>
-        </div>
-
-        <!-- User -->
-        <AppField
-          label="Người dùng SSH (User)"
-          required
-          description="Tài khoản hệ điều hành trên máy build có quyền chạy Docker."
-          :error="formErrors.user"
-        >
-          <template #default="{ id, error, ariaDescribedby }">
-            <AppInput
-              :id="id"
-              v-model="form.user"
-              placeholder="Ví dụ: devops"
-              :error="error"
-              :aria-describedby="ariaDescribedby"
-            />
-          </template>
-        </AppField>
-
-        <!-- SSH Credential Select -->
-        <AppField
-          label="Khoá xác thực SSH"
-          required
-          description="Chỉ chấp nhận các thông tin xác thực loại Khoá SSH."
-          :error="formErrors.sshCredentialId"
-        >
-          <template #default="{ id, error, ariaDescribedby }">
-            <AppSelect
-              :id="id"
-              v-model="form.sshCredentialId"
-              :options="sshCredentialOptions"
-              placeholder="Chọn khoá SSH"
-              :disabled="sshCredentials.length === 0"
-              :error="error"
-              :aria-describedby="ariaDescribedby"
-            />
-          </template>
-        </AppField>
-        </form>
-      </div>
+      </form>
     </div>
   </AppLayout>
 </template>
