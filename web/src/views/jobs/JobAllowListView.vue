@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   ListChecks,
   Plus,
@@ -14,8 +14,12 @@ import AppSelect from '../../components/AppSelect.vue'
 import AppField from '../../components/AppField.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import EmptyState from '../../components/EmptyState.vue'
+import DataToolbar, { type DataToolbarFilter } from '../../components/DataToolbar.vue'
+import DataPagination from '../../components/DataPagination.vue'
+import SortableHeader from '../../components/SortableHeader.vue'
 import { useJobsAllowStore } from '../../stores/jobsAllow'
 import { useToast } from '../../composables/useToast'
+import { useDataTable } from '../../composables/useDataTable'
 import type { JobAllowEntry, JobAllowKind } from '../../api/types'
 import { ApiError } from '../../api/client'
 
@@ -49,6 +53,57 @@ const kindOptions = [
   { label: 'Secret', value: 'secret' },
   { label: 'pullSecret (ImagePullSecret)', value: 'pullsecret' }
 ]
+
+const table = useDataTable<JobAllowEntry>({
+  mode: 'client',
+  items: computed(() => store.entries),
+  defaultFilters: {
+    kind: '',
+    namespace: ''
+  },
+  searchFields: ['namespace', 'name', (e) => kindLabel(e.kind)],
+  filterFns: {
+    kind: (e, val) => e.kind === val,
+    namespace: (e, val) => e.namespace === val
+  },
+  sortFns: {
+    namespace: (a, b) => a.namespace.localeCompare(b.namespace, 'vi'),
+    kind: (a, b) => kindLabel(a.kind).localeCompare(kindLabel(b.kind), 'vi'),
+    name: (a, b) => a.name.localeCompare(b.name, 'vi'),
+    createdAt: (a, b) =>
+      new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+  }
+})
+
+const toolbarFilters = computed<DataToolbarFilter[]>(() => {
+  const namespaces = Array.from(
+    new Set(store.entries.map((e) => e.namespace).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b))
+
+  return [
+    {
+      key: 'kind',
+      label: 'Loại tài nguyên',
+      type: 'select',
+      options: [
+        { label: 'Tất cả loại', value: '' },
+        { label: 'Namespace', value: 'namespace' },
+        { label: 'ConfigMap', value: 'configmap' },
+        { label: 'Secret', value: 'secret' },
+        { label: 'pullSecret', value: 'pullsecret' }
+      ]
+    },
+    {
+      key: 'namespace',
+      label: 'Namespace',
+      type: 'select',
+      options: [
+        { label: 'Tất cả namespace', value: '' },
+        ...namespaces.map((ns) => ({ label: ns, value: ns }))
+      ]
+    }
+  ]
+})
 
 function kindBadgeClass(kind: JobAllowKind): string {
   switch (kind) {
@@ -282,76 +337,136 @@ async function handleDelete() {
         </template>
       </EmptyState>
 
-      <AppTable v-else>
-        <template #header>
-          <tr>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
-              Namespace
-            </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
-              Loại
-            </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
-              Tên tài nguyên
-            </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg">
-              Ngày tạo
-            </th>
-            <th scope="col" class="text-right py-3 px-4 text-xs font-semibold text-muted-fg">
-              Thao tác
-            </th>
-          </tr>
-        </template>
+      <div
+        v-else
+        class="flex-1 min-h-0 flex flex-col rounded-[8px] border border-border bg-card overflow-hidden"
+      >
+        <DataToolbar
+          :q="table.q.value"
+          search-placeholder="Tìm namespace, tên tài nguyên..."
+          :filters="toolbarFilters"
+          :filter-values="table.filters"
+          :start-item="table.startItem.value"
+          :end-item="table.endItem.value"
+          :total="table.total.value"
+          :has-active-filters="table.hasActiveFilters.value"
+          @update:q="(v) => (table.q.value = v)"
+          @update:filter="(k, v) => (table.filters[k] = v)"
+          @clear="table.clearFilters()"
+        />
 
-        <tr
-          v-for="entry in store.entries"
-          :key="entry.id"
-          class="hover:bg-muted/40 transition-colors border-b border-border/60 last:border-b-0"
+        <div
+          v-if="table.items.value.length === 0"
+          class="flex-1 min-h-0 flex flex-col items-center justify-center p-8 text-center"
         >
-          <!-- Namespace -->
-          <td class="py-3 px-4 text-xs font-mono text-fg font-medium">
-            {{ entry.namespace }}
-          </td>
+          <p class="text-sm font-medium text-fg mb-1">Không có kết quả phù hợp</p>
+          <p class="text-xs text-muted-fg mb-4">Thử đổi từ khoá tìm kiếm hoặc xoá bộ lọc hiện tại.</p>
+          <AppButton variant="secondary" size="sm" @click="table.clearFilters()">
+            Xoá bộ lọc
+          </AppButton>
+        </div>
 
-          <!-- Kind -->
-          <td class="py-3 px-4">
-            <span
-              :class="[
-                'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border',
-                kindBadgeClass(entry.kind)
-              ]"
-            >
-              {{ kindLabel(entry.kind) }}
-            </span>
-          </td>
+        <AppTable v-else :bordered="false">
+          <template #header>
+            <tr>
+              <SortableHeader
+                label="Namespace"
+                sort-key="namespace"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                class="py-3 px-4"
+                @sort="table.toggleSort"
+              />
+              <SortableHeader
+                label="Loại"
+                sort-key="kind"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                class="py-3 px-4"
+                @sort="table.toggleSort"
+              />
+              <SortableHeader
+                label="Tên tài nguyên"
+                sort-key="name"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                class="py-3 px-4"
+                @sort="table.toggleSort"
+              />
+              <SortableHeader
+                label="Ngày tạo"
+                sort-key="createdAt"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                class="py-3 px-4"
+                @sort="table.toggleSort"
+              />
+              <th scope="col" class="text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
+                Thao tác
+              </th>
+            </tr>
+          </template>
 
-          <!-- Name -->
-          <td class="py-3 px-4 text-xs font-mono text-fg">
-            {{ entry.name }}
-          </td>
+          <tr
+            v-for="entry in table.items.value"
+            :key="entry.id"
+            class="hover:bg-muted/40 transition-colors border-b border-border/60 last:border-b-0"
+          >
+            <!-- Namespace -->
+            <td class="py-3 px-4 text-xs font-mono text-fg font-medium whitespace-nowrap">
+              {{ entry.namespace }}
+            </td>
 
-          <!-- Created At -->
-          <td class="py-3 px-4 text-xs text-muted-fg tabular-nums">
-            {{ formatDate(entry.createdAt) }}
-          </td>
+            <!-- Kind -->
+            <td class="py-3 px-4 whitespace-nowrap">
+              <span
+                :class="[
+                  'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border',
+                  kindBadgeClass(entry.kind)
+                ]"
+              >
+                {{ kindLabel(entry.kind) }}
+              </span>
+            </td>
 
-          <!-- Actions -->
-          <td class="py-3 px-4 text-right">
-            <AppButton
-              variant="ghost"
-              size="sm"
-              aria-label="Xoá mục khỏi allowlist"
-              title="Xoá mục"
-              class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
-              :disabled="deleteLoading"
-              @click="openDeleteConfirm(entry)"
-            >
-              <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
-              <span class="whitespace-nowrap">Xoá</span>
-            </AppButton>
-          </td>
-        </tr>
-      </AppTable>
+            <!-- Name -->
+            <td class="py-3 px-4 text-xs font-mono text-fg whitespace-nowrap">
+              {{ entry.name }}
+            </td>
+
+            <!-- Created At -->
+            <td class="py-3 px-4 text-xs text-muted-fg tabular-nums whitespace-nowrap">
+              {{ formatDate(entry.createdAt) }}
+            </td>
+
+            <!-- Actions -->
+            <td class="py-3 px-4 text-right whitespace-nowrap">
+              <AppButton
+                variant="ghost"
+                size="sm"
+                aria-label="Xoá mục khỏi allowlist"
+                title="Xoá mục"
+                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger"
+                :disabled="deleteLoading"
+                @click="openDeleteConfirm(entry)"
+              >
+                <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
+                <span class="whitespace-nowrap">Xoá</span>
+              </AppButton>
+            </td>
+          </tr>
+        </AppTable>
+
+        <DataPagination
+          :page="table.page.value"
+          :page-size="table.pageSize.value"
+          :total="table.total.value"
+          :total-pages="table.totalPages.value"
+          :loading="store.loading"
+          @update:page="table.setPage"
+          @update:page-size="table.setPageSize"
+        />
+      </div>
 
       <!-- Delete Confirmation Dialog -->
       <ConfirmDialog

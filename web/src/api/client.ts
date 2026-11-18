@@ -23,6 +23,8 @@ import type {
   JobPreview,
   JobAllowEntry,
   JobAllowEntryInput,
+  GetRunsParams,
+  PagedResult,
   SearchResponse
 } from './types'
 
@@ -109,7 +111,8 @@ export interface ShipitApi {
   // Runs
   triggerRun(pipelineId: number): Promise<Run>
   cancelRun(id: number): Promise<Run>
-  getRuns(params?: { pipelineId?: number; jobId?: number; limit?: number }): Promise<Run[]>
+  getRuns(params?: GetRunsParams): Promise<Run[]>
+  getRunsPaged?(params?: GetRunsParams): Promise<PagedResult<Run>>
   getRun(id: number): Promise<RunDetail>
   getRunLogs(id: number, after?: number): Promise<LogLine[]>
   streamRunLogs(
@@ -131,10 +134,10 @@ export class HttpShipitApi implements ShipitApi {
     this.baseUrl = baseUrl
   }
 
-  private async request<T>(
+  private async requestWithResponse<T>(
     endpoint: string,
     options: RequestInit = {}
-  ): Promise<T> {
+  ): Promise<{ data: T; response: Response }> {
     const url = `${this.baseUrl}${endpoint}`
     const headers: Record<string, string> = {
       Accept: 'application/json',
@@ -168,15 +171,23 @@ export class HttpShipitApi implements ShipitApi {
     }
 
     if (res.status === 204 || res.headers.get('content-length') === '0') {
-      return undefined as unknown as T
+      return { data: undefined as unknown as T, response: res }
     }
 
     const contentType = res.headers.get('content-type') || ''
     if (contentType.includes('application/json')) {
-      return (await res.json()) as T
+      return { data: (await res.json()) as T, response: res }
     }
 
-    return (await res.text()) as unknown as T
+    return { data: (await res.text()) as unknown as T, response: res }
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const { data } = await this.requestWithResponse<T>(endpoint, options)
+    return data
   }
 
   async login(req: LoginRequest): Promise<void> {
@@ -319,7 +330,7 @@ export class HttpShipitApi implements ShipitApi {
     })
   }
 
-  async getRuns(params?: { pipelineId?: number; jobId?: number; limit?: number }): Promise<Run[]> {
+  private buildRunsQuery(params?: GetRunsParams): string {
     const search = new URLSearchParams()
     if (params?.pipelineId !== undefined) {
       search.set('pipelineId', params.pipelineId.toString())
@@ -327,11 +338,39 @@ export class HttpShipitApi implements ShipitApi {
     if (params?.jobId !== undefined) {
       search.set('jobId', params.jobId.toString())
     }
+    if (params?.kind) {
+      search.set('kind', params.kind)
+    }
+    if (params?.status) {
+      search.set('status', params.status)
+    }
+    if (params?.q && params.q.trim() !== '') {
+      search.set('q', params.q.trim())
+    }
+    if (params?.page !== undefined) {
+      search.set('page', params.page.toString())
+    }
+    if (params?.pageSize !== undefined) {
+      search.set('pageSize', params.pageSize.toString())
+    }
     if (params?.limit !== undefined) {
       search.set('limit', params.limit.toString())
     }
-    const query = search.toString() ? `?${search.toString()}` : ''
-    return this.request<Run[]>(`/api/runs${query}`)
+    return search.toString() ? `?${search.toString()}` : ''
+  }
+
+  async getRuns(params?: GetRunsParams): Promise<Run[]> {
+    return this.request<Run[]>(`/api/runs${this.buildRunsQuery(params)}`)
+  }
+
+  async getRunsPaged(params?: GetRunsParams): Promise<PagedResult<Run>> {
+    const { data, response } = await this.requestWithResponse<Run[]>(
+      `/api/runs${this.buildRunsQuery(params)}`
+    )
+    const rawHeader = response.headers?.get('X-Total-Count')
+    const parsed = rawHeader ? Number.parseInt(rawHeader, 10) : Number.NaN
+    const total = !Number.isNaN(parsed) && parsed >= 0 ? parsed : data.length
+    return { items: data, total }
   }
 
   async getRun(id: number): Promise<RunDetail> {

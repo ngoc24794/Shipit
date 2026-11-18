@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Boxes,
@@ -15,8 +15,12 @@ import AppButton from '../../components/AppButton.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import EmptyState from '../../components/EmptyState.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
+import DataToolbar, { type DataToolbarFilter } from '../../components/DataToolbar.vue'
+import DataPagination from '../../components/DataPagination.vue'
+import SortableHeader from '../../components/SortableHeader.vue'
 import { useJobsStore } from '../../stores/jobs'
 import { useToast } from '../../composables/useToast'
+import { useDataTable } from '../../composables/useDataTable'
 import type { Job } from '../../api/types'
 import { ApiError } from '../../api/client'
 
@@ -28,6 +32,61 @@ const isConfirmOpen = ref(false)
 const deletingJob = ref<Job | null>(null)
 const deleteLoading = ref(false)
 const triggeringJobId = ref<number | null>(null)
+
+const table = useDataTable<Job>({
+  mode: 'client',
+  items: computed(() => store.jobs),
+  defaultFilters: {
+    status: '',
+    namespace: ''
+  },
+  searchFields: ['name', 'gitUrl', 'gitBranch', 'namespace', 'imageName'],
+  filterFns: {
+    status: (j, val) => {
+      if (val === 'none') return !j.lastRun
+      return j.lastRun?.status === val
+    },
+    namespace: (j, val) => j.namespace === val
+  },
+  sortFns: {
+    name: (a, b) => a.name.localeCompare(b.name, 'vi'),
+    namespace: (a, b) => a.namespace.localeCompare(b.namespace, 'vi'),
+    tasksCount: (a, b) => a.tasks.length - b.tasks.length,
+    lastRun: (a, b) => (a.lastRun?.status ?? '').localeCompare(b.lastRun?.status ?? '')
+  }
+})
+
+const toolbarFilters = computed<DataToolbarFilter[]>(() => {
+  const namespaces = Array.from(
+    new Set(store.jobs.map((j) => j.namespace).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b))
+
+  return [
+    {
+      key: 'status',
+      label: 'Trạng thái lần chạy gần nhất',
+      type: 'select',
+      options: [
+        { label: 'Tất cả trạng thái', value: '' },
+        { label: 'Thành công', value: 'success' },
+        { label: 'Thất bại', value: 'failed' },
+        { label: 'Đang chạy', value: 'running' },
+        { label: 'Đang chờ', value: 'queued' },
+        { label: 'Đã huỷ', value: 'cancelled' },
+        { label: 'Chưa chạy', value: 'none' }
+      ]
+    },
+    {
+      key: 'namespace',
+      label: 'Namespace',
+      type: 'select',
+      options: [
+        { label: 'Tất cả namespace', value: '' },
+        ...namespaces.map((ns) => ({ label: ns, value: ns }))
+      ]
+    }
+  ]
+})
 
 onMounted(async () => {
   try {
@@ -89,7 +148,7 @@ async function handleDelete() {
 
 <template>
   <AppLayout>
-    <div class="flex-1 min-h-0 flex flex-col gap-5">
+    <div class="flex-1 min-h-0 flex flex-col gap-4">
       <!-- Page Header -->
       <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap">
         <div class="min-w-0">
@@ -113,11 +172,12 @@ async function handleDelete() {
         </AppButton>
       </div>
 
-      <!-- Content: Table or Empty State -->
+      <!-- Loading -->
       <div v-if="store.loading && store.jobs.length === 0" class="py-16 text-center text-muted-fg">
         Đang tải danh sách Job...
       </div>
 
+      <!-- Empty State -->
       <EmptyState
         v-else-if="store.jobs.length === 0"
         title="Chưa có Job nào"
@@ -130,136 +190,194 @@ async function handleDelete() {
         </template>
       </EmptyState>
 
-      <AppTable v-else>
-        <template #header>
-          <tr>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
-              Tên
-            </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
-              Kho mã / Nhánh
-            </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
-              Namespace
-            </th>
-            <th scope="col" class="text-center py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
-              Số tác vụ
-            </th>
-            <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
-              Lượt chạy gần nhất
-            </th>
-            <th scope="col" class="text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
-              Thao tác
-            </th>
-          </tr>
-        </template>
+      <!-- Table Panel -->
+      <div
+        v-else
+        class="w-full flex-1 min-h-0 flex flex-col rounded-[8px] border border-border bg-card overflow-hidden"
+      >
+        <DataToolbar
+          :q="table.q.value"
+          search-placeholder="Tìm tên job, kho mã, namespace..."
+          :filters="toolbarFilters"
+          :filter-values="table.filters"
+          :start-item="table.startItem.value"
+          :end-item="table.endItem.value"
+          :total="table.total.value"
+          :has-active-filters="table.hasActiveFilters.value"
+          @update:q="(v) => (table.q.value = v)"
+          @update:filter="(k, v) => (table.filters[k] = v)"
+          @clear="table.clearFilters()"
+        />
 
-        <tr
-          v-for="job in store.jobs"
-          :key="job.id"
-          class="hover:bg-muted/40 transition-colors border-b border-border/60 last:border-b-0"
+        <div
+          v-if="table.items.value.length === 0"
+          class="flex-1 min-h-0 flex flex-col items-center justify-center p-8 text-center"
         >
-          <!-- Name -->
-          <td class="py-3 px-4 whitespace-nowrap">
-            <router-link
-              :to="`/jobs/${job.id}`"
-              class="font-semibold text-fg hover:text-primary transition-colors focus-visible:outline-2 focus-visible:outline-ring rounded-[2px]"
-            >
-              {{ job.name }}
-            </router-link>
-          </td>
+          <p class="text-sm font-medium text-fg mb-1">Không có kết quả phù hợp</p>
+          <p class="text-xs text-muted-fg mb-4">Thử đổi từ khoá tìm kiếm hoặc xoá bộ lọc hiện tại.</p>
+          <AppButton variant="secondary" size="sm" @click="table.clearFilters()">
+            Xoá bộ lọc
+          </AppButton>
+        </div>
 
-          <!-- Repo / Branch -->
-          <td class="py-3 px-4 text-xs font-mono text-muted-fg max-w-[260px]" :title="`${job.gitUrl} (${job.gitBranch})`">
-            <div class="flex items-center gap-1.5 min-w-0">
-              <GitBranch class="w-3.5 h-3.5 flex-shrink-0 text-muted-fg" aria-hidden="true" />
-              <span class="truncate" :title="job.gitUrl">{{ job.gitUrl }}</span>
-              <span class="text-fg font-medium flex-shrink-0">({{ job.gitBranch }})</span>
-            </div>
-          </td>
+        <AppTable v-else :bordered="false">
+          <template #header>
+            <tr>
+              <SortableHeader
+                label="Tên"
+                sort-key="name"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                @sort="table.toggleSort"
+              />
+              <th scope="col" class="text-left py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
+                Kho mã / Nhánh
+              </th>
+              <SortableHeader
+                label="Namespace"
+                sort-key="namespace"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                @sort="table.toggleSort"
+              />
+              <SortableHeader
+                label="Số tác vụ"
+                sort-key="tasksCount"
+                align="center"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                @sort="table.toggleSort"
+              />
+              <SortableHeader
+                label="Lượt chạy gần nhất"
+                sort-key="lastRun"
+                :sort-by="table.sortBy.value"
+                :sort-dir="table.sortDir.value"
+                @sort="table.toggleSort"
+              />
+              <th scope="col" class="text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
+                Thao tác
+              </th>
+            </tr>
+          </template>
 
-          <!-- Namespace -->
-          <td class="py-3 px-4 text-xs font-mono text-fg whitespace-nowrap">
-            {{ job.namespace }}
-          </td>
-
-          <!-- Number of tasks -->
-          <td class="py-3 px-4 text-center whitespace-nowrap">
-            <span class="inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-semibold bg-muted text-fg border border-border/80">
-              {{ job.tasks.length }}
-            </span>
-          </td>
-
-          <!-- Last Run -->
-          <td class="py-3 px-4 text-xs whitespace-nowrap">
-            <div v-if="job.lastRun" class="flex items-center gap-2">
-              <StatusBadge :status="job.lastRun.status" size="sm" />
+          <tr
+            v-for="job in table.items.value"
+            :key="job.id"
+            class="hover:bg-muted/40 transition-colors border-b border-border/60 last:border-b-0"
+          >
+            <!-- Name -->
+            <td class="py-3 px-4 whitespace-nowrap">
               <router-link
-                :to="`/runs/${job.lastRun.id}`"
-                class="font-mono text-primary hover:underline"
+                :to="`/jobs/${job.id}`"
+                class="font-semibold text-fg hover:text-primary transition-colors focus-visible:outline-2 focus-visible:outline-ring rounded-[2px]"
               >
-                #{{ job.lastRun.id }}
+                {{ job.name }}
               </router-link>
-            </div>
-            <span v-else class="text-muted-fg italic">Chưa chạy</span>
-          </td>
+            </td>
 
-          <!-- Actions -->
-          <td class="py-3 px-4 text-right whitespace-nowrap">
-            <div class="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
-              <AppButton
-                variant="primary"
-                size="sm"
-                class="whitespace-nowrap shrink-0"
-                :loading="triggeringJobId === job.id"
-                :disabled="triggeringJobId !== null || deleteLoading"
-                aria-label="Chạy ngay"
-                title="Chạy ngay"
-                @click="handleTriggerRun(job)"
-              >
-                <Play class="w-3.5 h-3.5 fill-current" aria-hidden="true" />
-                <span>Chạy ngay</span>
-              </AppButton>
+            <!-- Repo / Branch -->
+            <td class="py-3 px-4 text-xs font-mono text-muted-fg max-w-[260px]" :title="`${job.gitUrl} (${job.gitBranch})`">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <GitBranch class="w-3.5 h-3.5 flex-shrink-0 text-muted-fg" aria-hidden="true" />
+                <span class="truncate" :title="job.gitUrl">{{ job.gitUrl }}</span>
+                <span class="text-fg font-medium flex-shrink-0">({{ job.gitBranch }})</span>
+              </div>
+            </td>
 
-              <AppButton
-                variant="ghost"
-                size="sm"
-                class="whitespace-nowrap shrink-0"
-                aria-label="Sửa Job"
-                title="Chỉnh sửa cấu hình Job"
-                @click="navigateToEdit(job.id)"
-              >
-                <Pencil class="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Sửa</span>
-              </AppButton>
+            <!-- Namespace -->
+            <td class="py-3 px-4 text-xs font-mono text-fg whitespace-nowrap">
+              {{ job.namespace }}
+            </td>
 
-              <AppButton
-                variant="ghost"
-                size="sm"
-                aria-label="Xoá Job"
-                title="Xoá Job"
-                class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger whitespace-nowrap shrink-0"
-                @click="openDeleteConfirm(job)"
-              >
-                <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Xoá</span>
-              </AppButton>
-            </div>
-          </td>
-        </tr>
-      </AppTable>
+            <!-- Number of tasks -->
+            <td class="py-3 px-4 text-center whitespace-nowrap">
+              <span class="inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-semibold bg-muted text-fg border border-border/80">
+                {{ job.tasks.length }}
+              </span>
+            </td>
 
-      <!-- Delete Confirmation Dialog -->
-      <ConfirmDialog
-        v-model="isConfirmOpen"
-        title="Xoá Job"
-        :message="`Xoá Job &quot;${deletingJob?.name}&quot;? Thao tác này không thể hoàn tác.`"
-        confirm-text="Xoá Job"
-        cancel-text="Huỷ"
-        :loading="deleteLoading"
-        :danger="true"
-        @confirm="handleDelete"
-      />
+            <!-- Last Run -->
+            <td class="py-3 px-4 text-xs whitespace-nowrap">
+              <div v-if="job.lastRun" class="flex items-center gap-2">
+                <StatusBadge :status="job.lastRun.status" size="sm" />
+                <router-link
+                  :to="`/runs/${job.lastRun.id}`"
+                  class="font-mono text-primary hover:underline"
+                >
+                  #{{ job.lastRun.id }}
+                </router-link>
+              </div>
+              <span v-else class="text-muted-fg italic">Chưa chạy</span>
+            </td>
+
+            <!-- Actions -->
+            <td class="py-3 px-4 text-right whitespace-nowrap">
+              <div class="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
+                <AppButton
+                  variant="primary"
+                  size="sm"
+                  class="whitespace-nowrap shrink-0"
+                  :loading="triggeringJobId === job.id"
+                  :disabled="triggeringJobId !== null || deleteLoading"
+                  aria-label="Chạy ngay"
+                  title="Chạy ngay"
+                  @click="handleTriggerRun(job)"
+                >
+                  <Play class="w-3.5 h-3.5 fill-current" aria-hidden="true" />
+                  <span>Chạy ngay</span>
+                </AppButton>
+
+                <AppButton
+                  variant="ghost"
+                  size="sm"
+                  class="whitespace-nowrap shrink-0"
+                  aria-label="Sửa Job"
+                  title="Chỉnh sửa cấu hình Job"
+                  @click="navigateToEdit(job.id)"
+                >
+                  <Pencil class="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Sửa</span>
+                </AppButton>
+
+                <AppButton
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Xoá Job"
+                  title="Xoá Job"
+                  class="text-muted-fg hover:text-danger hover:bg-danger/10 focus-visible:text-danger whitespace-nowrap shrink-0"
+                  @click="openDeleteConfirm(job)"
+                >
+                  <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Xoá</span>
+                </AppButton>
+              </div>
+            </td>
+          </tr>
+        </AppTable>
+
+        <DataPagination
+          :page="table.page.value"
+          :page-size="table.pageSize.value"
+          :total="table.total.value"
+          :total-pages="table.totalPages.value"
+          :loading="store.loading"
+          @update:page="table.setPage"
+          @update:page-size="table.setPageSize"
+        />
+      </div>
     </div>
+
+    <!-- Delete Confirmation Dialog -->
+    <ConfirmDialog
+      v-model="isConfirmOpen"
+      title="Xoá Job"
+      :message="`Bạn có chắc chắn muốn xoá Job &quot;${deletingJob?.name}&quot;? Mọi lịch sử cấu hình của Job này sẽ bị xoá vĩnh viễn.`"
+      confirm-text="Xoá Job"
+      cancel-text="Huỷ"
+      :loading="deleteLoading"
+      :danger="true"
+      @confirm="handleDelete"
+    />
   </AppLayout>
 </template>
