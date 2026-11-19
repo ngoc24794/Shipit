@@ -74,12 +74,23 @@ kubectl apply -f deploy/k8s/prod/30-service.yaml
      kubectl -n avina-workspace auth can-i patch deployment/avina-sysadmin --as=system:serviceaccount:cicd:shipit
      kubectl -n avina-workspace auth can-i patch deployment/avina-users --as=system:serviceaccount:cicd:shipit
      ```
+   - Kiểm tra quyền quản lý Job và đọc log pod (phải trả về `yes`):
+     ```bash
+     kubectl -n avina-workspace auth can-i create jobs.batch --as=system:serviceaccount:cicd:shipit
+     kubectl -n avina-workspace auth can-i delete jobs.batch --as=system:serviceaccount:cicd:shipit
+     kubectl -n avina-workspace auth can-i get pods/log --as=system:serviceaccount:cicd:shipit
+     ```
    - Kiểm tra các quyền bị từ chối (phải trả về `no`):
      ```bash
      kubectl -n avina-workspace auth can-i patch deployment/avina-forbidden --as=system:serviceaccount:cicd:shipit
+     kubectl -n avina-workspace auth can-i get secrets --as=system:serviceaccount:cicd:shipit
+     kubectl -n avina-workspace auth can-i delete deployments --as=system:serviceaccount:cicd:shipit
+     kubectl -n avina-workspace auth can-i create pods --as=system:serviceaccount:cicd:shipit
      kubectl -n cicd auth can-i get pods --as=system:serviceaccount:cicd:shipit
      kubectl -n cicd auth can-i patch deployment/shipit --as=system:serviceaccount:cicd:shipit
      ```
+   > [!NOTE]
+   > Quyền Job chỉ có ở namespace `avina-workspace`. Danh sách ConfigMap, Secret và namespace Job được dùng do admin cấu hình trong Allowlist của Shipit.
 
 3. **Truy cập ứng dụng:**
    Sử dụng port-forward để kết nối tới Web UI:
