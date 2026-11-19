@@ -59,8 +59,14 @@ describe('JobAllowListView (Allowlist Job)', () => {
     const nameInput = inputs.find((i) => i.attributes('placeholder')?.includes('VD: avina-files-config'))
     await nameInput!.setValue('test-config')
 
-    const kindSelect = wrapper.find('select')
-    await kindSelect.setValue('configmap')
+    const kindSelect = wrapper.find('[role="combobox"]')
+    expect(kindSelect.exists()).toBe(true)
+    await kindSelect.trigger('click')
+    const cfgOpt = Array.from(document.body.querySelectorAll('[role="option"]')).find((el) =>
+      el.textContent?.includes('ConfigMap')
+    ) as HTMLElement | undefined
+    cfgOpt?.click()
+    await wrapper.vm.$nextTick()
 
     const submitBtn = wrapper.findAll('button').find((b) => b.text().includes('Thêm mục'))
     await wrapper.find('form').trigger('submit.prevent')

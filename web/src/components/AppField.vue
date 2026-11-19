@@ -7,20 +7,26 @@ const props = withDefaults(
     id?: string
     required?: boolean
     description?: string
+    help?: string
     error?: string | null
+    layout?: 'vertical' | 'horizontal'
   }>(),
   {
     label: undefined,
     id: undefined,
     required: false,
     description: undefined,
-    error: null
+    help: undefined,
+    error: null,
+    layout: 'vertical'
   }
 )
 
-const generatedId = computed(() => props.id || `field-${Math.random().toString(36).substring(2, 9)}`)
-const descriptionId = computed(() => props.description ? `${generatedId.value}-desc` : undefined)
-const errorId = computed(() => props.error ? `${generatedId.value}-error` : undefined)
+const uid = Math.random().toString(36).substring(2, 9)
+const generatedId = computed(() => props.id || `field-${uid}`)
+const helpText = computed(() => props.help ?? props.description)
+const descriptionId = computed(() => (helpText.value ? `${generatedId.value}-desc` : undefined))
+const errorId = computed(() => (props.error ? `${generatedId.value}-error` : undefined))
 
 const ariaDescribedby = computed(() => {
   const ids: string[] = []
@@ -31,33 +37,45 @@ const ariaDescribedby = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-1.5 w-full">
+  <div
+    :class="[
+      'w-full font-mono',
+      layout === 'horizontal'
+        ? 'grid grid-cols-[160px_minmax(0,1fr)] items-start gap-x-3 gap-y-1'
+        : 'flex flex-col gap-1'
+    ]"
+  >
     <label
       v-if="label"
       :for="generatedId"
-      class="text-sm font-medium text-fg flex items-center gap-1 select-none"
+      :class="[
+        'text-[11.5px] font-semibold text-fg-muted flex items-center gap-1 select-none',
+        layout === 'horizontal' ? 'pt-1.5' : ''
+      ]"
     >
-      {{ label }}
+      <span>{{ label }}</span>
       <span v-if="required" class="text-danger" aria-hidden="true">*</span>
     </label>
 
-    <slot :id="generatedId" :error="!!error" :aria-describedby="ariaDescribedby" />
+    <div class="flex flex-col gap-1 min-w-0">
+      <slot :id="generatedId" :error="!!error" :aria-describedby="ariaDescribedby" />
 
-    <p
-      v-if="description && !error"
-      :id="descriptionId"
-      class="text-xs text-muted-fg leading-relaxed"
-    >
-      {{ description }}
-    </p>
+      <p
+        v-if="helpText && !error"
+        :id="descriptionId"
+        class="text-[11px] text-fg-muted leading-snug prose"
+      >
+        {{ helpText }}
+      </p>
 
-    <p
-      v-if="error"
-      :id="errorId"
-      role="alert"
-      class="text-xs text-danger font-medium leading-relaxed"
-    >
-      {{ error }}
-    </p>
+      <p
+        v-if="error"
+        :id="errorId"
+        role="alert"
+        class="text-[11px] text-danger font-medium leading-snug"
+      >
+        {{ error }}
+      </p>
+    </div>
   </div>
 </template>
