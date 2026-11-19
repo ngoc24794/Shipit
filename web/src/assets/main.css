@@ -1,62 +1,159 @@
 @import "tailwindcss";
 
 @theme {
+  /* D1 Terminal-native Colors */
   --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-hover: var(--bg-hover);
+  --color-bg-selected: var(--bg-selected);
+  --color-bg-input: var(--bg-input);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-focus: var(--border-focus);
+
+  --color-fg: var(--fg);
+  --color-fg-strong: var(--fg-strong);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-dim: var(--fg-dim);
+
+  --color-accent: var(--accent);
+  --color-accent-bg: var(--accent-bg);
+  --color-phosphor: var(--phosphor);
+  --color-phosphor-bg: var(--phosphor-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-muted-badge-bg: var(--muted-badge-bg);
+
+  /* Legacy Token Aliases (for unmigrated components) */
   --color-card: var(--card);
   --color-muted: var(--muted);
-  --color-fg: var(--fg);
   --color-muted-fg: var(--muted-fg);
-  --color-border: var(--border);
   --color-primary: var(--primary);
   --color-on-primary: var(--on-primary);
   --color-success: var(--success);
   --color-info: var(--info);
-  --color-warn: var(--warn);
-  --color-danger: var(--danger);
   --color-ring: var(--ring);
   --color-log-bg: var(--log-bg);
 
-  --font-sans: 'Fira Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Fira Code', ui-monospace, Consolas, monospace;
+  /* Local Offline Typography Stacks */
+  --font-mono: 'Cascadia Mono', 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  --font-sans: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  /* Sharp 2px Terminal Radius */
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+
+  /* Shadows */
+  --shadow-overlay: var(--shadow-overlay);
 }
 
+/* Light Theme ("Paper Terminal") */
 :root {
-  --bg: #F8FAFC;
-  --card: #FFFFFF;
-  --muted: #F1F5F9;
-  --fg: #0F172A;
-  --muted-fg: #475569;
-  --border: #CBD5E1;
-  --primary: #2563EB;
-  --on-primary: #FFFFFF;
-  --success: #15803D;
-  --info: #0369A1;
-  --warn: #B45309;
-  --danger: #DC2626;
-  --ring: #2563EB;
-  --log-bg: #090D16;
+  --bg: #f4f5f0;
+  --bg-elevated: #ffffff;
+  --bg-surface: #eaece5;
+  --bg-hover: #e1e4db;
+  --bg-selected: #d6e4dc;
+  --bg-input: #fbfcf9;
+
+  --border: #c8cfc3;
+  --border-strong: #939e8d;
+  --border-focus: #0369a1;
+
+  --fg: #18201b;
+  --fg-strong: #0b100d;
+  --fg-muted: #526058;
+  --fg-dim: #7f8d84;
+
+  --accent: #0369a1;
+  --accent-bg: rgba(3, 105, 161, 0.1);
+  --phosphor: #047857;
+  --phosphor-bg: rgba(4, 120, 87, 0.1);
+  --warn: #b45309;
+  --warn-bg: rgba(180, 83, 9, 0.1);
+  --danger: #b91c1c;
+  --danger-bg: rgba(185, 28, 28, 0.1);
+  --muted-badge-bg: rgba(82, 96, 88, 0.1);
+
+  --shadow-overlay: 0 10px 28px rgba(15, 23, 18, 0.16);
+  --backdrop: rgba(20, 28, 23, 0.45);
+
+  /* Legacy Aliases */
+  --card: var(--bg-elevated);
+  --muted: var(--bg-surface);
+  --muted-fg: var(--fg-muted);
+  --primary: var(--phosphor);
+  --on-primary: var(--bg);
+  --success: var(--phosphor);
+  --info: var(--accent);
+  --ring: var(--border-focus);
+  --log-bg: var(--bg-input);
+
+  /* Tight 4px Grid & Motion */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --radius: 2px;
+
+  --dur-snap: 80ms;
+  --dur-fast: 110ms;
+  --dur-pane: 140ms;
+  --ease-snap: cubic-bezier(0.2, 0, 0, 1);
+  --ease-step: steps(4, end);
+
   color-scheme: light;
 }
 
+/* Dark Theme ("Phosphor Refined", default) */
 .dark {
-  --bg: #0F172A;
-  --card: #1B2336;
-  --muted: #272F42;
-  --fg: #F8FAFC;
-  --muted-fg: #94A3B8;
-  --border: rgba(71, 85, 105, 0.55);
-  --primary: #60A5FA;
-  --on-primary: #0F172A;
-  --success: #22C55E;
-  --info: #38BDF8;
-  --warn: #FBBF24;
-  --danger: #F87171;
-  --ring: #93C5FD;
-  --log-bg: #090D16;
+  --bg: #070b09;
+  --bg-elevated: #0b110e;
+  --bg-surface: #101915;
+  --bg-hover: #15221c;
+  --bg-selected: #162921;
+  --bg-input: #050807;
+
+  --border: #1e2f27;
+  --border-strong: #2d473b;
+  --border-focus: #38bdf8;
+
+  --fg: #d6e6dc;
+  --fg-strong: #f0f7f3;
+  --fg-muted: #7c9688;
+  --fg-dim: #4c6357;
+
+  --accent: #38bdf8;
+  --accent-bg: rgba(56, 189, 248, 0.12);
+  --phosphor: #34d399;
+  --phosphor-bg: rgba(52, 211, 153, 0.12);
+  --warn: #f59e0b;
+  --warn-bg: rgba(245, 158, 11, 0.12);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.12);
+  --muted-badge-bg: rgba(124, 150, 136, 0.12);
+
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.65);
+  --backdrop: rgba(3, 6, 5, 0.72);
+
+  /* Legacy Aliases */
+  --card: var(--bg-elevated);
+  --muted: var(--bg-surface);
+  --muted-fg: var(--fg-muted);
+  --primary: var(--phosphor);
+  --on-primary: var(--bg);
+  --success: var(--phosphor);
+  --info: var(--accent);
+  --ring: var(--border-focus);
+  --log-bg: var(--bg-input);
+
   color-scheme: dark;
 }
 
@@ -74,13 +171,25 @@ body,
 body {
   background-color: var(--bg);
   color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.prose {
   font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--phosphor-bg);
+  color: var(--fg-strong);
 }
 
 /* Thin, token-colored internal scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--border-strong) var(--bg);
 }
 
 *::-webkit-scrollbar {
@@ -89,22 +198,70 @@ body {
 }
 
 *::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--bg);
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: var(--border);
-  border-radius: 9999px;
+  background-color: var(--border-strong);
+  border-radius: 2px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: var(--muted-fg);
+  background-color: var(--fg-dim);
 }
 
-/* Focus visibility requirement: outline 2px var(--ring) + offset 2px */
+/* Focus visibility */
 :focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 2px solid var(--border-focus);
   outline-offset: 2px;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Terminal-native Keyframes */
+@keyframes blinkCaret {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes skelPulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.9; }
+}
+
+@keyframes pulseLive {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes viewEnter {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes toastStep {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.caret-blink {
+  animation: blinkCaret 1s steps(2, start) infinite;
+}
+
+.skel-pulse {
+  animation: skelPulse 1.1s steps(2, start) infinite;
+}
+
+.live-pulse {
+  animation: pulseLive 1.8s infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
