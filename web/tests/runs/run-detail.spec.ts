@@ -496,9 +496,9 @@ describe('RunDetailView (Chi tiết lượt chạy)', () => {
     expect(wrapper.find('button[aria-label="Dừng lượt chạy"]').exists()).toBe(false)
     expect(wrapper.find('button[aria-label="Đang dừng lượt chạy"]').exists()).toBe(false)
 
-    // StatusBadge displays "Đã dừng"
+    // StatusBadge displays "Đã huỷ"
     const badge = wrapper.findComponent(StatusBadge)
-    expect(badge.text()).toContain('Đã dừng')
+    expect(badge.text()).toContain('Đã huỷ')
     expect(badge.attributes('data-status')).toBe('cancelled')
   })
 

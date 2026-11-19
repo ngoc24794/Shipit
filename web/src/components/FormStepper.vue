@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { AlertCircle } from 'lucide-vue-next'
 
 export type WizardStepStatus = 'pending' | 'visited' | 'current' | 'error'
 
@@ -78,12 +77,15 @@ function handleKeydown(event: KeyboardEvent, index: number) {
 </script>
 
 <template>
-  <nav aria-label="Các bước biểu mẫu" class="w-full overflow-x-auto py-1">
-    <ol class="flex flex-nowrap items-center gap-2 min-w-max">
+  <nav
+    aria-label="Các bước biểu mẫu"
+    class="w-full flex items-center justify-between gap-2 px-3 py-2 bg-bg-surface border-b border-border overflow-x-auto font-mono"
+  >
+    <ol class="flex flex-nowrap items-center gap-1.5 min-w-max">
       <li
         v-for="(step, idx) in steps"
         :key="step.id"
-        class="flex items-center gap-2 shrink-0"
+        class="flex items-center gap-1.5 shrink-0"
       >
         <button
           ref="buttonRefs"
@@ -93,44 +95,31 @@ function handleKeydown(event: KeyboardEvent, index: number) {
           :aria-current="idx === currentStep ? 'step' : undefined"
           :disabled="!isStepClickable(idx)"
           :class="[
-            'inline-flex items-center gap-2 px-3 py-1.5 rounded-[6px] border text-xs transition-colors whitespace-nowrap',
-            'focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
-            isStepClickable(idx) ? 'cursor-pointer' : 'cursor-not-allowed opacity-55',
+            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] border text-[12px] transition-colors duration-[80ms] whitespace-nowrap',
+            'focus-visible:outline-2 focus-visible:outline-border-focus focus-visible:outline-offset-2',
+            isStepClickable(idx) ? 'cursor-pointer' : 'cursor-not-allowed opacity-50',
             idx === currentStep
-              ? 'border-primary bg-primary/10 text-primary font-semibold'
+              ? 'border-phosphor bg-[var(--phosphor-bg)] text-phosphor font-bold'
               : step.status === 'error'
-                ? 'border-danger/50 bg-danger/5 text-danger font-medium hover:bg-danger/10'
+                ? 'border-danger bg-[var(--danger-bg)]/40 text-danger font-semibold'
                 : step.status === 'visited'
-                  ? 'border-border bg-card text-fg hover:bg-muted'
-                  : 'border-transparent bg-muted/60 text-muted-fg hover:text-fg hover:bg-muted'
+                  ? 'border-border-strong bg-bg-elevated text-fg hover:bg-bg-hover'
+                  : 'border-border bg-bg-elevated text-fg-muted hover:text-fg-strong hover:bg-bg-hover'
           ]"
           @click="handleClick(idx)"
           @keydown="handleKeydown($event, idx)"
         >
-          <span
-            :class="[
-              'w-5 h-5 rounded-full inline-flex items-center justify-center text-[11px] font-semibold shrink-0',
-              idx === currentStep
-                ? 'bg-primary text-on-primary'
-                : step.status === 'error'
-                  ? 'bg-danger text-white'
-                  : step.status === 'visited'
-                    ? 'bg-muted text-fg border border-border'
-                    : 'bg-muted-fg/20 text-muted-fg'
-            ]"
-          >
-            <AlertCircle v-if="step.status === 'error' && idx !== currentStep" class="w-3.5 h-3.5" aria-hidden="true" />
-            <span v-else>{{ idx + 1 }}</span>
+          <span class="text-[11px] font-bold shrink-0">
+            <template v-if="step.status === 'error' && idx !== currentStep">!</template>
+            <template v-else>{{ idx + 1 }}.</template>
           </span>
           <span>{{ step.label }}</span>
         </button>
-
-        <span
-          v-if="idx < steps.length - 1"
-          aria-hidden="true"
-          class="w-4 h-px bg-border shrink-0"
-        />
       </li>
     </ol>
+
+    <span class="text-[10.5px] text-fg-dim whitespace-nowrap shrink-0 select-none">
+      [←/→] chuyển bước · Lưu ở bước cuối
+    </span>
   </nav>
 </template>

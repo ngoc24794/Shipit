@@ -16,22 +16,22 @@ withDefaults(
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center p-8 text-center rounded-[8px] border border-dashed border-border bg-card/50 my-4">
-    <div class="flex items-center justify-center w-12 h-12 rounded-full bg-muted text-muted-fg mb-4">
+  <div class="flex flex-col items-center justify-center p-6 text-center rounded-[2px] border border-dashed border-border bg-bg-elevated/60 my-2 font-mono">
+    <div class="flex items-center justify-center w-9 h-9 rounded-[2px] bg-bg-surface border border-border text-fg-dim mb-3">
       <slot name="icon">
-        <component :is="icon || Inbox" class="w-6 h-6" aria-hidden="true" />
+        <component :is="icon || Inbox" class="w-4 h-4" aria-hidden="true" />
       </slot>
     </div>
 
-    <h3 class="text-base font-semibold text-fg mb-1">
+    <h3 class="text-[13px] font-bold text-fg-strong mb-1">
       <slot name="title">{{ title }}</slot>
     </h3>
 
-    <p v-if="description || $slots.description" class="text-sm text-muted-fg max-w-sm mb-6">
+    <p v-if="description || $slots.description" class="prose text-[12.5px] text-fg-muted max-w-md mb-4">
       <slot name="description">{{ description }}</slot>
     </p>
 
-    <div v-if="$slots.action" class="flex items-center gap-3">
+    <div v-if="$slots.action" class="flex items-center gap-2">
       <slot name="action" />
     </div>
   </div>

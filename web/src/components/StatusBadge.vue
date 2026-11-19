@@ -1,14 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import {
-  Clock,
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  MinusCircle,
-  Circle,
-  CircleStop
-} from 'lucide-vue-next'
 import type { RunStatus, StepStatus } from '../api/types'
 
 export type BadgeStatus = RunStatus | StepStatus
@@ -29,52 +20,52 @@ const config = computed(() => {
     case 'queued':
       return {
         label: 'Đang chờ',
-        icon: Clock,
-        spin: false,
-        classes: 'text-warn bg-warn/10 border-warn/30'
+        glyph: '◌',
+        pulse: false,
+        classes: 'text-warn bg-[var(--warn-bg)] border-warn/30'
       }
     case 'running':
       return {
         label: 'Đang chạy',
-        icon: Loader2,
-        spin: true,
-        classes: 'text-info bg-info/10 border-info/30'
+        glyph: '▲',
+        pulse: true,
+        classes: 'text-accent bg-[var(--accent-bg)] border-accent/30'
       }
     case 'success':
       return {
         label: 'Thành công',
-        icon: CheckCircle2,
-        spin: false,
-        classes: 'text-success bg-success/10 border-success/30'
+        glyph: '●',
+        pulse: false,
+        classes: 'text-phosphor bg-[var(--phosphor-bg)] border-phosphor/30'
       }
     case 'failed':
       return {
         label: 'Thất bại',
-        icon: XCircle,
-        spin: false,
-        classes: 'text-danger bg-danger/10 border-danger/30'
+        glyph: '✕',
+        pulse: false,
+        classes: 'text-danger bg-[var(--danger-bg)] border-danger/30'
       }
     case 'cancelled':
       return {
-        label: 'Đã dừng',
-        icon: CircleStop,
-        spin: false,
-        classes: 'text-warn bg-warn/10 border-warn/30'
+        label: 'Đã huỷ',
+        glyph: '○',
+        pulse: false,
+        classes: 'text-fg-muted bg-[var(--muted-badge-bg)] border-border'
       }
     case 'skipped':
       return {
         label: 'Bỏ qua',
-        icon: MinusCircle,
-        spin: false,
-        classes: 'text-muted-fg bg-muted border-border'
+        glyph: '─',
+        pulse: false,
+        classes: 'text-fg-muted bg-[var(--muted-badge-bg)] border-border'
       }
     case 'pending':
     default:
       return {
         label: 'Chưa chạy',
-        icon: Circle,
-        spin: false,
-        classes: 'text-muted-fg bg-muted border-border'
+        glyph: '○',
+        pulse: false,
+        classes: 'text-fg-muted bg-[var(--muted-badge-bg)] border-border'
       }
   }
 })
@@ -83,20 +74,18 @@ const config = computed(() => {
 <template>
   <span
     :class="[
-      'inline-flex items-center font-medium border rounded-full whitespace-nowrap select-none',
-      size === 'sm' ? 'px-2 py-0.5 text-xs gap-1.5' : 'px-3 py-1 text-sm gap-2',
+      'inline-flex items-center font-mono font-semibold border rounded-[2px] whitespace-nowrap select-none',
+      size === 'sm' ? 'px-1.5 py-[1px] text-[11.5px] gap-1.5' : 'px-2.5 py-0.5 text-[12.5px] gap-2',
       config.classes
     ]"
     :data-status="status"
   >
-    <component
-      :is="config.icon"
-      :class="[
-        size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4',
-        config.spin ? 'animate-spin' : ''
-      ]"
+    <span
+      :class="['leading-none shrink-0', config.pulse ? 'live-pulse' : '']"
       aria-hidden="true"
-    />
+    >
+      {{ config.glyph }}
+    </span>
     <span>{{ label || config.label }}</span>
   </span>
 </template>
