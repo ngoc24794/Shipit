@@ -113,7 +113,7 @@ Trong namespace `avina-workspace`, hệ thống sử dụng 6 Kubernetes Secret 
 - `avina-files-migrate-secret`: key `ConnectionStrings__FilesDb` (DB: `etc_avina_files`)
 
 ### Cách chạy script nhập chuỗi kết nối
-Script nhập chuỗi kết nối qua `Read-Host -AsSecureString` (không hiển thị lên màn hình, không lưu lịch sử shell hay đối số dòng lệnh, truyền vào `kubectl` qua stdin):
+Script nhập chuỗi kết nối qua `Read-Host -AsSecureString` (không hiển thị lên màn hình, không lưu lịch sử shell hay đối số dòng lệnh, truyền vào `kubectl` qua stdin). Script luôn tự động truyền `--context kubernetes-admin@kubernetes` và `-n avina-workspace` cho mọi lệnh `kubectl`, người điều hành **không cần đổi context hay namespace hiện tại** trong kubeconfig trước khi chạy (chỉ cần context `kubernetes-admin@kubernetes` có sẵn trong kubeconfig):
 
 1. **Kiểm tra trước (Dry-run mặc định):**
    ```powershell

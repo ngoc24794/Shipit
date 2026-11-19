@@ -12,7 +12,9 @@
   - avina-files-migrate-secret      : ConnectionStrings__FilesDb      (DB: etc_avina_files)
 
   Security features:
-  - Fixed context 'kubernetes-admin@kubernetes' and namespace 'avina-workspace'. Refuses to run if current context or configured namespace differs.
+  - Fixed context 'kubernetes-admin@kubernetes' and namespace 'avina-workspace'. Does not depend on or alter current kubeconfig context.
+  - Verifies that context 'kubernetes-admin@kubernetes' exists in kubeconfig.
+  - All kubectl commands are routed through Invoke-Kubectl with explicit --context and -n.
   - Connection strings are read via Read-Host -AsSecureString (masked input).
   - Secret values travel to kubectl exclusively through stdin, never via command-line arguments.
   - Secret labels and metadata are preserved by updating the existing Secret definition and replacing via stdin.
@@ -61,32 +63,32 @@ if ($Context -match 'staging') {
     Fail "Refusing to use context '$Context': this script is for the production cluster only."
 }
 
-# Verify current kubectl context
-$currentCtx = (& kubectl config current-context 2>&1 | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $currentCtx -ne $Context) {
-    Fail "Current kubectl context is '$currentCtx'. Refusing to run: this script strictly requires context '$Context'."
-}
-
-# Verify current configured context namespace (if set)
-$currentNs = (& kubectl config view --minify --output "jsonpath={..namespace}" 2>$null | Out-String).Trim()
-if ($currentNs -and $currentNs -ne $Namespace) {
-    Fail "Current kubectl context namespace is configured as '$currentNs'. Refusing to run: this script strictly requires namespace '$Namespace'."
-}
-
 function Invoke-Kubectl {
-    # Runs kubectl against the production context. Output is returned; on failure only kubectl's own message is shown.
-    param([string[]]$KubectlArgs, [string]$InputText)
-    $all = @('--context', $Context) + $KubectlArgs
+    # Runs kubectl with fixed production context and namespace. Output is returned; on failure only kubectl's own message is shown.
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$KubectlArgs,
+        [string]$InputText,
+        [switch]$IgnoreError
+    )
+    $all = @('--context', $Context, '-n', $Namespace) + $KubectlArgs
     if ($PSBoundParameters.ContainsKey('InputText')) {
         $result = $InputText | & kubectl @all 2>&1
     }
     else {
         $result = & kubectl @all 2>&1
     }
-    if ($LASTEXITCODE -ne 0) {
+    if ($LASTEXITCODE -ne 0 -and -not $IgnoreError) {
         Fail ("kubectl failed: " + (($result | Out-String).Trim()))
     }
     return $result
+}
+
+# Verify that the fixed context exists in kubeconfig
+$contextList = Invoke-Kubectl @('config', 'get-contexts', '-o', 'name')
+$availableContexts = $contextList -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+if ($availableContexts -notcontains $Context) {
+    Fail "Context '$Context' not found in kubeconfig. Available contexts: $($availableContexts -join ', ')"
 }
 
 # Verify namespace exists in cluster
@@ -148,7 +150,7 @@ if ($selectedServiceKeys.Count -eq 0) {
 $secretCache = @{}
 foreach ($key in $selectedServiceKeys) {
     $cfg = $ServiceConfigs[$key]
-    $secJson = & kubectl --context $Context -n $Namespace get secret $cfg.SecretName -o json 2>&1
+    $secJson = Invoke-Kubectl @('get', 'secret', $cfg.SecretName, '-o', 'json') -IgnoreError
     if ($LASTEXITCODE -ne 0) {
         Fail "Secret '$($cfg.SecretName)' does not exist in namespace '$Namespace'."
     }
@@ -164,8 +166,8 @@ foreach ($key in $selectedServiceKeys) {
 # Dry-run check: Default behavior unless -Apply is explicitly provided.
 if (-not $Apply -or $DryRun) {
     Write-Host "DRY RUN (Production) - context '$Context', namespace '$Namespace'"
-    Write-Host "  Context check    : verified ($Context)"
-    Write-Host "  Namespace check  : verified ($Namespace)"
+    Write-Host "  Context check    : verified in kubeconfig ($Context)"
+    Write-Host "  Namespace check  : verified in cluster ($Namespace)"
     Write-Host ""
     Write-Host "Services to update ($($selectedServiceKeys.Count) selected):"
     foreach ($key in $selectedServiceKeys) {
@@ -232,7 +234,7 @@ foreach ($key in $selectedServiceKeys) {
     $b64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($plain))
 
     # Retrieve fresh secret to ensure resourceVersion is accurate and labels/metadata are preserved
-    $freshJson = Invoke-Kubectl @('-n', $Namespace, 'get', 'secret', $cfg.SecretName, '-o', 'json')
+    $freshJson = Invoke-Kubectl @('get', 'secret', $cfg.SecretName, '-o', 'json')
     $secObj = $freshJson | ConvertFrom-Json
 
     if ($null -eq $secObj.data) {
@@ -242,7 +244,7 @@ foreach ($key in $selectedServiceKeys) {
 
     # Send updated Secret JSON through stdin to kubectl replace
     $replaceJson = $secObj | ConvertTo-Json -Depth 10
-    $null = Invoke-Kubectl @('-n', $Namespace, 'replace', '-f', '-') -InputText $replaceJson
+    $null = Invoke-Kubectl @('replace', '-f', '-') -InputText $replaceJson
 
     # Wipe memory
     $plain = $null
