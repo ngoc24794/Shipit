@@ -25,7 +25,7 @@ All primitives use D1 Terminal-native tokens (`2px` radius, `1px` structural bor
 
 ## 4. `AppSelect.vue` & `AppCombobox.vue`
 - **`AppSelect`** (backward-compatible custom combobox): `modelValue`, `options: SelectOption[]`, `id`, `name`, `disabled`, `error`, `ariaDescribedby`, `placeholder`, `size`, `searchable`. Emits: `update:modelValue`, `change`.
-- **`AppCombobox`**: Full-featured combobox with `searchable`, `clearable`, `multiple` (renders `AppTag` chips), `creatable` (emits `create`), `groups: ComboboxGroup[]`, `loading`, `emptyText`, `size`. Teleported to `body` via `usePopover` (`src/composables/usePopover.ts`). Full ARIA (`combobox`, `listbox`, `option`, `aria-activedescendant`, `aria-expanded`) and keyboard (`ArrowUp/Down`, `PageUp/Down`, `Home/End`, `Enter`, `Escape`, `Tab`, type-ahead).
+- **`AppCombobox`**: Full-featured combobox with `searchable`, `clearable`, `multiple` (renders `AppTag` chips), `creatable` (emits `create`), `groups: ComboboxGroup[]`, `loading`, `emptyText`, `size`. Teleported to `body` via `useFloating` (`src/composables/useFloating.ts`). Full ARIA (`combobox`, `listbox`, `option`, `aria-activedescendant`, `aria-expanded`) and keyboard (`ArrowUp/Down`, `PageUp/Down`, `Home/End`, `Enter`, `Escape`, `Tab`, type-ahead).
 
 ## 5. `AppCheckbox.vue`, `AppRadioGroup.vue`, `AppRadio.vue`, `AppSwitch.vue`
 - **`AppCheckbox`**: `[x]` / `[ ]` / `[-]` glyph. Supports `v-model` boolean or array (with `value` prop), `indeterminate`, `label`, `description`, `disabled`, `error`. Space toggles.

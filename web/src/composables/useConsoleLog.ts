@@ -1,4 +1,5 @@
-import { computed, ref, type ComputedRef, type Ref } from 'vue'
+import { computed, type ComputedRef, type Ref } from 'vue'
+import { useToast, type ConsoleEntry, type ToastType } from './useToast'
 
 export type ConsoleLogLevel = 'info' | 'success' | 'warn' | 'error'
 
@@ -10,7 +11,7 @@ export interface ConsoleLogEntry {
 }
 
 export interface ConsoleLogApi {
-  entries: Ref<ConsoleLogEntry[]>
+  entries: ComputedRef<ConsoleLogEntry[]>
   lastEntry: ComputedRef<ConsoleLogEntry | null>
   drawerOpen: Ref<boolean>
   log: (message: string, level?: ConsoleLogLevel) => void
@@ -20,63 +21,42 @@ export interface ConsoleLogApi {
   toggleDrawer: () => void
 }
 
-const MAX_CONSOLE_ENTRIES = 100
+function toConsoleLevel(type: ToastType): ConsoleLogLevel {
+  if (type === 'warning') return 'warn'
+  return type
+}
 
-const entries = ref<ConsoleLogEntry[]>([])
-const drawerOpen = ref(false)
-let nextId = 1
-
-function formatNow(): string {
-  const now = new Date()
-  const hh = String(now.getHours()).padStart(2, '0')
-  const mm = String(now.getMinutes()).padStart(2, '0')
-  const ss = String(now.getSeconds()).padStart(2, '0')
-  return `${hh}:${mm}:${ss}`
+function mapEntry(entry: ConsoleEntry): ConsoleLogEntry {
+  return {
+    id: entry.id,
+    time: entry.timestamp,
+    level: toConsoleLevel(entry.type),
+    message: entry.message
+  }
 }
 
 export function useConsoleLog(): ConsoleLogApi {
+  const toast = useToast()
+
+  const entries = computed<ConsoleLogEntry[]>(() => toast.entries.value.map(mapEntry))
+
   const lastEntry = computed<ConsoleLogEntry | null>(() => {
-    if (entries.value.length === 0) return null
-    return entries.value[entries.value.length - 1]
+    const latest = toast.latestEntry.value
+    return latest ? mapEntry(latest) : null
   })
 
   function log(message: string, level: ConsoleLogLevel = 'info'): void {
-    const entry: ConsoleLogEntry = {
-      id: nextId++,
-      time: formatNow(),
-      level,
-      message
-    }
-    entries.value.push(entry)
-    if (entries.value.length > MAX_CONSOLE_ENTRIES) {
-      entries.value.splice(0, entries.value.length - MAX_CONSOLE_ENTRIES)
-    }
-  }
-
-  function clear(): void {
-    entries.value = []
-  }
-
-  function openDrawer(): void {
-    drawerOpen.value = true
-  }
-
-  function closeDrawer(): void {
-    drawerOpen.value = false
-  }
-
-  function toggleDrawer(): void {
-    drawerOpen.value = !drawerOpen.value
+    toast.logHistory(message, level)
   }
 
   return {
     entries,
     lastEntry,
-    drawerOpen,
+    drawerOpen: toast.drawerOpen,
     log,
-    clear,
-    openDrawer,
-    closeDrawer,
-    toggleDrawer
+    clear: toast.clear,
+    openDrawer: toast.openDrawer,
+    closeDrawer: toast.closeDrawer,
+    toggleDrawer: toast.toggleDrawer
   }
 }

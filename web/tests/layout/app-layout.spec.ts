@@ -130,7 +130,7 @@ describe('AppLayout Sidebar & Topbar', () => {
     await cmdInput.setValue('theme light')
     await cmdInput.trigger('keydown', { key: 'Enter' })
     await flushPromises()
-    expect(wrapper.find('[data-testid="status-bar-console"]').text()).toContain('light')
+    expect(wrapper.find('[data-testid="status-bar-console"]').text()).toContain('Giao diện: Sáng')
 
     await cmdInput.setValue('goto pipelines')
     await cmdInput.trigger('keydown', { key: 'Enter' })
