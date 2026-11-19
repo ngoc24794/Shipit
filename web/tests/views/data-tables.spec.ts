@@ -70,7 +70,7 @@ describe('All Data Views - Search, Filter, Sort, Pagination', () => {
     expect(wrapper.get('[data-testid="result-count"]').text()).toBe('Hiển thị 1 đến 12 trong 12')
 
     // Change page size to 10 -> 2 pages
-    await wrapper.get('select[aria-label="Số dòng mỗi trang"]').setValue('10')
+    wrapper.findAllComponents({ name: 'AppSelect' }).find((c) => c.attributes('aria-label') === 'Số dòng mỗi trang')!.vm.$emit('update:modelValue', 10)
     await flushPromises()
     expect(wrapper.get('[data-testid="result-count"]').text()).toBe('Hiển thị 1 đến 10 trong 12')
 
@@ -79,7 +79,7 @@ describe('All Data Views - Search, Filter, Sort, Pagination', () => {
     expect(wrapper.get('[data-testid="result-count"]').text()).toBe('Hiển thị 11 đến 12 trong 12')
 
     // Filter by namespace
-    await wrapper.get('select[aria-label="Namespace"]').setValue('devops')
+    wrapper.findAllComponents({ name: 'AppSelect' }).find((c) => c.attributes('aria-label') === 'Namespace')!.vm.$emit('update:modelValue', 'devops')
     await flushPromises()
     expect(wrapper.text()).toContain('shipit-demo-pipeline')
 
@@ -106,7 +106,7 @@ describe('All Data Views - Search, Filter, Sort, Pagination', () => {
 
     expect(wrapper.get('[data-testid="result-count"]').text()).toBe('Hiển thị 1 đến 12 trong 12')
 
-    await wrapper.get('select[aria-label="Số dòng mỗi trang"]').setValue('10')
+    wrapper.findAllComponents({ name: 'AppSelect' }).find((c) => c.attributes('aria-label') === 'Số dòng mỗi trang')!.vm.$emit('update:modelValue', 10)
     await flushPromises()
     expect(wrapper.get('[data-testid="result-count"]').text()).toBe('Hiển thị 1 đến 10 trong 12')
 
@@ -156,7 +156,7 @@ describe('All Data Views - Search, Filter, Sort, Pagination', () => {
 
     expect(wrapper.get('[data-testid="result-count"]').text()).toBe('Hiển thị 1 đến 3 trong 3')
 
-    await wrapper.get('select[aria-label="Loại thông tin xác thực"]').setValue('registry')
+    wrapper.findAllComponents({ name: 'AppSelect' }).find((c) => c.attributes('aria-label') === 'Loại thông tin xác thực')!.vm.$emit('update:modelValue', 'registry')
     await flushPromises()
     expect(wrapper.get('[data-testid="result-count"]').text()).toBe('Hiển thị 1 đến 1 trong 1')
     expect(wrapper.text()).toContain('registry-secret')
@@ -175,7 +175,7 @@ describe('All Data Views - Search, Filter, Sort, Pagination', () => {
 
     expect(wrapper.get('[data-testid="result-count"]').text()).toBe('Hiển thị 1 đến 2 trong 2')
 
-    await wrapper.get('select[aria-label="Namespace"]').setValue('devops')
+    wrapper.findAllComponents({ name: 'AppSelect' }).find((c) => c.attributes('aria-label') === 'Namespace')!.vm.$emit('update:modelValue', 'devops')
     await flushPromises()
     expect(wrapper.get('[data-testid="result-count"]').text()).toBe('Hiển thị 1 đến 1 trong 1')
     expect(wrapper.text()).toContain('shipit-demo')
@@ -194,7 +194,7 @@ describe('All Data Views - Search, Filter, Sort, Pagination', () => {
 
     expect(wrapper.get('[data-testid="result-count"]').text()).toBe('Hiển thị 1 đến 6 trong 6')
 
-    await wrapper.get('select[aria-label="Loại tài nguyên"]').setValue('secret')
+    wrapper.findAllComponents({ name: 'AppSelect' }).find((c) => c.attributes('aria-label') === 'Loại tài nguyên')!.vm.$emit('update:modelValue', 'secret')
     await flushPromises()
     expect(wrapper.get('[data-testid="result-count"]').text()).toBe('Hiển thị 1 đến 2 trong 2')
   })

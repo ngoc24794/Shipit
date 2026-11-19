@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import AppCheckbox from './AppCheckbox.vue'
 import EmptyState from './EmptyState.vue'
 import ErrorState from './ErrorState.vue'
 
@@ -147,17 +148,14 @@ function handleTableKeydown(e: KeyboardEvent) {
         <slot name="header">
           <tr v-if="$slots['header-columns']">
             <th v-if="selectable" scope="col" class="w-9 text-center">
-              <!-- Minimal inline glyph checkbox until merged with d1-terminal AppCheckbox -->
-              <button
-                type="button"
-                role="checkbox"
-                :aria-checked="allSelected ? 'true' : someSelected ? 'mixed' : 'false'"
-                aria-label="Chọn tất cả dòng"
-                class="font-mono text-[12px] text-fg-muted hover:text-fg-strong cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus rounded-[2px]"
-                @click="toggleSelectAll"
-              >
-                {{ allSelected ? '[x]' : someSelected ? '[-]' : '[ ]' }}
-              </button>
+              <div class="inline-flex items-center justify-center">
+                <AppCheckbox
+                  :model-value="allSelected"
+                  :indeterminate="someSelected"
+                  aria-label="Chọn tất cả dòng"
+                  @update:model-value="toggleSelectAll"
+                />
+              </div>
             </th>
             <th v-if="keyboardNav" scope="col" class="w-5" aria-label="Con trỏ" />
             <slot name="header-columns" />
@@ -189,16 +187,13 @@ function handleTableKeydown(e: KeyboardEvent) {
             @click="setActiveIndex(idx)"
           >
             <td v-if="selectable" class="w-9 text-center" @click.stop>
-              <button
-                type="button"
-                role="checkbox"
-                :aria-checked="selectedKeys.includes(getRowKey(row, idx)) ? 'true' : 'false'"
-                :aria-label="`Chọn dòng ${idx + 1}`"
-                class="font-mono text-[12px] text-phosphor hover:text-fg-strong cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus rounded-[2px]"
-                @click="toggleSelectRow(getRowKey(row, idx))"
-              >
-                {{ selectedKeys.includes(getRowKey(row, idx)) ? '[x]' : '[ ]' }}
-              </button>
+              <div class="inline-flex items-center justify-center">
+                <AppCheckbox
+                  :model-value="selectedKeys.includes(getRowKey(row, idx))"
+                  :aria-label="`Chọn dòng ${idx + 1}`"
+                  @update:model-value="toggleSelectRow(getRowKey(row, idx))"
+                />
+              </div>
             </td>
             <td v-if="keyboardNav" class="w-5 px-1 text-center select-none">
               <span

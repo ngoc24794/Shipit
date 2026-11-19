@@ -7,6 +7,7 @@ import {
   ChevronsRight,
   Loader2
 } from 'lucide-vue-next'
+import AppSelect from './AppSelect.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -90,10 +91,10 @@ function handleJumpSubmit() {
   }
 }
 
-function onPageSizeChange(event: Event) {
-  const val = Number((event.target as HTMLSelectElement).value)
-  if (props.pageSizeOptions.includes(val)) {
-    emit('update:pageSize', val)
+function onPageSizeChange(val: string | number) {
+  const num = Number(val)
+  if (props.pageSizeOptions.includes(num)) {
+    emit('update:pageSize', num)
   }
 }
 </script>
@@ -105,20 +106,19 @@ function onPageSizeChange(event: Event) {
   >
     <!-- Left: Page size + Loading indicator -->
     <div class="flex flex-row items-center gap-2 shrink-0 whitespace-nowrap">
-      <label class="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <div class="inline-flex items-center gap-1.5 whitespace-nowrap">
         <span>Số dòng</span>
-        <select
-          :value="pageSize"
-          aria-label="Số dòng mỗi trang"
-          :disabled="loading"
-          class="h-6 px-1.5 text-[11.5px] rounded-[2px] bg-bg-input text-fg-strong border border-border cursor-pointer focus:outline-none focus:border-border-focus disabled:opacity-50"
-          @change="onPageSizeChange"
-        >
-          <option v-for="size in pageSizeOptions" :key="size" :value="size">
-            {{ size }}
-          </option>
-        </select>
-      </label>
+        <div class="w-[68px]">
+          <AppSelect
+            :model-value="pageSize"
+            :options="pageSizeOptions.map((s) => ({ label: String(s), value: s }))"
+            aria-label="Số dòng mỗi trang"
+            :disabled="loading"
+            size="sm"
+            @update:model-value="onPageSizeChange"
+          />
+        </div>
+      </div>
 
       <span
         v-if="loading"

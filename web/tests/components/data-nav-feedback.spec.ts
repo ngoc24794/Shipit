@@ -78,7 +78,7 @@ describe('AppTable (selection, keyboard nav, loading, empty, error)', () => {
       }
     })
 
-    const checkboxes = wrapper.findAll('button[role="checkbox"]')
+    const checkboxes = wrapper.findAll('[role="checkbox"]')
     expect(checkboxes).toHaveLength(3) // 1 header + 2 rows
     await checkboxes[1].trigger('click')
     expect(wrapper.emitted('update:selectedKeys')?.[0]).toEqual([[1]])

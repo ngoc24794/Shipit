@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount } from 'vue'
-import { Search, X, ChevronDown, RotateCcw } from 'lucide-vue-next'
+import { Search, X, RotateCcw } from 'lucide-vue-next'
+import AppSelect from './AppSelect.vue'
+import SegmentedControl from './SegmentedControl.vue'
 
 export interface DataToolbarFilterOption {
   label: string
@@ -80,9 +82,8 @@ function clearSearch() {
   emit('update:q', '')
 }
 
-function onSelectChange(key: string, event: Event) {
-  const val = (event.target as HTMLSelectElement).value
-  emit('update:filter', key, val)
+function onSelectChange(key: string, val: string | number) {
+  emit('update:filter', key, String(val))
 }
 
 function onSegmentedClick(key: string, value: string) {
@@ -132,48 +133,23 @@ onBeforeUnmount(() => {
       <!-- Dynamic filters -->
       <template v-for="filter in filters" :key="filter.key">
         <!-- Segmented -->
-        <div
+        <SegmentedControl
           v-if="filter.type === 'segmented'"
-          role="group"
+          :model-value="filterValues[filter.key] ?? ''"
+          :options="filter.options"
           :aria-label="filter.label"
-          class="inline-flex items-center rounded-[2px] bg-bg-elevated border border-border shrink-0 whitespace-nowrap overflow-hidden"
-        >
-          <button
-            v-for="opt in filter.options"
-            :key="opt.value"
-            type="button"
-            :aria-pressed="(filterValues[filter.key] ?? '') === opt.value"
-            :class="[
-              'h-[26px] px-2.5 text-[12px] border-r border-border last:border-r-0 transition-colors duration-[80ms] cursor-pointer whitespace-nowrap',
-              (filterValues[filter.key] ?? '') === opt.value
-                ? 'bg-bg-selected text-phosphor font-semibold'
-                : 'text-fg-muted hover:text-fg-strong hover:bg-bg-hover'
-            ]"
-            @click="onSegmentedClick(filter.key, opt.value)"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
+          size="sm"
+          @update:model-value="onSegmentedClick(filter.key, String($event))"
+        />
 
         <!-- Select -->
-        <div v-else class="relative shrink-0">
-          <select
-            :value="filterValues[filter.key] ?? ''"
+        <div v-else class="w-[175px] shrink-0">
+          <AppSelect
+            :model-value="filterValues[filter.key] ?? ''"
+            :options="filter.options"
             :aria-label="filter.label"
-            class="h-7 pl-2 pr-6 text-[12px] rounded-[2px] bg-bg-input text-fg-strong border border-border appearance-none cursor-pointer focus:outline-none focus:border-border-focus transition-colors duration-[80ms] max-w-[180px] truncate"
-            @change="onSelectChange(filter.key, $event)"
-          >
-            <option
-              v-for="opt in filter.options"
-              :key="opt.value"
-              :value="opt.value"
-            >
-              {{ opt.label }}
-            </option>
-          </select>
-          <ChevronDown
-            class="w-3.5 h-3.5 text-fg-muted absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none"
-            aria-hidden="true"
+            size="sm"
+            @update:model-value="onSelectChange(filter.key, $event)"
           />
         </div>
       </template>

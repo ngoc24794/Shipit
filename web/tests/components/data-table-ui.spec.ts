@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DataToolbar from '../../src/components/DataToolbar.vue'
 import DataPagination from '../../src/components/DataPagination.vue'
+import AppSelect from '../../src/components/AppSelect.vue'
 
 describe('DataToolbar', () => {
   afterEach(() => {
@@ -74,8 +75,9 @@ describe('DataToolbar', () => {
     await jobBtn.trigger('click')
     expect(wrapper.emitted('update:filter')?.[0]).toEqual(['kind', 'job'])
 
-    const select = wrapper.get('select[aria-label="Trạng thái"]')
-    await select.setValue('success')
+    const selectComp = wrapper.findComponent(AppSelect)
+    selectComp.vm.$emit('update:modelValue', 'success')
+    await wrapper.vm.$nextTick()
     expect(wrapper.emitted('update:filter')?.[1]).toEqual(['status', 'success'])
 
     const clearAllBtn = wrapper.findAll('button').find((b) => b.text().includes('Xoá bộ lọc'))!
@@ -103,8 +105,9 @@ describe('DataPagination', () => {
 
     expect(wrapper.emitted('update:page')).toEqual([[1], [4], [6], [10]])
 
-    const pageSizeSelect = wrapper.get('select[aria-label="Số dòng mỗi trang"]')
-    await pageSizeSelect.setValue('50')
+    const pageSizeSelect = wrapper.findComponent(AppSelect)
+    pageSizeSelect.vm.$emit('update:modelValue', 50)
+    await wrapper.vm.$nextTick()
     expect(wrapper.emitted('update:pageSize')).toEqual([[50]])
 
     const jumpInput = wrapper.get('input[aria-label="Nhảy tới trang"]')
