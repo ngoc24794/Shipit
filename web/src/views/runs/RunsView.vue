@@ -15,6 +15,7 @@ import EmptyState from '../../components/EmptyState.vue'
 import { useRunsStore } from '../../stores/runs'
 import { useToast } from '../../composables/useToast'
 import { useDataTable } from '../../composables/useDataTable'
+import { useShortcuts } from '../../composables/useShortcuts'
 import { formatDateTime, formatDuration } from './formatters'
 import { ApiError } from '../../api/client'
 import type { GetRunsParams, Run, RunStatus } from '../../api/types'
@@ -22,6 +23,8 @@ import type { GetRunsParams, Run, RunStatus } from '../../api/types'
 const router = useRouter()
 const runsStore = useRunsStore()
 const toast = useToast()
+const { registerMany } = useShortcuts()
+const selectedIndex = ref(0)
 
 const showTriggerDialog = ref(false)
 const triggerKind = ref<'pipeline' | 'job'>('pipeline')
@@ -326,6 +329,24 @@ async function manualRefresh() {
 function navigateToRun(id: number) {
   router.push(`/runs/${id}`)
 }
+
+function moveRunSelection(delta: number) {
+  const len = table.items.value.length
+  if (len === 0) return
+  selectedIndex.value = (selectedIndex.value + delta + len) % len
+}
+
+function openSelectedRun() {
+  const item = table.items.value[selectedIndex.value]
+  if (item) navigateToRun(item.id)
+}
+
+registerMany([
+  { id: 'runs-new', keys: 'n', label: 'Mở hộp thoại Chạy ngay', scope: 'Danh sách lượt chạy', handler: openTriggerDialog },
+  { id: 'runs-next', keys: 'j', label: 'Chọn dòng tiếp theo', scope: 'Danh sách lượt chạy', handler: () => moveRunSelection(1) },
+  { id: 'runs-prev', keys: 'k', label: 'Chọn dòng trước đó', scope: 'Danh sách lượt chạy', handler: () => moveRunSelection(-1) },
+  { id: 'runs-open', keys: 'Enter', label: 'Mở lượt chạy đang chọn', scope: 'Danh sách lượt chạy', when: () => !showTriggerDialog.value, handler: openSelectedRun }
+])
 </script>
 
 <template>

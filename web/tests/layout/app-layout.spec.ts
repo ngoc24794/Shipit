@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import AppLayout from '../../src/layouts/AppLayout.vue'
 import { useAuthStore } from '../../src/stores/auth'
 import { MockShipitApi } from '../../src/api/mock'
@@ -103,5 +103,42 @@ describe('AppLayout Sidebar & Topbar', () => {
     expect(innerContainer.classes()).toContain('min-w-[1024px]')
     expect(innerContainer.classes()).toContain('flex-1')
     expect(innerContainer.classes()).toContain('min-h-0')
+  })
+
+  it('executes command bar commands (goto, theme) and renders bottom status bar', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const authStore = useAuthStore()
+    authStore.user = { username: 'admin' }
+    authStore.initialized = true
+
+    const wrapper = mount(AppLayout, {
+      global: {
+        plugins: [pinia, router]
+      },
+      slots: {
+        default: '<h1>Lượt chạy</h1>'
+      }
+    })
+
+    const statusBar = wrapper.find('[data-testid="status-bar"]')
+    expect(statusBar.exists()).toBe(true)
+    expect(statusBar.text()).toContain('TRỰC TIẾP')
+    expect(statusBar.text()).toContain('đang chạy')
+
+    const cmdInput = wrapper.find('[data-testid="command-bar-input"]')
+    await cmdInput.setValue('theme light')
+    await cmdInput.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="status-bar-console"]').text()).toContain('light')
+
+    await cmdInput.setValue('goto pipelines')
+    await cmdInput.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="status-bar-console"]').text()).toContain('/pipelines')
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.path).toBe('/pipelines')
+    }, { timeout: 3000 })
   })
 })

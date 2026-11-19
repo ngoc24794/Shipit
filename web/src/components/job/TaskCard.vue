@@ -67,28 +67,28 @@ function onNumberInput(field: 'timeoutSeconds' | 'backoffLimit' | 'ttlSeconds', 
 
 <template>
   <div
-    class="rounded-[8px] border border-border bg-card shadow-sm transition-all overflow-hidden"
+    class="rounded-[2px] border border-border bg-bg-elevated transition-colors overflow-hidden"
     draggable="true"
     @dragstart="emit('dragstart', $event)"
     @dragover="emit('dragover', $event)"
     @drop="emit('drop', $event)"
   >
     <!-- Header of TaskCard -->
-    <div class="px-4 py-3 bg-muted/40 border-b border-border flex items-center justify-between gap-3 select-none">
-      <div class="flex items-center gap-2.5">
+    <div class="px-3 py-2 bg-bg-surface border-b border-border flex items-center justify-between gap-3 select-none">
+      <div class="flex items-center gap-2 min-w-0">
         <div
-          class="cursor-grab active:cursor-grabbing text-muted-fg hover:text-fg p-1 rounded-[4px] focus-visible:outline-2 focus-visible:outline-ring"
+          class="cursor-grab active:cursor-grabbing text-fg-muted hover:text-fg-strong p-1 rounded-[2px] focus-visible:outline-2 focus-visible:outline-border-focus"
           title="Kéo thả để đổi thứ tự"
           aria-label="Kéo thả để đổi thứ tự tác vụ"
         >
           <GripVertical class="w-4 h-4" aria-hidden="true" />
         </div>
 
-        <span class="inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+        <span class="inline-flex items-center justify-center px-1.5 py-0.5 rounded-[2px] text-[11px] font-mono font-semibold bg-phosphor-bg text-phosphor border border-phosphor/30">
           #{{ index + 1 }}
         </span>
 
-        <h4 class="text-sm font-semibold text-fg truncate">
+        <h4 class="text-[13px] font-semibold text-fg-strong truncate">
           {{ task.label ? task.label : `Tác vụ #${index + 1}` }}
         </h4>
       </div>
@@ -100,10 +100,10 @@ function onNumberInput(field: 'timeoutSeconds' | 'backoffLimit' | 'ttlSeconds', 
           :disabled="disabled || index === 0"
           aria-label="Di chuyển tác vụ lên"
           title="Di chuyển lên (bàn phím)"
-          class="p-1.5 rounded-[6px] text-muted-fg hover:text-fg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+          class="p-1 rounded-[2px] text-fg-muted hover:text-fg-strong hover:bg-bg-hover disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus"
           @click="emit('move-up')"
         >
-          <ArrowUp class="w-4 h-4" aria-hidden="true" />
+          <ArrowUp class="w-3.5 h-3.5" aria-hidden="true" />
         </button>
 
         <button
@@ -111,10 +111,10 @@ function onNumberInput(field: 'timeoutSeconds' | 'backoffLimit' | 'ttlSeconds', 
           :disabled="disabled || index === totalTasks - 1"
           aria-label="Di chuyển tác vụ xuống"
           title="Di chuyển xuống (bàn phím)"
-          class="p-1.5 rounded-[6px] text-muted-fg hover:text-fg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+          class="p-1 rounded-[2px] text-fg-muted hover:text-fg-strong hover:bg-bg-hover disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus"
           @click="emit('move-down')"
         >
-          <ArrowDown class="w-4 h-4" aria-hidden="true" />
+          <ArrowDown class="w-3.5 h-3.5" aria-hidden="true" />
         </button>
 
         <button
@@ -122,10 +122,10 @@ function onNumberInput(field: 'timeoutSeconds' | 'backoffLimit' | 'ttlSeconds', 
           :disabled="disabled"
           aria-label="Nhân bản tác vụ"
           title="Nhân bản tác vụ này"
-          class="p-1.5 rounded-[6px] text-muted-fg hover:text-fg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+          class="p-1 rounded-[2px] text-fg-muted hover:text-fg-strong hover:bg-bg-hover disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus"
           @click="emit('duplicate')"
         >
-          <Copy class="w-4 h-4" aria-hidden="true" />
+          <Copy class="w-3.5 h-3.5" aria-hidden="true" />
         </button>
 
         <button
@@ -133,10 +133,10 @@ function onNumberInput(field: 'timeoutSeconds' | 'backoffLimit' | 'ttlSeconds', 
           :disabled="disabled || totalTasks <= 1"
           aria-label="Xoá tác vụ"
           title="Xoá tác vụ"
-          class="p-1.5 rounded-[6px] text-muted-fg hover:text-danger hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+          class="p-1 rounded-[2px] text-fg-muted hover:text-danger hover:bg-danger-bg disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus"
           @click="emit('remove')"
         >
-          <Trash2 class="w-4 h-4" aria-hidden="true" />
+          <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
         </button>
       </div>
     </div>

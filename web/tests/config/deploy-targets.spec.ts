@@ -54,8 +54,9 @@ describe('DeployTargets View & Store', () => {
     expect(wrapper.text()).toContain('Vui lòng nhập Deployment')
 
     // Submit invalid namespace
-    const nsInput = wrapper.findAll('input')[0]
-    const depInput = wrapper.findAll('input')[1]
+    const formInputs = wrapper.find('form').findAll('input')
+    const nsInput = formInputs[0]
+    const depInput = formInputs[1]
 
     await nsInput.setValue('DevOps_Upper')
     await depInput.setValue('valid-app')
@@ -74,8 +75,9 @@ describe('DeployTargets View & Store', () => {
     await new Promise((resolve) => setTimeout(resolve, 60))
     await flushPromises()
 
-    const nsInput = wrapper.findAll('input')[0]
-    const depInput = wrapper.findAll('input')[1]
+    const formInputs = wrapper.find('form').findAll('input')
+    const nsInput = formInputs[0]
+    const depInput = formInputs[1]
 
     await nsInput.setValue('production')
     await depInput.setValue('payment-api')

@@ -95,6 +95,7 @@ describe('Job UI Components', () => {
   describe('AllowlistMultiSelect', () => {
     it('only lists unselected allowed options in dropdown and adds to modelValue', async () => {
       const wrapper = mount(AllowlistMultiSelect, {
+        attachTo: document.body,
         props: {
           modelValue: ['cm-1'],
           options: ['cm-1', 'cm-2', 'cm-3']
@@ -103,18 +104,23 @@ describe('Job UI Components', () => {
 
       expect(wrapper.text()).toContain('cm-1')
 
-      // Dropdown should only have unselected: cm-2 and cm-3
-      const select = wrapper.find('select')
-      const optionTexts = select.findAll('option').map((o) => o.text())
-      expect(optionTexts).toContain('cm-2')
-      expect(optionTexts).toContain('cm-3')
-      expect(optionTexts.filter((t) => t === 'cm-1').length).toBe(0)
+      // Open custom AppSelect combobox
+      const trigger = wrapper.find('[role="combobox"]')
+      await trigger.trigger('click')
 
-      await select.setValue('cm-2')
-      await select.trigger('change')
+      const options = Array.from(document.body.querySelectorAll('[role="option"]'))
+      const optionTexts = options.map((o) => o.textContent?.trim() || '')
+      expect(optionTexts.some((t) => t.includes('cm-2'))).toBe(true)
+      expect(optionTexts.some((t) => t.includes('cm-3'))).toBe(true)
+      expect(optionTexts.some((t) => t.includes('cm-1'))).toBe(false)
+
+      const cm2Option = options.find((o) => o.textContent?.includes('cm-2')) as HTMLElement
+      cm2Option.click()
+      await wrapper.vm.$nextTick()
 
       const emitted = wrapper.emitted('update:modelValue')
       expect(emitted![0][0]).toEqual(['cm-1', 'cm-2'])
+      wrapper.unmount()
     })
 
     it('removes item when clicking remove button', async () => {
