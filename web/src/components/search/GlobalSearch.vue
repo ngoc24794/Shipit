@@ -165,67 +165,67 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex-1 flex justify-center px-4 min-w-0">
+  <div class="flex items-center min-w-0">
     <button
       type="button"
-      class="w-[400px] shrink-0 h-8 flex items-center justify-between gap-2 px-3 rounded-[6px] bg-muted/70 hover:bg-muted border border-border text-sm text-muted-fg focus-visible:outline-2 focus-visible:outline-ring cursor-pointer transition-colors whitespace-nowrap"
+      class="h-7 flex items-center justify-between gap-2 px-2.5 rounded-[2px] bg-bg-input hover:bg-bg-hover border border-border hover:border-border-strong text-xs text-fg-muted hover:text-fg-strong focus-visible:outline-2 focus-visible:outline-border-focus cursor-pointer transition-colors whitespace-nowrap"
       aria-label="Tìm pipeline, job, lượt chạy... (Ctrl K)"
       title="Tìm pipeline, job, lượt chạy... (Ctrl K)"
       data-testid="global-search-trigger"
       @click="searchStore.open()"
     >
-      <span class="flex items-center gap-2 min-w-0">
-        <Search class="w-4 h-4 shrink-0 text-muted-fg" aria-hidden="true" />
-        <span class="truncate">Tìm pipeline, job, lượt chạy...</span>
+      <span class="flex items-center gap-1.5 min-w-0">
+        <Search class="w-3.5 h-3.5 shrink-0 text-fg-dim" aria-hidden="true" />
+        <span class="truncate">Tìm nhanh...</span>
       </span>
-      <kbd class="shrink-0 text-[11px] font-mono px-1.5 py-0.5 rounded bg-card border border-border text-muted-fg">
-        Ctrl K
+      <kbd class="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded-[2px] bg-bg-surface border border-border text-fg-muted">
+        Ctrl+K
       </kbd>
     </button>
 
     <Teleport to="body">
       <div
         v-if="searchStore.isOpen"
-        class="fixed inset-0 z-50 bg-black/50 flex items-start justify-center pt-[12%]"
+        class="fixed inset-0 z-50 bg-[var(--backdrop)] flex items-start justify-center pt-[10%] p-4"
         data-testid="search-backdrop"
         @mousedown.self="searchStore.close()"
       >
         <div
-          class="w-[640px] max-h-[60%] bg-card border border-border rounded-[8px] shadow-xl flex flex-col overflow-hidden text-fg"
+          class="w-[640px] max-h-[60%] bg-bg-elevated border border-border-strong rounded-[2px] shadow-[var(--shadow-overlay)] flex flex-col overflow-hidden text-fg animate-[modalIn_var(--dur-fast)_var(--ease-snap)]"
           role="dialog"
           aria-modal="true"
           aria-label="Tìm kiếm toàn cục"
           data-testid="search-dialog"
           @keydown="handlePaletteKeydown"
         >
-          <div class="flex items-center gap-2.5 px-3.5 h-12 border-b border-border shrink-0">
-            <Search class="w-4 h-4 shrink-0 text-muted-fg" aria-hidden="true" />
+          <div class="flex items-center gap-2 px-3 h-10 bg-bg-input border-b border-border shrink-0">
+            <Search class="w-4 h-4 shrink-0 text-phosphor" aria-hidden="true" />
             <input
               ref="inputRef"
               type="text"
               :value="searchStore.query"
               placeholder="Tìm pipeline, job, lượt chạy... (Ctrl K)"
               aria-label="Tìm pipeline, job, lượt chạy"
-              class="flex-1 min-w-0 bg-transparent text-sm text-fg placeholder:text-muted-fg focus:outline-none"
+              class="flex-1 min-w-0 bg-transparent text-[13px] font-mono text-fg-strong placeholder:text-fg-dim focus:outline-none"
               data-testid="search-input"
               @input="handleInput"
             />
             <Loader2
               v-if="searchStore.loading"
-              class="w-4 h-4 shrink-0 animate-spin text-primary"
+              class="w-3.5 h-3.5 shrink-0 animate-spin text-phosphor"
               aria-hidden="true"
             />
             <button
               v-if="searchStore.query"
               type="button"
               aria-label="Xoá từ khoá"
-              class="p-1 rounded-[4px] text-muted-fg hover:text-fg hover:bg-muted cursor-pointer"
+              class="p-1 rounded-[2px] text-fg-muted hover:text-fg-strong hover:bg-bg-hover cursor-pointer"
               data-testid="search-clear"
               @click="clearQuery"
             >
               <X class="w-3.5 h-3.5" aria-hidden="true" />
             </button>
-            <kbd class="shrink-0 text-[11px] font-mono px-1.5 py-0.5 rounded bg-muted border border-border text-muted-fg">
+            <kbd class="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded-[2px] bg-bg-surface border border-border text-fg-muted">
               Esc
             </kbd>
           </div>
@@ -240,7 +240,7 @@ onUnmounted(() => {
             @hover="(idx) => (activeIndex = idx)"
           />
 
-          <div class="px-3.5 py-2 border-t border-border bg-muted/40 text-[11px] text-muted-fg flex items-center justify-between shrink-0 whitespace-nowrap">
+          <div class="px-3 py-1.5 border-t border-border bg-bg-surface text-[11px] text-fg-muted flex items-center justify-between shrink-0 whitespace-nowrap">
             <div class="flex items-center gap-3">
               <span>↑↓ di chuyển</span>
               <span>Tab đổi nhóm</span>

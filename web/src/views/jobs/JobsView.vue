@@ -21,12 +21,15 @@ import SortableHeader from '../../components/SortableHeader.vue'
 import { useJobsStore } from '../../stores/jobs'
 import { useToast } from '../../composables/useToast'
 import { useDataTable } from '../../composables/useDataTable'
+import { useShortcuts } from '../../composables/useShortcuts'
 import type { Job } from '../../api/types'
 import { ApiError } from '../../api/client'
 
 const router = useRouter()
 const store = useJobsStore()
 const toast = useToast()
+const { registerMany } = useShortcuts()
+const selectedIndex = ref(0)
 
 const isConfirmOpen = ref(false)
 const deletingJob = ref<Job | null>(null)
@@ -103,6 +106,24 @@ function navigateToNew() {
 function navigateToEdit(id: number) {
   router.push(`/jobs/${id}`)
 }
+
+function moveJobSelection(delta: number) {
+  const len = table.items.value.length
+  if (len === 0) return
+  selectedIndex.value = (selectedIndex.value + delta + len) % len
+}
+
+function openSelectedJob() {
+  const item = table.items.value[selectedIndex.value]
+  if (item) navigateToEdit(item.id)
+}
+
+registerMany([
+  { id: 'jobs-new', keys: 'n', label: 'Tạo Job mới', scope: 'Danh sách Job', handler: navigateToNew },
+  { id: 'jobs-next', keys: 'j', label: 'Chọn dòng tiếp theo', scope: 'Danh sách Job', handler: () => moveJobSelection(1) },
+  { id: 'jobs-prev', keys: 'k', label: 'Chọn dòng trước đó', scope: 'Danh sách Job', handler: () => moveJobSelection(-1) },
+  { id: 'jobs-open', keys: 'Enter', label: 'Mở Job đang chọn', scope: 'Danh sách Job', when: () => !isConfirmOpen.value, handler: openSelectedJob }
+])
 
 async function handleTriggerRun(job: Job) {
   triggeringJobId.value = job.id

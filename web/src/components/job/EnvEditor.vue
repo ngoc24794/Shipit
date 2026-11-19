@@ -82,16 +82,16 @@ function updateSecretKey(index: number, secretKey: string) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 w-full">
-    <div v-if="modelValue.length === 0" class="text-xs text-muted-fg italic py-1">
+  <div class="flex flex-col gap-2.5 w-full font-mono">
+    <div v-if="modelValue.length === 0" class="text-xs text-fg-muted italic py-1">
       Chưa có biến môi trường nào được cấu hình.
     </div>
 
-    <div v-else class="space-y-2.5">
+    <div v-else class="space-y-2">
       <div
         v-for="(row, idx) in modelValue"
         :key="idx"
-        class="p-2.5 rounded-[6px] bg-muted/30 border border-border flex flex-row items-center gap-2.5 flex-nowrap"
+        class="p-2 rounded-[2px] bg-bg-surface border border-border flex flex-row items-center gap-2 flex-nowrap"
       >
         <!-- Variable Name -->
         <div class="flex-1 min-w-[140px]">
@@ -101,7 +101,7 @@ function updateSecretKey(index: number, secretKey: string) {
             :disabled="disabled"
             placeholder="Tên biến (VD: PORT)"
             aria-label="Tên biến môi trường"
-            class="w-full h-9 px-3 text-sm rounded-[6px] border border-border bg-card text-fg placeholder:text-muted-fg/70 focus-visible:outline-2 focus-visible:outline-ring"
+            class="w-full h-8 px-2.5 text-xs rounded-[2px] border border-border bg-bg-input text-fg-strong placeholder:text-fg-dim focus:border-border-focus focus:outline-none"
             @input="updateName(idx, ($event.target as HTMLInputElement).value)"
           />
         </div>
@@ -112,13 +112,13 @@ function updateSecretKey(index: number, secretKey: string) {
             :value="row.secretName !== undefined && row.secretName !== null ? 'secret' : 'value'"
             :disabled="disabled"
             aria-label="Nguồn biến môi trường"
-            class="w-full h-9 pl-2.5 pr-8 text-xs font-medium rounded-[6px] border border-border bg-card text-fg appearance-none cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+            class="w-full h-8 pl-2.5 pr-7 text-xs font-medium rounded-[2px] border border-border bg-bg-input text-fg-strong appearance-none cursor-pointer focus:border-border-focus focus:outline-none"
             @change="updateSource(idx, ($event.target as HTMLSelectElement).value as 'value' | 'secret')"
           >
             <option value="value">Giá trị trực tiếp</option>
             <option value="secret">Lấy từ Secret</option>
           </select>
-          <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-muted-fg">
+          <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-fg-muted">
             <ChevronDown class="w-3.5 h-3.5" aria-hidden="true" />
           </div>
         </div>
@@ -133,7 +133,7 @@ function updateSecretKey(index: number, secretKey: string) {
               :disabled="disabled"
               placeholder="Giá trị biến"
               aria-label="Giá trị biến môi trường"
-              class="w-full h-9 px-3 text-sm rounded-[6px] border border-border bg-card text-fg placeholder:text-muted-fg/70 focus-visible:outline-2 focus-visible:outline-ring"
+              class="w-full h-8 px-2.5 text-xs rounded-[2px] border border-border bg-bg-input text-fg-strong placeholder:text-fg-dim focus:border-border-focus focus:outline-none"
               @input="updateValue(idx, ($event.target as HTMLInputElement).value)"
             />
           </template>
@@ -146,7 +146,7 @@ function updateSecretKey(index: number, secretKey: string) {
                 :value="row.secretName || ''"
                 :disabled="disabled || secretOptions.length === 0"
                 aria-label="Tên Secret trong allowlist"
-                class="w-full h-9 pl-2.5 pr-7 text-xs font-mono rounded-[6px] border border-border bg-card text-fg appearance-none cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+                class="w-full h-8 pl-2.5 pr-7 text-xs font-mono rounded-[2px] border border-border bg-bg-input text-fg-strong appearance-none cursor-pointer focus:border-border-focus focus:outline-none"
                 @change="updateSecretName(idx, ($event.target as HTMLSelectElement).value)"
               >
                 <option value="" disabled>-- Chọn Secret --</option>
@@ -154,7 +154,7 @@ function updateSecretKey(index: number, secretKey: string) {
                   {{ sec }}
                 </option>
               </select>
-              <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-muted-fg">
+              <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-fg-muted">
                 <ChevronDown class="w-3.5 h-3.5" aria-hidden="true" />
               </div>
             </div>
@@ -166,10 +166,10 @@ function updateSecretKey(index: number, secretKey: string) {
                 :disabled="disabled"
                 placeholder="Key (VD: password)"
                 aria-label="Key trong Secret"
-                class="w-full h-9 pl-7 pr-3 text-xs font-mono rounded-[6px] border border-border bg-card text-fg placeholder:text-muted-fg/70 focus-visible:outline-2 focus-visible:outline-ring"
+                class="w-full h-8 pl-7 pr-2.5 text-xs font-mono rounded-[2px] border border-border bg-bg-input text-fg-strong placeholder:text-fg-dim focus:border-border-focus focus:outline-none"
                 @input="updateSecretKey(idx, ($event.target as HTMLInputElement).value)"
               />
-              <div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none text-muted-fg">
+              <div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none text-fg-muted">
                 <Lock class="w-3.5 h-3.5" aria-hidden="true" />
               </div>
             </div>
@@ -181,10 +181,10 @@ function updateSecretKey(index: number, secretKey: string) {
           v-if="!disabled"
           type="button"
           aria-label="Xoá biến môi trường"
-          class="h-9 w-9 flex items-center justify-center rounded-[6px] text-muted-fg hover:text-danger hover:bg-card border border-transparent hover:border-border transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring flex-shrink-0"
+          class="h-8 w-8 flex items-center justify-center rounded-[2px] text-fg-muted hover:text-danger hover:bg-danger-bg border border-transparent hover:border-danger/30 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus flex-shrink-0"
           @click="removeRow(idx)"
         >
-          <Trash2 class="w-4 h-4" aria-hidden="true" />
+          <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
         </button>
       </div>
     </div>

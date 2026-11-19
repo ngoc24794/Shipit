@@ -51,20 +51,20 @@ function remove(item: string) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-2 w-full">
+  <div class="flex flex-col gap-2 w-full font-mono">
     <!-- Selected pills -->
     <div v-if="modelValue.length > 0" class="flex flex-wrap items-center gap-1.5">
       <span
         v-for="item in modelValue"
         :key="item"
-        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] text-xs font-mono bg-muted text-fg border border-border"
+        class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[2px] text-xs font-mono bg-bg-surface text-fg-strong border border-border"
       >
         <span>{{ item }}</span>
         <button
           v-if="!disabled"
           type="button"
           :aria-label="`Bỏ chọn ${item}`"
-          class="text-muted-fg hover:text-danger p-0.5 rounded-[2px] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+          class="text-fg-muted hover:text-danger p-0.5 rounded-[2px] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus"
           @click="remove(item)"
         >
           <X class="w-3 h-3" aria-hidden="true" />
@@ -80,12 +80,12 @@ function remove(item: string) {
         :aria-describedby="ariaDescribedby"
         :aria-invalid="!!error ? 'true' : undefined"
         :class="[
-          'w-full h-10 pl-3 pr-9 py-2 text-sm rounded-[6px] border bg-card text-fg appearance-none cursor-pointer transition-colors',
-          'focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
+          'w-full h-8 pl-2.5 pr-8 text-xs rounded-[2px] border bg-bg-input text-fg-strong appearance-none cursor-pointer transition-colors',
+          'focus-visible:outline-2 focus-visible:outline-border-focus',
           error
-            ? 'border-danger focus-visible:outline-danger'
-            : 'border-border focus-visible:border-transparent',
-          disabled || availableOptions.length === 0 ? 'opacity-50 cursor-not-allowed bg-muted/50' : 'hover:border-muted-fg/50'
+            ? 'border-danger'
+            : 'border-border focus:border-border-focus',
+          disabled || availableOptions.length === 0 ? 'opacity-50 cursor-not-allowed bg-bg-surface' : 'hover:border-border-strong'
         ]"
         @change="onSelect"
       >
@@ -97,13 +97,13 @@ function remove(item: string) {
         </option>
       </select>
 
-      <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-muted-fg">
-        <ChevronDown class="w-4 h-4" aria-hidden="true" />
+      <div class="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-fg-muted">
+        <ChevronDown class="w-3.5 h-3.5" aria-hidden="true" />
       </div>
     </div>
 
     <!-- Empty state when no options in allowlist -->
-    <p v-else class="text-xs text-muted-fg italic py-1">
+    <p v-else class="text-xs text-fg-muted italic py-1">
       {{ emptyText }}
     </p>
   </div>
