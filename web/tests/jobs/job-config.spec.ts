@@ -91,6 +91,7 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     await router.isReady()
 
     const wrapper = mount(JobFormView, {
+      attachTo: document.body,
       global: {
         plugins: [pinia, router]
       }
@@ -105,14 +106,23 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     await router.replace('/jobs/new?step=4')
     await wrapper.vm.$nextTick()
 
-    const selects = wrapper.findAll('select')
-    const selectTexts = selects.map((s) => s.text())
+    const comboboxes = wrapper.findAll('[role="combobox"]')
+    const collectedOptions: string[] = []
+    for (const cb of comboboxes) {
+      await cb.trigger('click')
+      await wrapper.vm.$nextTick()
+      document.body.querySelectorAll('[role="option"]').forEach((opt) => {
+        collectedOptions.push(opt.textContent?.trim() || '')
+      })
+      await cb.trigger('keydown', { key: 'Escape' })
+    }
 
-    expect(selectTexts.some((t) => t.includes('avina-files-config'))).toBe(true)
-    expect(selectTexts.some((t) => t.includes('avina-users-config'))).toBe(true)
-    expect(selectTexts.some((t) => t.includes('avina-files-secret'))).toBe(true)
-    expect(selectTexts.some((t) => t.includes('avina-users-secret'))).toBe(true)
-    expect(selectTexts.some((t) => t.includes('root-secret') || t.includes('unallowed-secret'))).toBe(false)
+    expect(collectedOptions.some((t) => t.includes('avina-files-config'))).toBe(true)
+    expect(collectedOptions.some((t) => t.includes('avina-users-config'))).toBe(true)
+    expect(collectedOptions.some((t) => t.includes('avina-files-secret'))).toBe(true)
+    expect(collectedOptions.some((t) => t.includes('avina-users-secret'))).toBe(true)
+    expect(collectedOptions.some((t) => t.includes('root-secret') || t.includes('unallowed-secret'))).toBe(false)
+    wrapper.unmount()
   })
 
   it('guarantees NO input exists for entering secret value (không có ô nhập giá trị secret)', async () => {
@@ -120,6 +130,7 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     await router.isReady()
 
     const wrapper = mount(JobFormView, {
+      attachTo: document.body,
       global: {
         plugins: [pinia, router]
       }
@@ -132,9 +143,17 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     expect(addEnvBtn).toBeDefined()
     await addEnvBtn!.trigger('click')
 
-    const sourceSelect = wrapper.findAll('select').find((s) => s.text().includes('Giá trị trực tiếp') && s.text().includes('Lấy từ Secret'))
-    expect(sourceSelect).toBeDefined()
-    await sourceSelect!.setValue('secret')
+    const sourceCombobox = wrapper.findAll('[role="combobox"]').find((cb) => cb.text().includes('Giá trị trực tiếp'))
+    expect(sourceCombobox).toBeDefined()
+    await sourceCombobox!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const secretOpt = Array.from(document.body.querySelectorAll('[role="option"]')).find((o) =>
+      o.textContent?.includes('Lấy từ Secret')
+    ) as HTMLElement | undefined
+    expect(secretOpt).toBeDefined()
+    secretOpt!.click()
+    await wrapper.vm.$nextTick()
 
     const inputs = wrapper.findAll('input')
     const placeholders = inputs.map((i) => i.attributes('placeholder') || '')
@@ -143,6 +162,7 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     expect(placeholders.some((p) => p.toLowerCase().includes('key'))).toBe(true)
     expect(placeholders.some((p) => p.toLowerCase().includes('mật khẩu') || p.toLowerCase().includes('giá trị secret'))).toBe(false)
     expect(ariaLabels.some((a) => a.toLowerCase().includes('giá trị secret'))).toBe(false)
+    wrapper.unmount()
   })
 
   it('enforces required timeout validation (timeout bắt buộc và > 0)', async () => {

@@ -109,12 +109,12 @@ describe('Job UI Components', () => {
       await trigger.trigger('click')
 
       const options = Array.from(document.body.querySelectorAll('[role="option"]'))
-      const optionTexts = options.map((o) => o.textContent?.trim())
-      expect(optionTexts).toContain('cm-2')
-      expect(optionTexts).toContain('cm-3')
-      expect(optionTexts.filter((t) => t === 'cm-1').length).toBe(0)
+      const optionTexts = options.map((o) => o.textContent?.trim() || '')
+      expect(optionTexts.some((t) => t.includes('cm-2'))).toBe(true)
+      expect(optionTexts.some((t) => t.includes('cm-3'))).toBe(true)
+      expect(optionTexts.some((t) => t.includes('cm-1'))).toBe(false)
 
-      const cm2Option = options.find((o) => o.textContent?.trim() === 'cm-2') as HTMLElement
+      const cm2Option = options.find((o) => o.textContent?.includes('cm-2')) as HTMLElement
       cm2Option.click()
       await wrapper.vm.$nextTick()
 

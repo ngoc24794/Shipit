@@ -145,8 +145,8 @@ async function executeCommand(): Promise<void> {
   } else if (cmd === 'goto' || cmd === 'g') {
     const target = resolveRouteAlias(arg)
     if (target) {
-      await router.push(target)
       consoleLog.log(`Chuyển tới ${target}`, 'info')
+      await router.push(target)
     } else {
       consoleLog.log(`Không rõ trang: ${arg || '(trống)'}`, 'warn')
       toast.error(`Không tìm thấy trang "${arg}"`)
@@ -179,6 +179,16 @@ async function executeCommand(): Promise<void> {
 
   cmdInput.value = ''
   cmdInputRef.value?.blur()
+}
+
+function onCmdKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    void executeCommand()
+  } else if (e.key === 'Escape') {
+    e.stopPropagation()
+    cmdInputRef.value?.blur()
+  }
 }
 
 async function handleLogout(): Promise<void> {
@@ -234,8 +244,7 @@ registerMany([
           placeholder="run <tên> | goto <trang> | filter <trạng thái|all> | theme <dark|light> | help"
           class="flex-1 min-w-0 bg-transparent border-none outline-none text-xs font-mono text-fg-strong placeholder:text-fg-dim"
           data-testid="command-bar-input"
-          @keydown.enter.prevent="executeCommand"
-          @keydown.esc.stop="cmdInputRef?.blur()"
+          @keydown="onCmdKeydown"
         />
         <kbd class="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded-[2px] bg-bg-surface border border-border text-fg-muted">
           :

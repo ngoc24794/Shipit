@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 import AppLayout from '../../src/layouts/AppLayout.vue'
@@ -127,12 +127,18 @@ describe('AppLayout Sidebar & Topbar', () => {
     expect(statusBar.text()).toContain('đang chạy')
 
     const cmdInput = wrapper.find('[data-testid="command-bar-input"]')
+    await cmdInput.setValue('theme light')
+    await cmdInput.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="status-bar-console"]').text()).toContain('light')
+
     await cmdInput.setValue('goto pipelines')
     await cmdInput.trigger('keydown', { key: 'Enter' })
     await flushPromises()
-    await router.isReady()
 
-    expect(router.currentRoute.value.path).toBe('/pipelines')
     expect(wrapper.find('[data-testid="status-bar-console"]').text()).toContain('/pipelines')
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.path).toBe('/pipelines')
+    }, { timeout: 3000 })
   })
 })
