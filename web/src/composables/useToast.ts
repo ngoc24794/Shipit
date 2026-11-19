@@ -159,6 +159,21 @@ export function useToast() {
     return add(message, 'info', durationOrOptions, options)
   }
 
+  function logHistory(message: string, type: ToastType = 'info') {
+    const id = nextId++
+    const timestamp = formatTime(new Date())
+    entries.value.unshift({
+      id,
+      message,
+      type,
+      timestamp
+    })
+    if (entries.value.length > MAX_HISTORY) {
+      entries.value.length = MAX_HISTORY
+    }
+    return id
+  }
+
   function clear() {
     entries.value = []
     unreadCount.value = 0
@@ -201,6 +216,7 @@ export function useToast() {
     error,
     warn,
     info,
+    logHistory,
     clear,
     markAllRead,
     openDrawer,

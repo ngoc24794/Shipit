@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount, type CSSProperties } from 'vue'
 import { ChevronDown, X, Check, Plus } from 'lucide-vue-next'
-import { usePopover } from '../composables/usePopover'
+import { useFloating } from '../composables/useFloating'
 import AppTag from './AppTag.vue'
 import AppSpinner from './AppSpinner.vue'
 
@@ -76,13 +76,56 @@ const activeIndex = ref(-1)
 let typeAheadBuffer = ''
 let typeAheadTimer: ReturnType<typeof setTimeout> | null = null
 
-const { popupStyle } = usePopover(
+const { x: floatingX, y: floatingY, updatePosition } = useFloating(
   triggerRef,
   popupRef,
   isOpen,
-  () => closePopup(),
-  { matchWidth: true }
+  { placement: 'bottom-start', offset: 4, flip: true }
 )
+
+const popupStyle = computed<CSSProperties>(() => {
+  const triggerWidth = triggerRef.value?.getBoundingClientRect().width
+  return {
+    position: 'fixed',
+    top: `${floatingY.value}px`,
+    left: `${floatingX.value}px`,
+    zIndex: 9999,
+    maxHeight: '260px',
+    ...(triggerWidth ? { width: `${triggerWidth}px`, minWidth: `${triggerWidth}px` } : {})
+  }
+})
+
+function handleOutsidePointerDown(event: MouseEvent) {
+  const target = event.target as Node | null
+  if (!target) return
+  if (triggerRef.value?.contains(target)) return
+  if (popupRef.value?.contains(target)) return
+  closePopup()
+}
+
+function handleOutsideScroll(event: Event) {
+  const target = event.target as Node | null
+  if (target && popupRef.value && (popupRef.value === target || popupRef.value.contains(target))) {
+    return
+  }
+  closePopup()
+}
+
+watch(isOpen, (open) => {
+  if (open) {
+    nextTick(() => updatePosition())
+    document.addEventListener('mousedown', handleOutsidePointerDown, true)
+    window.addEventListener('scroll', handleOutsideScroll, true)
+  } else {
+    document.removeEventListener('mousedown', handleOutsidePointerDown, true)
+    window.removeEventListener('scroll', handleOutsideScroll, true)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', handleOutsidePointerDown, true)
+  window.removeEventListener('scroll', handleOutsideScroll, true)
+})
 
 const allFlatOptions = computed<ComboboxOption[]>(() => {
   if (props.groups && props.groups.length > 0) {

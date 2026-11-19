@@ -110,6 +110,16 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/config/CredentialFormView.vue'),
     meta: { title: 'Sửa thông tin xác thực' }
   },
+  ...(import.meta.env.DEV || import.meta.env.MODE === 'mock'
+    ? [
+        {
+          path: '/dev/components',
+          name: 'dev-components',
+          component: () => import('../views/dev/ComponentsGalleryView.vue'),
+          meta: { title: 'Thư viện thành phần' }
+        }
+      ]
+    : []),
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
