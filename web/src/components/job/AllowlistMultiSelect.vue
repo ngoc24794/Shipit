@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { X, ChevronDown } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { X } from 'lucide-vue-next'
+import AppSelect from '../AppSelect.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -27,18 +28,23 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string[]): void
 }>()
 
+const pendingSelection = ref('')
+
 const availableOptions = computed(() => {
   return props.options.filter((opt) => !props.modelValue.includes(opt))
 })
 
-function onSelect(e: Event) {
-  const target = e.target as HTMLSelectElement
-  const val = target.value
-  if (!val) return
-  if (!props.modelValue.includes(val)) {
-    emit('update:modelValue', [...props.modelValue, val])
+const selectOptions = computed(() => {
+  return availableOptions.value.map((opt) => ({ label: opt, value: opt }))
+})
+
+function onSelect(val: string | number | null) {
+  const str = val ? String(val) : ''
+  if (!str) return
+  if (!props.modelValue.includes(str)) {
+    emit('update:modelValue', [...props.modelValue, str])
   }
-  target.value = ''
+  pendingSelection.value = ''
 }
 
 function remove(item: string) {
@@ -72,35 +78,19 @@ function remove(item: string) {
       </span>
     </div>
 
-    <!-- Dropdown to select from allowed items -->
-    <div v-if="options.length > 0" class="relative w-full">
-      <select
-        :id="id"
-        :disabled="disabled || availableOptions.length === 0"
-        :aria-describedby="ariaDescribedby"
-        :aria-invalid="!!error ? 'true' : undefined"
-        :class="[
-          'w-full h-8 pl-2.5 pr-8 text-xs rounded-[2px] border bg-bg-input text-fg-strong appearance-none cursor-pointer transition-colors',
-          'focus-visible:outline-2 focus-visible:outline-border-focus',
-          error
-            ? 'border-danger'
-            : 'border-border focus:border-border-focus',
-          disabled || availableOptions.length === 0 ? 'opacity-50 cursor-not-allowed bg-bg-surface' : 'hover:border-border-strong'
-        ]"
-        @change="onSelect"
-      >
-        <option value="" disabled selected>
-          {{ availableOptions.length === 0 ? 'Đã chọn toàn bộ danh sách cho phép' : placeholder }}
-        </option>
-        <option v-for="opt in availableOptions" :key="opt" :value="opt">
-          {{ opt }}
-        </option>
-      </select>
-
-      <div class="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-fg-muted">
-        <ChevronDown class="w-3.5 h-3.5" aria-hidden="true" />
-      </div>
-    </div>
+    <!-- Custom AppSelect to pick from allowed items -->
+    <AppSelect
+      v-if="options.length > 0"
+      :id="id"
+      :model-value="pendingSelection"
+      :options="selectOptions"
+      :disabled="disabled || availableOptions.length === 0"
+      :error="Boolean(error)"
+      :aria-describedby="ariaDescribedby"
+      :placeholder="availableOptions.length === 0 ? 'Đã chọn toàn bộ danh sách cho phép' : placeholder"
+      size="sm"
+      @update:model-value="onSelect"
+    />
 
     <!-- Empty state when no options in allowlist -->
     <p v-else class="text-xs text-fg-muted italic py-1">

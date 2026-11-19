@@ -12,6 +12,7 @@ const props = withDefaults(
     disabled?: boolean
     error?: boolean | string
     ariaDescribedby?: string
+    size?: 'sm' | 'md'
   }>(),
   {
     modelValue: '',
@@ -21,7 +22,8 @@ const props = withDefaults(
     hasExistingValue: false,
     disabled: false,
     error: false,
-    ariaDescribedby: undefined
+    ariaDescribedby: undefined,
+    size: 'md'
   }
 )
 
@@ -51,7 +53,16 @@ function onInput(event: Event) {
 </script>
 
 <template>
-  <div class="relative w-full">
+  <div
+    :class="[
+      'flex items-center w-full rounded-[2px] bg-bg-input text-fg-strong border font-mono transition-colors duration-[80ms]',
+      size === 'sm' ? 'h-6 text-[11.5px]' : 'h-7 text-xs',
+      disabled ? 'opacity-50 bg-bg-surface cursor-not-allowed' : '',
+      error
+        ? 'border-danger focus-within:border-danger focus-within:outline-2 focus-within:outline-danger focus-within:outline-offset-1'
+        : 'border-border focus-within:border-border-focus'
+    ]"
+  >
     <input
       :id="id"
       :name="name"
@@ -62,13 +73,7 @@ function onInput(event: Event) {
       :aria-invalid="!!error ? 'true' : undefined"
       :aria-describedby="ariaDescribedby"
       autocomplete="new-password"
-      :class="[
-        'w-full h-10 pl-3 pr-10 text-base sm:text-sm rounded-[6px] bg-card text-fg border transition-colors font-mono',
-        'placeholder:text-muted-fg/60 placeholder:font-sans',
-        'focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
-        'disabled:opacity-50 disabled:bg-muted disabled:cursor-not-allowed',
-        error ? 'border-danger focus-visible:outline-danger' : 'border-border focus-visible:border-primary'
-      ]"
+      class="flex-1 min-w-0 h-full pl-2 pr-1 bg-transparent border-0 outline-none focus-visible:outline-none font-mono text-fg-strong placeholder:text-fg-dim disabled:cursor-not-allowed"
       @input="onInput"
       @blur="emit('blur', $event)"
       @focus="emit('focus', $event)"
@@ -77,11 +82,12 @@ function onInput(event: Event) {
       type="button"
       :disabled="disabled"
       :aria-label="isVisible ? 'Ẩn giá trị bí mật' : 'Hiện giá trị bí mật'"
-      class="absolute inset-y-0 right-0 flex items-center justify-center w-10 text-muted-fg hover:text-fg focus-visible:outline-2 focus-visible:outline-ring rounded-r-[6px] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+      class="inline-flex items-center gap-1 h-full px-2 border-l border-border text-[11px] text-fg-muted hover:text-fg-strong hover:bg-bg-hover focus-visible:outline-2 focus-visible:outline-border-focus cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 shrink-0"
       @click="toggleVisibility"
     >
-      <EyeOff v-if="isVisible" class="w-4 h-4" aria-hidden="true" />
-      <Eye v-else class="w-4 h-4" aria-hidden="true" />
+      <EyeOff v-if="isVisible" class="w-3.5 h-3.5" aria-hidden="true" />
+      <Eye v-else class="w-3.5 h-3.5" aria-hidden="true" />
+      <span>{{ isVisible ? '[Ẩn]' : '[Hiện]' }}</span>
     </button>
   </div>
 </template>

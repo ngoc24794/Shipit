@@ -367,16 +367,20 @@ describe('RunsView (Danh sách lượt chạy)', () => {
 
     expect(wrapper.text()).toContain('Hiển thị 1 đến 20 trong 65')
 
-    const targetSelect = wrapper.get('select[aria-label="Pipeline / Job"]')
-    await targetSelect.setValue('pipeline:1')
+    const targetSelect = wrapper
+      .findAllComponents({ name: 'AppSelect' })
+      .find((c) => c.attributes('aria-label') === 'Pipeline / Job')!
+    targetSelect.vm.$emit('update:modelValue', 'pipeline:1')
     await waitMounted(wrapper)
 
     expect(getRunsPagedSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({ pipelineId: 1, page: 1, pageSize: 20 })
     )
 
-    const statusSelect = wrapper.get('select[aria-label="Trạng thái"]')
-    await statusSelect.setValue('success')
+    const statusSelect = wrapper
+      .findAllComponents({ name: 'AppSelect' })
+      .find((c) => c.attributes('aria-label') === 'Trạng thái')!
+    statusSelect.vm.$emit('update:modelValue', 'success')
     await waitMounted(wrapper)
 
     expect(getRunsPagedSpy).toHaveBeenLastCalledWith(

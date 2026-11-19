@@ -109,9 +109,13 @@ describe('Credentials View, Form & Store', () => {
     expect(wrapper.text()).not.toContain('Tên đăng nhập (Username)')
 
     // Change kind to 'registry'
-    const select = wrapper.find('select')
+    const select = wrapper.find('[role="combobox"]')
     expect(select.exists()).toBe(true)
-    await select.setValue('registry')
+    await select.trigger('click')
+    const regOpt = Array.from(document.body.querySelectorAll('[role="option"]')).find((el) =>
+      el.textContent?.includes('Registry')
+    ) as HTMLElement | undefined
+    regOpt?.click()
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).toContain('Tên đăng nhập (Username)')

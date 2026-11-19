@@ -23,10 +23,9 @@ describe('LoginView Component', () => {
       }
     })
 
-    const checkbox = wrapper.find<HTMLInputElement>('input#login-remember-me')
+    const checkbox = wrapper.find('[role="checkbox"]#login-remember-me')
     expect(checkbox.exists()).toBe(true)
-    expect(checkbox.attributes('type')).toBe('checkbox')
-    expect(checkbox.element.checked).toBe(false)
+    expect(checkbox.attributes('aria-checked')).toBe('false')
 
     const label = wrapper.find('label[for="login-remember-me"]')
     expect(label.exists()).toBe(true)
@@ -46,9 +45,9 @@ describe('LoginView Component', () => {
     await wrapper.find('input#login-username').setValue('admin')
     await wrapper.find('input#login-password').setValue('testpassword')
 
-    const checkbox = wrapper.find<HTMLInputElement>('input#login-remember-me')
-    await checkbox.setValue(true)
-    expect(checkbox.element.checked).toBe(true)
+    const checkbox = wrapper.find('[role="checkbox"]#login-remember-me')
+    await checkbox.trigger('click')
+    expect(checkbox.attributes('aria-checked')).toBe('true')
 
     await wrapper.find('form').trigger('submit.prevent')
 
@@ -72,8 +71,8 @@ describe('LoginView Component', () => {
     await wrapper.find('input#login-username').setValue('admin')
     await wrapper.find('input#login-password').setValue('testpassword')
 
-    const checkbox = wrapper.find<HTMLInputElement>('input#login-remember-me')
-    expect(checkbox.element.checked).toBe(false)
+    const checkbox = wrapper.find('[role="checkbox"]#login-remember-me')
+    expect(checkbox.attributes('aria-checked')).toBe('false')
 
     await wrapper.find('form').trigger('submit.prevent')
 

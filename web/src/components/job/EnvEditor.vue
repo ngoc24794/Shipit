@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { Plus, Trash2, ChevronDown, Lock } from 'lucide-vue-next'
+import { Plus, Trash2, Lock } from 'lucide-vue-next'
 import type { JobEnvVar } from '../../api/types'
 import AppButton from '../AppButton.vue'
+import AppInput from '../AppInput.vue'
+import AppSelect from '../AppSelect.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -95,97 +97,90 @@ function updateSecretKey(index: number, secretKey: string) {
       >
         <!-- Variable Name -->
         <div class="flex-1 min-w-[140px]">
-          <input
-            type="text"
-            :value="row.name || ''"
+          <AppInput
+            :model-value="row.name || ''"
             :disabled="disabled"
+            size="sm"
             placeholder="Tên biến (VD: PORT)"
             aria-label="Tên biến môi trường"
-            class="w-full h-8 px-2.5 text-xs rounded-[2px] border border-border bg-bg-input text-fg-strong placeholder:text-fg-dim focus:border-border-focus focus:outline-none"
-            @input="updateName(idx, ($event.target as HTMLInputElement).value)"
+            @update:model-value="updateName(idx, String($event))"
           />
         </div>
 
         <!-- Source Selector: Direct value vs From Secret -->
-        <div class="w-[150px] flex-shrink-0 relative">
-          <select
-            :value="row.secretName !== undefined && row.secretName !== null ? 'secret' : 'value'"
+        <div class="w-[155px] flex-shrink-0">
+          <AppSelect
+            :model-value="row.secretName !== undefined && row.secretName !== null ? 'secret' : 'value'"
             :disabled="disabled"
+            size="sm"
             aria-label="Nguồn biến môi trường"
-            class="w-full h-8 pl-2.5 pr-7 text-xs font-medium rounded-[2px] border border-border bg-bg-input text-fg-strong appearance-none cursor-pointer focus:border-border-focus focus:outline-none"
-            @change="updateSource(idx, ($event.target as HTMLSelectElement).value as 'value' | 'secret')"
-          >
-            <option value="value">Giá trị trực tiếp</option>
-            <option value="secret">Lấy từ Secret</option>
-          </select>
-          <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-fg-muted">
-            <ChevronDown class="w-3.5 h-3.5" aria-hidden="true" />
-          </div>
+            :options="[
+              { label: 'Giá trị trực tiếp', value: 'value' },
+              { label: 'Lấy từ Secret', value: 'secret' }
+            ]"
+            @update:model-value="updateSource(idx, ($event as 'value' | 'secret'))"
+          />
         </div>
 
         <!-- Value Input OR Secret Selection -->
         <div class="flex-1 flex flex-row items-center gap-2 min-w-[180px]">
           <!-- Case A: Plain direct value -->
           <template v-if="row.secretName === undefined || row.secretName === null">
-            <input
-              type="text"
-              :value="row.value || ''"
+            <AppInput
+              :model-value="row.value || ''"
               :disabled="disabled"
+              size="sm"
               placeholder="Giá trị biến"
               aria-label="Giá trị biến môi trường"
-              class="w-full h-8 px-2.5 text-xs rounded-[2px] border border-border bg-bg-input text-fg-strong placeholder:text-fg-dim focus:border-border-focus focus:outline-none"
-              @input="updateValue(idx, ($event.target as HTMLInputElement).value)"
+              @update:model-value="updateValue(idx, String($event))"
             />
           </template>
 
           <!-- Case B: From Secret (Secret name dropdown from allowlist + Secret key input) -->
           <!-- NOTE: Never displays or requests the secret's secret value! -->
           <template v-else>
-            <div class="w-1/2 relative">
-              <select
-                :value="row.secretName || ''"
+            <div class="w-1/2">
+              <AppSelect
+                :model-value="row.secretName || ''"
                 :disabled="disabled || secretOptions.length === 0"
+                size="sm"
+                placeholder="-- Chọn Secret --"
                 aria-label="Tên Secret trong allowlist"
-                class="w-full h-8 pl-2.5 pr-7 text-xs font-mono rounded-[2px] border border-border bg-bg-input text-fg-strong appearance-none cursor-pointer focus:border-border-focus focus:outline-none"
-                @change="updateSecretName(idx, ($event.target as HTMLSelectElement).value)"
-              >
-                <option value="" disabled>-- Chọn Secret --</option>
-                <option v-for="sec in secretOptions" :key="sec" :value="sec">
-                  {{ sec }}
-                </option>
-              </select>
-              <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-fg-muted">
-                <ChevronDown class="w-3.5 h-3.5" aria-hidden="true" />
-              </div>
+                :options="secretOptions.map((sec) => ({ label: sec, value: sec }))"
+                @update:model-value="updateSecretName(idx, String($event))"
+              />
             </div>
 
-            <div class="w-1/2 relative flex items-center">
-              <input
-                type="text"
-                :value="row.secretKey || ''"
+            <div class="w-1/2">
+              <AppInput
+                :model-value="row.secretKey || ''"
                 :disabled="disabled"
+                size="sm"
                 placeholder="Key (VD: password)"
                 aria-label="Key trong Secret"
-                class="w-full h-8 pl-7 pr-2.5 text-xs font-mono rounded-[2px] border border-border bg-bg-input text-fg-strong placeholder:text-fg-dim focus:border-border-focus focus:outline-none"
-                @input="updateSecretKey(idx, ($event.target as HTMLInputElement).value)"
-              />
-              <div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none text-fg-muted">
-                <Lock class="w-3.5 h-3.5" aria-hidden="true" />
-              </div>
+                @update:model-value="updateSecretKey(idx, String($event))"
+              >
+                <template #prefix>
+                  <Lock class="w-3.5 h-3.5 text-fg-muted" aria-hidden="true" />
+                </template>
+              </AppInput>
             </div>
           </template>
         </div>
 
         <!-- Remove row button -->
-        <button
+        <AppButton
           v-if="!disabled"
           type="button"
+          variant="ghost"
+          size="sm"
+          icon-only
           aria-label="Xoá biến môi trường"
-          class="h-8 w-8 flex items-center justify-center rounded-[2px] text-fg-muted hover:text-danger hover:bg-danger-bg border border-transparent hover:border-danger/30 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus flex-shrink-0"
+          class="flex-shrink-0 hover:text-danger"
           @click="removeRow(idx)"
         >
           <Trash2 class="w-3.5 h-3.5" aria-hidden="true" />
-        </button>
+        </AppButton>
       </div>
     </div>
 

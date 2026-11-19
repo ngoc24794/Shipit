@@ -5,6 +5,7 @@ import type { LogLine, RunStatus, RunTask } from '../api/types'
 import { useToast } from '../composables/useToast'
 import { classifyLogLine, type LogSeverity } from '../utils/logSeverity'
 import StatusBadge from './StatusBadge.vue'
+import AppSelect from './AppSelect.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -326,18 +327,19 @@ const statusMessage = computed(() => {
         <!-- Task Filter Dropdown for Grouped Job Mode -->
         <div v-if="isGrouped && tasks.length > 0" class="flex items-center gap-1 ml-1 shrink-0">
           <Filter class="w-3.5 h-3.5 text-fg-muted shrink-0" aria-hidden="true" />
-          <select
-            id="task-filter"
-            v-model="selectedTaskFilter"
-            aria-label="Lọc theo tác vụ"
-            class="bg-bg-input text-fg-strong border border-border rounded-[2px] px-2 py-0.5 h-7 text-xs max-w-[180px] truncate focus:border-border-focus focus:outline-none cursor-pointer"
-          >
-            <option value="all">Tất cả tác vụ</option>
-            <option value="prep">Chuẩn bị</option>
-            <option v-for="t in tasks" :key="t.position" :value="t.position">
-              Tác vụ {{ t.position + 1 }}: {{ t.label }}
-            </option>
-          </select>
+          <div class="w-[180px]">
+            <AppSelect
+              id="task-filter"
+              v-model="selectedTaskFilter"
+              aria-label="Lọc theo tác vụ"
+              size="sm"
+              :options="[
+                { label: 'Tất cả tác vụ', value: 'all' },
+                { label: 'Chuẩn bị', value: 'prep' },
+                ...tasks.map((t) => ({ label: `Tác vụ ${t.position + 1}: ${t.label}`, value: t.position }))
+              ]"
+            />
+          </div>
         </div>
 
         <!-- Status Notification for Screen Readers and UI -->

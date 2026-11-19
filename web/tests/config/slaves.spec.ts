@@ -85,12 +85,14 @@ describe('Slaves View, Form & Store', () => {
     await new Promise((resolve) => setTimeout(resolve, 60))
     await flushPromises()
 
-    const sshSelect = wrapper.find('select')
+    const sshSelect = wrapper.find('[role="combobox"]')
     expect(sshSelect.exists()).toBe(true)
-
-    const options = Array.from((sshSelect.element as HTMLSelectElement).options).filter((o) => o.value !== '')
-    expect(options.length).toBe(1)
-    expect(options[0].textContent?.trim()).toBe('devops-ssh-key')
+    await sshSelect.trigger('click')
+    const opts = Array.from(document.body.querySelectorAll('[role="option"]')).filter(
+      (o) => !o.textContent?.includes('Chọn')
+    )
+    expect(opts.length).toBe(1)
+    expect(opts[0].textContent?.trim()).toContain('devops-ssh-key')
   })
 
   it('loads slave by :id on edit page and shows not-found for unknown id', async () => {
