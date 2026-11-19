@@ -101,6 +101,47 @@ kubectl apply -f deploy/k8s/prod/30-service.yaml
 
 ---
 
+## Job migration: Secret chuỗi kết nối
+
+Trong namespace `avina-workspace`, hệ thống sử dụng 6 Kubernetes Secret chứa chuỗi kết nối PostgreSQL cho các Job migration (`DbMigrator`):
+
+- `avina-generation-migrate-secret`: key `ConnectionStrings__GenerationDb` (DB: `etc_avina_generation`)
+- `avina-billing-migrate-secret`: key `ConnectionStrings__BillingDb` (DB: `etc_avina_billing`)
+- `avina-users-migrate-secret`: key `ConnectionStrings__UsersDb` (DB: `etc_avina_users`)
+- `avina-learning-migrate-secret`: key `ConnectionStrings__LearningDb` (DB: `etc_avina_learning`)
+- `avina-catalog-migrate-secret`: key `ConnectionStrings__CatalogDb` (DB: `etc_avina_catalog`)
+- `avina-files-migrate-secret`: key `ConnectionStrings__FilesDb` (DB: `etc_avina_files`)
+
+### Cách chạy script nhập chuỗi kết nối
+Script nhập chuỗi kết nối qua `Read-Host -AsSecureString` (không hiển thị lên màn hình, không lưu lịch sử shell hay đối số dòng lệnh, truyền vào `kubectl` qua stdin):
+
+1. **Kiểm tra trước (Dry-run mặc định):**
+   ```powershell
+   pwsh scripts/set-migrate-secrets-prod.ps1
+   ```
+   Hoặc chỉ định một số service:
+   ```powershell
+   pwsh scripts/set-migrate-secrets-prod.ps1 -Services generation, billing
+   ```
+
+2. **Thực hiện cập nhật (với cờ `-Apply`):**
+   ```powershell
+   pwsh scripts/set-migrate-secrets-prod.ps1 -Apply
+   ```
+   Nhập chuỗi kết nối khi được yêu cầu (chuỗi phải chứa `Host=`, `Database=<tên DB>`, `Username=`, `Password=` và không còn chữ `CHANGE_ME`). Nhấn Enter để trống nếu muốn bỏ qua service.
+
+### Rollback / Gỡ bỏ Secret
+Khi cần xoá hoặc hoàn tác Secret migrate trong `avina-workspace`:
+```bash
+kubectl -n avina-workspace delete secret <name>
+```
+Ví dụ:
+```bash
+kubectl -n avina-workspace delete secret avina-generation-migrate-secret
+```
+
+---
+
 ## Hướng dẫn Rollback
 
 Khi cần gỡ bỏ bản triển khai, thực hiện lệnh `kubectl delete -f` theo **thứ tự ngược lại**:
