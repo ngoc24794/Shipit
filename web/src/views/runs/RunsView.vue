@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Play, RotateCw, PlayCircle, Search, Check, ChevronDown } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import AppTable from '../../components/AppTable.vue'
+
+defineOptions({ name: 'RunsView' })
 import AppButton from '../../components/AppButton.vue'
 import AppDialog from '../../components/AppDialog.vue'
 import AppField from '../../components/AppField.vue'
@@ -196,8 +197,25 @@ function currentFetchParams(): GetRunsParams {
   })
 }
 
+let isViewActive = true
+let hasMountedRuns = false
+
+function startSecondTimer() {
+  if (secondInterval) return
+  secondInterval = setInterval(() => {
+    currentTime.value = Date.now()
+  }, 1000)
+}
+
+function stopSecondTimer() {
+  if (secondInterval) {
+    clearInterval(secondInterval)
+    secondInterval = null
+  }
+}
+
 function startPolling() {
-  if (pollInterval) return
+  if (!isViewActive || pollInterval) return
   pollInterval = setInterval(async () => {
     await table.load({ silent: true }).catch(() => {})
   }, 3000)
@@ -211,7 +229,7 @@ function stopPolling() {
 }
 
 watch(hasActiveRuns, (active) => {
-  if (active) {
+  if (active && isViewActive) {
     startPolling()
   } else {
     stopPolling()
@@ -238,27 +256,44 @@ watch(triggerKind, (nextKind) => {
 })
 
 onMounted(async () => {
-  secondInterval = setInterval(() => {
-    currentTime.value = Date.now()
-  }, 1000)
+  isViewActive = true
+  startSecondTimer()
 
   await Promise.all([
     runsStore.fetchPipelines(),
     runsStore.fetchJobs(),
     table.load().catch(() => {})
   ])
+  hasMountedRuns = true
 
+  if (hasActiveRuns.value && isViewActive) {
+    startPolling()
+  }
+})
+
+onActivated(() => {
+  isViewActive = true
+  startSecondTimer()
+  if (!hasMountedRuns) return
+  // Silent background refresh on keep-alive revisit (never show skeleton)
+  table.load({ silent: true }).catch(() => {})
+  runsStore.fetchPipelines().catch(() => {})
+  runsStore.fetchJobs().catch(() => {})
   if (hasActiveRuns.value) {
     startPolling()
   }
 })
 
-onBeforeUnmount(() => {
+onDeactivated(() => {
+  isViewActive = false
   stopPolling()
-  if (secondInterval) {
-    clearInterval(secondInterval)
-    secondInterval = null
-  }
+  stopSecondTimer()
+})
+
+onBeforeUnmount(() => {
+  isViewActive = false
+  stopPolling()
+  stopSecondTimer()
 })
 
 function openTriggerDialog() {
@@ -350,8 +385,7 @@ registerMany([
 </script>
 
 <template>
-  <AppLayout>
-    <div class="flex-1 min-h-0 flex flex-col gap-4 w-full">
+  <div class="flex-1 min-h-0 flex flex-col gap-4 w-full">
       <!-- Header -->
       <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap">
         <div class="min-w-0">
@@ -742,6 +776,5 @@ registerMany([
           </AppButton>
         </template>
       </AppDialog>
-    </div>
-  </AppLayout>
+  </div>
 </template>

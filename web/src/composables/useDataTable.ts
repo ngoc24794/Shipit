@@ -362,10 +362,13 @@ export function useDataTable<T>(options: UseDataTableOptions<T>) {
     })
   })
 
+  let hasLoadedServer = false
+
   async function load(opts?: { silent?: boolean }): Promise<void> {
     if (options.mode !== 'server' || !options.fetchFn) return
     const seq = ++fetchSeq
-    if (!opts?.silent) {
+    const showLoading = !opts?.silent && !hasLoadedServer
+    if (showLoading) {
       serverLoading.value = true
     }
     serverError.value = null
@@ -381,12 +384,13 @@ export function useDataTable<T>(options: UseDataTableOptions<T>) {
       if (seq !== fetchSeq) return
       serverItems.value = result.items
       serverTotal.value = result.total
+      hasLoadedServer = true
     } catch (err: any) {
       if (seq !== fetchSeq) return
       serverError.value = err?.message || 'Không thể tải dữ liệu'
       throw err
     } finally {
-      if (seq === fetchSeq && !opts?.silent) {
+      if (seq === fetchSeq && showLoading) {
         serverLoading.value = false
       }
     }

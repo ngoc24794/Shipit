@@ -39,6 +39,14 @@ const { registerMany, toggleOverlay } = useShortcuts()
 const railCollapsed = ref(false)
 const cmdInput = ref('')
 const cmdInputRef = ref<HTMLInputElement | null>(null)
+const KEEP_ALIVE_VIEWS = [
+  'RunsView',
+  'PipelinesView',
+  'JobsView',
+  'SlavesView',
+  'CredentialsView',
+  'AllowlistView'
+]
 
 const navGroups = [
   {
@@ -358,8 +366,18 @@ registerMany([
 
       <!-- Workspace (never scrolls vertically; min-w-[1024px] prevents layout wrapping) -->
       <main class="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex flex-col bg-bg">
-        <div class="min-w-[1024px] w-full p-4 flex-1 min-h-0 flex flex-col animate-[viewEnter_var(--dur-fast)_var(--ease-snap)]">
-          <slot />
+        <div class="min-w-[1024px] w-full p-4 flex-1 min-h-0 flex flex-col">
+          <slot v-if="$slots.default" />
+          <router-view v-else v-slot="{ Component, route: childRoute }">
+            <Transition name="d1-content" :appear="false">
+              <KeepAlive :include="KEEP_ALIVE_VIEWS" :max="8">
+                <component
+                  :is="Component"
+                  :key="childRoute.meta?.keepAlive ? childRoute.name : undefined"
+                />
+              </KeepAlive>
+            </Transition>
+          </router-view>
         </div>
       </main>
     </div>
@@ -399,3 +417,23 @@ registerMany([
     </footer>
   </div>
 </template>
+
+<style scoped>
+.d1-content-enter-active {
+  transition: opacity 80ms var(--ease-snap);
+}
+
+.d1-content-enter-from {
+  opacity: 0;
+}
+
+.d1-content-leave-active {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .d1-content-enter-active {
+    transition: none;
+  }
+}
+</style>

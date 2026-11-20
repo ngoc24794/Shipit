@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Sun, Moon, Play, Trash2, Terminal, Inbox } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import { useTheme } from '../../composables/useTheme'
 import { useToast } from '../../composables/useToast'
 import { useShortcuts } from '../../composables/useShortcuts'
@@ -188,7 +187,7 @@ function handleSort(key: string) {
 </script>
 
 <template>
-  <AppLayout>
+  <div class="flex-1 min-h-0 flex flex-col">
     <div class="flex-1 min-h-0 flex flex-col gap-3" data-testid="components-gallery">
       <!-- Header & Global Controls -->
       <div class="shrink-0 flex items-center justify-between gap-3 pb-2 border-b border-border flex-nowrap">
@@ -713,5 +712,5 @@ function handleSort(key: string) {
     <AppDrawer v-model="drawerOpen" title="AppDrawer mẫu" side="right" size="md">
       <p class="text-xs text-fg">Bảng trượt bên phải trong D1 Terminal-native.</p>
     </AppDrawer>
-  </AppLayout>
+  </div>
 </template>

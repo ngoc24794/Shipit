@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Boxes,
@@ -9,8 +9,9 @@ import {
   Play,
   GitBranch
 } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import AppTable from '../../components/AppTable.vue'
+
+defineOptions({ name: 'JobsView' })
 import AppButton from '../../components/AppButton.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import EmptyState from '../../components/EmptyState.vue'
@@ -91,12 +92,19 @@ const toolbarFilters = computed<DataToolbarFilter[]>(() => {
   ]
 })
 
+let hasMountedJobs = false
 onMounted(async () => {
+  hasMountedJobs = true
   try {
     await store.fetchJobs()
   } catch (err: any) {
     toast.error(err.message || 'Không thể tải danh sách Job')
   }
+})
+
+onActivated(() => {
+  if (!hasMountedJobs) return
+  store.fetchJobs({ silent: true }).catch(() => {})
 })
 
 function navigateToNew() {
@@ -168,7 +176,7 @@ async function handleDelete() {
 </script>
 
 <template>
-  <AppLayout>
+  <div class="flex-1 min-h-0 flex flex-col">
     <div class="flex-1 min-h-0 flex flex-col gap-4">
       <!-- Page Header -->
       <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap">
@@ -403,5 +411,5 @@ async function handleDelete() {
       :danger="true"
       @confirm="handleDelete"
     />
-  </AppLayout>
+  </div>
 </template>

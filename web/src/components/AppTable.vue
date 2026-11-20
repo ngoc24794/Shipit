@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onActivated, onDeactivated, ref } from 'vue'
 import AppCheckbox from './AppCheckbox.vue'
 import EmptyState from './EmptyState.vue'
 import ErrorState from './ErrorState.vue'
@@ -98,6 +98,26 @@ function setActiveIndex(idx: number) {
   emit('update:activeIndex', idx)
 }
 
+const containerRef = ref<HTMLElement | null>(null)
+let savedScrollTop = 0
+let savedScrollLeft = 0
+
+onDeactivated(() => {
+  if (containerRef.value) {
+    savedScrollTop = containerRef.value.scrollTop
+    savedScrollLeft = containerRef.value.scrollLeft
+  }
+})
+
+onActivated(() => {
+  nextTick(() => {
+    if (containerRef.value) {
+      containerRef.value.scrollTop = savedScrollTop
+      containerRef.value.scrollLeft = savedScrollLeft
+    }
+  })
+})
+
 function handleTableKeydown(e: KeyboardEvent) {
   if (!props.keyboardNav || !props.rows || props.rows.length === 0) return
   const target = e.target as HTMLElement | null
@@ -123,6 +143,7 @@ function handleTableKeydown(e: KeyboardEvent) {
 
 <template>
   <div
+    ref="containerRef"
     :tabindex="keyboardNav ? 0 : undefined"
     :class="[
       'w-full flex-1 min-h-0 max-h-full overflow-auto bg-bg-elevated font-mono focus-visible:outline-2 focus-visible:outline-border-focus',

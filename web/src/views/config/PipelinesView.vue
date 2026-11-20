@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Workflow,
@@ -9,8 +9,9 @@ import {
   Play,
   AlertCircle
 } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import AppTable from '../../components/AppTable.vue'
+
+defineOptions({ name: 'PipelinesView' })
 import AppButton from '../../components/AppButton.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import EmptyState from '../../components/EmptyState.vue'
@@ -154,14 +155,22 @@ async function handleTriggerRun(pipeline: Pipeline) {
   }
 }
 
+let hasMountedPipelines = false
 onMounted(() => {
+  hasMountedPipelines = true
   store.fetchPipelines().catch(() => {})
+  slaveStore.fetchSlaves().catch(() => {})
+})
+
+onActivated(() => {
+  if (!hasMountedPipelines) return
+  store.fetchPipelines({ silent: true }).catch(() => {})
   slaveStore.fetchSlaves().catch(() => {})
 })
 </script>
 
 <template>
-  <AppLayout>
+  <div class="flex-1 min-h-0 flex flex-col">
     <div class="flex-1 min-h-0 flex flex-col gap-4">
       <!-- Header -->
       <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap">
@@ -389,5 +398,5 @@ onMounted(() => {
       @confirm="handleDelete"
       @cancel="isConfirmOpen = false"
     />
-  </AppLayout>
+  </div>
 </template>

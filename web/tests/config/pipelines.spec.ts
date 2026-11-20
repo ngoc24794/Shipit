@@ -385,10 +385,9 @@ describe('Pipelines View, Form & Store', () => {
   })
 
   it('defaults to "Không cần đăng nhập" when no registry credentials exist', async () => {
-    const credStore = useConfigCredentialsStore()
-    await credStore.fetchCredentials()
+    const allCreds = await mockApi.getCredentials()
     vi.spyOn(mockApi, 'getCredentials').mockResolvedValueOnce(
-      credStore.credentials.filter((c) => c.kind !== 'registry')
+      allCreds.filter((c) => c.kind !== 'registry')
     )
 
     await router.push('/pipelines/new')

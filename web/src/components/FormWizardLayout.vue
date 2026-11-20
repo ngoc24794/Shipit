@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ArrowLeft, ArrowRight, Save, FileQuestion } from 'lucide-vue-next'
-import AppLayout from '../layouts/AppLayout.vue'
 import AppButton from './AppButton.vue'
 import AppSkeleton from './AppSkeleton.vue'
 import FormStepper, { type WizardStep } from './FormStepper.vue'
@@ -44,7 +43,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <AppLayout>
+  <div class="flex-1 min-h-0 flex flex-col">
     <div class="flex-1 w-full flex flex-col min-h-0 gap-3 font-mono">
       <!-- Top Header (Fixed) -->
       <div class="shrink-0 flex items-center justify-between gap-4 flex-nowrap pb-2 border-b border-border">
@@ -169,5 +168,5 @@ const emit = defineEmits<{
         </template>
       </div>
     </div>
-  </AppLayout>
+  </div>
 </template>

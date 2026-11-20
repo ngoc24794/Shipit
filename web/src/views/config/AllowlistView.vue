@@ -2,9 +2,10 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ShieldCheck, ListChecks, Rocket } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import DeployTargetsView from './DeployTargetsView.vue'
 import JobAllowListView from '../jobs/JobAllowListView.vue'
+
+defineOptions({ name: 'AllowlistView' })
 
 type AllowlistTab = 'deployment' | 'job'
 
@@ -25,8 +26,7 @@ function selectTab(tab: AllowlistTab) {
 </script>
 
 <template>
-  <AppLayout>
-    <div class="flex-1 min-h-0 flex flex-col gap-5">
+  <div class="flex-1 min-h-0 flex flex-col gap-5">
       <!-- Page Header -->
       <div class="shrink-0">
         <h1 class="text-2xl font-bold tracking-tight text-fg flex items-center gap-2.5">
@@ -97,8 +97,7 @@ function selectTab(tab: AllowlistTab) {
         aria-labelledby="tab-job"
         class="flex-1 min-h-0 flex flex-col"
       >
-        <JobAllowListView embedded />
-      </div>
+      <JobAllowListView embedded />
     </div>
-  </AppLayout>
+  </div>
 </template>

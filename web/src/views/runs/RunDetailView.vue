@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   CircleStop
 } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import AppButton from '../../components/AppButton.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
@@ -409,7 +408,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <AppLayout>
+  <div class="flex-1 min-h-0 flex flex-col">
     <!-- Screen reader status announcement -->
     <div role="status" class="sr-only" aria-live="polite">
       {{ statusAnnouncement }}
@@ -661,5 +660,5 @@ onBeforeUnmount(() => {
       @confirm="handleConfirmCancel"
       @cancel="showCancelDialog = false"
     />
-  </AppLayout>
+  </div>
 </template>
