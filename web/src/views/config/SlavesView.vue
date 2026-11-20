@@ -213,6 +213,7 @@ onMounted(() => {
                 sort-key="user"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[115px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -220,10 +221,11 @@ onMounted(() => {
                 sort-key="sshCredentialId"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[140px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="py-3 whitespace-nowrap">Trạng thái kết nối</th>
-              <th scope="col" class="py-3 text-right whitespace-nowrap">Thao tác</th>
+              <th scope="col" class="py-3 w-[165px] whitespace-nowrap">Trạng thái kết nối</th>
+              <th scope="col" class="py-3 w-[300px] text-right whitespace-nowrap">Thao tác</th>
             </tr>
           </template>
 

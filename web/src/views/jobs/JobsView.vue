@@ -259,6 +259,7 @@ async function handleDelete() {
                 sort-key="namespace"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[135px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -267,6 +268,7 @@ async function handleDelete() {
                 align="center"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[105px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -274,9 +276,10 @@ async function handleDelete() {
                 sort-key="lastRun"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[172px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
+              <th scope="col" class="w-[258px] text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
                 Thao tác
               </th>
             </tr>

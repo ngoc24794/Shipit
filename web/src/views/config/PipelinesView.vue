@@ -260,16 +260,16 @@ onMounted(() => {
                 sort-key="slave"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
-                class="!px-3"
+                class="!px-3 w-[115px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="py-3 !px-3 whitespace-nowrap">Image Docker</th>
+              <th scope="col" class="py-3 !px-3 w-[125px] whitespace-nowrap">Image Docker</th>
               <SortableHeader
                 label="Đích Deploy"
                 sort-key="deploy"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
-                class="!px-3"
+                class="!px-3 w-[120px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -277,18 +277,18 @@ onMounted(() => {
                 sort-key="lastRun"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
-                class="!px-3 w-[185px]"
+                class="!px-3 w-[172px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="py-3 !px-3 text-right whitespace-nowrap">Thao tác</th>
+              <th scope="col" class="py-3 !px-3 w-[260px] text-right whitespace-nowrap">Thao tác</th>
             </tr>
           </template>
 
           <tr v-for="pipeline in table.items.value" :key="pipeline.id">
-            <td class="!px-3 font-medium text-fg min-w-[160px]">
-              <div class="flex items-center gap-2">
+            <td class="!px-3 font-medium text-fg" :title="pipeline.name">
+              <div class="flex items-center gap-2 min-w-0">
                 <Workflow class="w-4 h-4 text-muted-fg flex-shrink-0" aria-hidden="true" />
-                <span class="break-words">{{ pipeline.name }}</span>
+                <span class="truncate">{{ pipeline.name }}</span>
               </div>
             </td>
             <td

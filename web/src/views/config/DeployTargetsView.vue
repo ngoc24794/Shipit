@@ -327,10 +327,10 @@ onMounted(() => {
                 sort-key="createdAt"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
-                class="py-3 px-4"
+                class="py-3 px-4 w-[155px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="py-3 px-4 text-right text-xs font-semibold text-muted-fg whitespace-nowrap">
+              <th scope="col" class="py-3 px-4 w-[100px] text-right text-xs font-semibold text-muted-fg whitespace-nowrap">
                 Thao tác
               </th>
             </tr>

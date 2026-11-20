@@ -320,8 +320,8 @@ const statusMessage = computed(() => {
 <template>
   <div class="flex flex-col flex-1 min-h-0 w-full rounded-[2px] overflow-hidden border border-border bg-bg-input text-fg font-mono">
     <!-- Toolbar -->
-    <div class="shrink-0 flex flex-nowrap items-center justify-between gap-2 px-3 py-1.5 bg-bg-surface border-b border-border text-xs select-none overflow-x-auto">
-      <div class="flex items-center gap-2 flex-nowrap min-w-0">
+    <div class="shrink-0 flex flex-nowrap items-center justify-between gap-1.5 px-2.5 py-1.5 bg-bg-surface border-b border-border text-xs select-none overflow-x-auto">
+      <div class="flex items-center gap-1.5 flex-nowrap min-w-0">
         <span class="font-mono text-fg-muted whitespace-nowrap shrink-0">Nhật ký ({{ lines.length }} dòng)</span>
 
         <!-- Task Filter Dropdown for Grouped Job Mode -->
@@ -357,16 +357,16 @@ const statusMessage = computed(() => {
         </span>
       </div>
 
-      <div class="flex items-center gap-1.5 flex-nowrap shrink-0">
+      <div class="flex items-center gap-1 flex-nowrap shrink-0">
         <!-- Search in Log -->
-        <div class="flex items-center gap-1 bg-bg-input border border-border focus-within:border-border-focus rounded-[2px] px-2 h-7">
+        <div class="flex items-center gap-1 bg-bg-input border border-border focus-within:border-border-focus rounded-[2px] px-1.5 h-7">
           <Search class="w-3.5 h-3.5 text-fg-dim shrink-0" aria-hidden="true" />
           <input
             v-model="searchQuery"
             type="text"
             aria-label="Tìm trong nhật ký"
-            placeholder="Tìm trong log..."
-            class="w-32 bg-transparent text-fg-strong placeholder:text-fg-dim text-xs focus:outline-none"
+            placeholder="Tìm log..."
+            class="w-20 bg-transparent text-fg-strong placeholder:text-fg-dim text-xs focus:outline-none"
             @keydown.enter.exact.prevent="goToNextMatch"
             @keydown.enter.shift.prevent="goToPrevMatch"
           />
@@ -414,7 +414,7 @@ const statusMessage = computed(() => {
         <button
           type="button"
           :class="[
-            'inline-flex items-center gap-1 h-7 px-2 rounded-[2px] text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap',
+            'inline-flex items-center gap-1 h-7 px-1.5 rounded-[2px] text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap',
             autoScroll
               ? 'bg-phosphor-bg text-phosphor border-phosphor/50 hover:bg-phosphor hover:text-bg'
               : 'bg-bg-elevated text-fg-muted border-border hover:text-fg-strong hover:bg-bg-hover'
@@ -430,7 +430,7 @@ const statusMessage = computed(() => {
         <button
           type="button"
           aria-label="Sao chép nhật ký"
-          class="inline-flex items-center gap-1 h-7 px-2 rounded-[2px] text-xs font-medium border border-border bg-bg-elevated text-fg-muted hover:text-fg-strong hover:bg-bg-hover transition-colors cursor-pointer whitespace-nowrap"
+          class="inline-flex items-center gap-1 h-7 px-1.5 rounded-[2px] text-xs font-medium border border-border bg-bg-elevated text-fg-muted hover:text-fg-strong hover:bg-bg-hover transition-colors cursor-pointer whitespace-nowrap"
           @click="copyLogs"
         >
           <Check v-if="copied" class="w-3.5 h-3.5 text-phosphor" aria-hidden="true" />
@@ -442,7 +442,7 @@ const statusMessage = computed(() => {
         <button
           type="button"
           aria-label="Tải xuống nhật ký"
-          class="inline-flex items-center gap-1 h-7 px-2 rounded-[2px] text-xs font-medium border border-border bg-bg-elevated text-fg-muted hover:text-fg-strong hover:bg-bg-hover transition-colors cursor-pointer whitespace-nowrap"
+          class="inline-flex items-center gap-1 h-7 px-1.5 rounded-[2px] text-xs font-medium border border-border bg-bg-elevated text-fg-muted hover:text-fg-strong hover:bg-bg-hover transition-colors cursor-pointer whitespace-nowrap"
           @click="downloadLogs"
         >
           <Download class="w-3.5 h-3.5" aria-hidden="true" />

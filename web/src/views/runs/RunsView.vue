@@ -460,7 +460,7 @@ registerMany([
                 sort-key="id"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
-                class="w-20"
+                class="w-[68px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -468,6 +468,7 @@ registerMany([
                 sort-key="kind"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[96px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -482,18 +483,20 @@ registerMany([
                 sort-key="status"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[132px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="whitespace-nowrap">Tag (SHA)</th>
+              <th scope="col" class="w-[130px] whitespace-nowrap">Tag (SHA)</th>
               <th scope="col" class="whitespace-nowrap">Image</th>
               <SortableHeader
                 label="Bắt đầu lúc"
                 sort-key="startedAt"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[155px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="whitespace-nowrap">Thời lượng</th>
+              <th scope="col" class="w-[100px] whitespace-nowrap">Thời lượng</th>
             </tr>
           </template>
 

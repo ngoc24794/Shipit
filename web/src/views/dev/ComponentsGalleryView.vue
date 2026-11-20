@@ -544,7 +544,7 @@ function handleSort(key: string) {
             </h2>
 
             <div class="grid grid-cols-2 gap-3">
-              <div class="p-3 bg-bg-elevated border border-border rounded-[2px] space-y-2">
+              <div class="col-span-2 p-3 bg-bg-elevated border border-border rounded-[2px] space-y-2">
                 <div class="text-xs font-bold text-fg-strong">StatusBadge / AppBadge / AppToast</div>
                 <div class="flex flex-wrap items-center gap-1.5">
                   <StatusBadge status="success" size="sm" />
@@ -596,7 +596,7 @@ function handleSort(key: string) {
             </h2>
 
             <div class="grid grid-cols-2 gap-3">
-              <div class="p-3 bg-bg-elevated border border-border rounded-[2px] space-y-2">
+              <div class="col-span-2 p-3 bg-bg-elevated border border-border rounded-[2px] space-y-2">
                 <div class="text-xs font-bold text-fg-strong">KeyValueGrid / CopyButton / RelativeTime / DurationText</div>
                 <KeyValueGrid
                   :items="[
@@ -640,7 +640,7 @@ function handleSort(key: string) {
             </h2>
 
             <div class="grid grid-cols-2 gap-3">
-              <div class="p-3 bg-bg-elevated border border-border rounded-[2px] space-y-2">
+              <div class="col-span-2 p-3 bg-bg-elevated border border-border rounded-[2px] space-y-2">
                 <div class="text-xs font-bold text-fg-strong">StepTimeline (tmux tree) &amp; TaskTable</div>
                 <StepTimeline :steps="sampleSteps" kind="pipeline" orientation="vertical" />
                 <div class="h-[120px] flex">
@@ -648,7 +648,7 @@ function handleSort(key: string) {
                 </div>
               </div>
 
-              <div class="p-3 bg-bg-elevated border border-border rounded-[2px] space-y-2 flex flex-col">
+              <div class="col-span-2 p-3 bg-bg-elevated border border-border rounded-[2px] space-y-2 flex flex-col">
                 <div class="text-xs font-bold text-fg-strong">LogViewer</div>
                 <div class="h-[240px] flex">
                   <LogViewer :lines="sampleLogs" status="running" :run-id="1" />
@@ -657,7 +657,7 @@ function handleSort(key: string) {
             </div>
 
             <div class="grid grid-cols-2 gap-3">
-              <div class="p-3 bg-bg-elevated border border-border rounded-[2px] space-y-2">
+              <div class="col-span-2 p-3 bg-bg-elevated border border-border rounded-[2px] space-y-2">
                 <div class="text-xs font-bold text-fg-strong">ChipInput / AllowlistMultiSelect / EnvEditor</div>
                 <ChipInput v-model="sampleChips" :disabled="demoDisabled" :error="demoError" />
                 <AllowlistMultiSelect
