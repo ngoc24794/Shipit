@@ -123,11 +123,17 @@ internal static partial class JobEndpoints
             return Results.NoContent();
         });
 
-        jobs.MapPost("{id:long}/runs", async (long id, IRunCoordinator coordinator, CancellationToken ct) =>
+        jobs.MapPost("{id:long}/runs", async (long id, HttpRequest http, IRunCoordinator coordinator, CancellationToken ct) =>
         {
+            var (ok, skipSteps, badRequest) = await RunEndpoints.TryParseTriggerSkipStepsAsync(http, isJob: true, ct);
+            if (!ok)
+            {
+                return badRequest!;
+            }
+
             try
             {
-                var run = await coordinator.TriggerJobAsync(id, ct);
+                var run = await coordinator.TriggerJobAsync(id, ct, skipSteps);
                 return Results.Json(run.ToDto(), statusCode: StatusCodes.Status202Accepted);
             }
             catch (JobNotFoundException)

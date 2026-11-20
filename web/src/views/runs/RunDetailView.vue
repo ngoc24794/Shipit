@@ -11,6 +11,8 @@ import {
 } from 'lucide-vue-next'
 import AppButton from '../../components/AppButton.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import RunDialog from '../../components/RunDialog.vue'
+import type { StepName } from '../../api/types'
 import StatusBadge from '../../components/StatusBadge.vue'
 import StepTimeline from '../../components/StepTimeline.vue'
 import LogViewer from '../../components/LogViewer.vue'
@@ -287,26 +289,46 @@ function startStream(runId: number) {
   )
 }
 
-async function handleRerun() {
+const showRerunDialog = ref(false)
+const rerunError = ref<string | null>(null)
+
+function handleRerun() {
+  if (!run.value || showRerunDialog.value) return
+  rerunError.value = null
+  showRerunDialog.value = true
+}
+
+async function confirmRerun(skipSteps: StepName[]) {
   if (!run.value) return
   isTriggering.value = true
+  rerunError.value = null
 
   try {
+    const opts = skipSteps.length > 0 ? { skipSteps } : undefined
     let newRun: any
     if (isJobRun.value && run.value.jobId) {
-      newRun = await runsStore.runJob(run.value.jobId)
+      newRun = opts
+        ? await runsStore.runJob(run.value.jobId, opts)
+        : await runsStore.runJob(run.value.jobId)
     } else if (run.value.pipelineId) {
-      newRun = await api.triggerRun(run.value.pipelineId)
+      newRun = opts
+        ? await api.triggerRun(run.value.pipelineId, opts)
+        : await api.triggerRun(run.value.pipelineId)
     }
     if (newRun) {
+      showRerunDialog.value = false
       toast.success(`Đã kích hoạt lượt chạy mới #${newRun.id}`)
       router.push(`/runs/${newRun.id}`)
     }
   } catch (err: any) {
     if (err instanceof ApiError && err.status === 409) {
-      toast.error(isJobRun.value ? 'Job đang có lượt chạy' : 'Pipeline đang có lượt chạy')
+      const msg = isJobRun.value ? 'Job đang có lượt chạy' : 'Pipeline đang có lượt chạy'
+      rerunError.value = msg
+      toast.error(msg)
     } else {
-      toast.error(err.message || 'Không thể kích hoạt lượt chạy')
+      const msg = err.message || 'Không thể kích hoạt lượt chạy'
+      rerunError.value = msg
+      toast.error(msg)
     }
   } finally {
     isTriggering.value = false
@@ -659,6 +681,15 @@ onBeforeUnmount(() => {
       :danger="true"
       @confirm="handleConfirmCancel"
       @cancel="showCancelDialog = false"
+    />
+
+    <RunDialog
+      v-model="showRerunDialog"
+      :kind="isJobRun ? 'job' : 'pipeline'"
+      :target-name="displayName"
+      :loading="isTriggering"
+      :error="rerunError"
+      @confirm="confirmRerun"
     />
   </div>
 </template>

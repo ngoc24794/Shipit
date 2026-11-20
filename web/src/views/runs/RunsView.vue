@@ -7,6 +7,8 @@ import AppTable from '../../components/AppTable.vue'
 defineOptions({ name: 'RunsView' })
 import AppButton from '../../components/AppButton.vue'
 import AppDialog from '../../components/AppDialog.vue'
+import RunStepsSelector from '../../components/RunStepsSelector.vue'
+import type { StepName } from '../../api/types'
 import AppField from '../../components/AppField.vue'
 import DataToolbar, { type DataToolbarFilter } from '../../components/DataToolbar.vue'
 import DataPagination from '../../components/DataPagination.vue'
@@ -251,6 +253,7 @@ watch(
 watch(triggerKind, (nextKind) => {
   triggerError.value = null
   triggerSearchQuery.value = ''
+  triggerSkipSteps.value = []
   const list = nextKind === 'job' ? runsStore.jobs : runsStore.pipelines
   triggerTargetId.value = list.length > 0 ? list[0].id : null
 })
@@ -296,10 +299,13 @@ onBeforeUnmount(() => {
   stopSecondTimer()
 })
 
+const triggerSkipSteps = ref<StepName[]>([])
+
 function openTriggerDialog() {
   triggerError.value = null
   triggerSearchQuery.value = ''
   comboboxOpen.value = false
+  triggerSkipSteps.value = []
   if (table.filters.target.startsWith('job:')) {
     triggerKind.value = 'job'
     triggerTargetId.value = Number(table.filters.target.split(':')[1]) || null
@@ -330,10 +336,11 @@ async function handleTriggerRun() {
   triggerError.value = null
 
   try {
+    const opts = triggerSkipSteps.value.length > 0 ? { skipSteps: triggerSkipSteps.value } : undefined
     const newRun =
       triggerKind.value === 'job'
-        ? await runsStore.runJob(targetId)
-        : await runsStore.triggerRun(targetId)
+        ? await (opts ? runsStore.runJob(targetId, opts) : runsStore.runJob(targetId))
+        : await (opts ? runsStore.triggerRun(targetId, opts) : runsStore.triggerRun(targetId))
     toast.success(`Đã kích hoạt lượt chạy #${newRun.id}`)
     showTriggerDialog.value = false
     router.push(`/runs/${newRun.id}`)
@@ -756,6 +763,12 @@ registerMany([
               </div>
             </template>
           </AppField>
+
+          <RunStepsSelector
+            v-model="triggerSkipSteps"
+            :kind="triggerKind"
+            :disabled="isTriggering"
+          />
         </div>
 
         <template #footer>

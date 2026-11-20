@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Pipeline, PipelineInput, Run } from '../api/types'
+import type { Pipeline, PipelineInput, Run, TriggerRunOptions } from '../api/types'
 import { ApiError } from '../api/client'
 import { getApi } from '../api'
 import { createSwrChannel, type SwrOptions } from '../utils/swr'
@@ -91,12 +91,14 @@ export const useConfigPipelinesStore = defineStore('configPipelines', () => {
     }
   }
 
-  async function triggerRun(pipelineId: number): Promise<Run> {
+  async function triggerRun(pipelineId: number, options?: TriggerRunOptions): Promise<Run> {
     const api = getApi()
     triggeringId.value = pipelineId
     error.value = null
     try {
-      const run = await api.triggerRun(pipelineId)
+      const run = options?.skipSteps?.length
+        ? await api.triggerRun(pipelineId, options)
+        : await api.triggerRun(pipelineId)
       pipelinesSwr.invalidate()
       await fetchPipelines({ force: true, silent: true })
       return run

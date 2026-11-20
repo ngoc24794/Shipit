@@ -238,7 +238,12 @@ describe('Pipelines View, Form & Store', () => {
     await new Promise((resolve) => setTimeout(resolve, 60))
 
     const vm = wrapper.vm as any
-    await vm.handleTriggerRun(targetPipeline)
+    vm.handleTriggerRun(targetPipeline)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const confirmBtn = document.body.querySelector('[data-testid="run-dialog-confirm"]') as HTMLButtonElement | null
+    expect(confirmBtn).not.toBeNull()
+    confirmBtn!.click()
+    await new Promise((resolve) => setTimeout(resolve, 250))
 
     expect(pushSpy).toHaveBeenCalledWith(expect.stringMatching(/^\/runs\/\d+/))
   })

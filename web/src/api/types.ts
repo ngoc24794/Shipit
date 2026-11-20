@@ -70,6 +70,10 @@ export type RunStatus = 'queued' | 'running' | 'success' | 'failed' | 'cancelled
 export type StepName = 'checkout' | 'build' | 'push' | 'deploy' | 'runjob'
 export type StepStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'
 
+export interface TriggerRunOptions {
+  skipSteps?: StepName[]
+}
+
 export interface Run {
   id: number
   pipelineId?: number | null

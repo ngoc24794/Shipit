@@ -315,6 +315,9 @@ describe('RunDetailView (Chi tiết lượt chạy)', () => {
     expect(rerunBtn.exists()).toBe(true)
 
     await rerunBtn.trigger('click')
+    const confirmBtn1 = document.body.querySelector('[data-testid="run-dialog-confirm"]') as HTMLButtonElement | null
+    expect(confirmBtn1).not.toBeNull()
+    confirmBtn1!.click()
     await waitMounted(wrapper)
 
     expect(triggerSpy).toHaveBeenCalledWith(1)
@@ -325,7 +328,8 @@ describe('RunDetailView (Chi tiết lượt chạy)', () => {
     const newRun = { id: 888, pipelineId: 1, status: 'queued' as const, createdAt: new Date().toISOString() }
     triggerSpy.mockResolvedValueOnce(newRun)
 
-    await rerunBtn.trigger('click')
+    const confirmBtn2 = document.body.querySelector('[data-testid="run-dialog-confirm"]') as HTMLButtonElement | null
+    confirmBtn2!.click()
     await waitMounted(wrapper)
 
     expect(pushSpy).toHaveBeenCalledWith('/runs/888')

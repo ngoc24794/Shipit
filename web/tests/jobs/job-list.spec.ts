@@ -70,6 +70,9 @@ describe('JobsView (Danh sách Job)', () => {
     const runBtn = wrapper.findAll('button').find((b) => b.text().includes('Chạy ngay'))
     expect(runBtn).toBeDefined()
     await runBtn!.trigger('click')
+    const confirmBtn = document.body.querySelector('[data-testid="run-dialog-confirm"]') as HTMLButtonElement | null
+    expect(confirmBtn).not.toBeNull()
+    confirmBtn!.click()
     await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 

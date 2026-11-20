@@ -1,23 +1,29 @@
 import { getApi } from './index'
-import type { Run } from './types'
+import type { Run, TriggerRunOptions } from './types'
 
-export async function runJob(id: number): Promise<Run> {
+export async function runJob(id: number, options?: TriggerRunOptions): Promise<Run> {
   const api = getApi()
   if ('runJob' in api && typeof (api as any).runJob === 'function') {
-    return (api as any).runJob(id)
+    return options ? (api as any).runJob(id, options) : (api as any).runJob(id)
   }
   if ('triggerJobRun' in api && typeof (api as any).triggerJobRun === 'function') {
-    return (api as any).triggerJobRun(id)
+    return options ? (api as any).triggerJobRun(id, options) : (api as any).triggerJobRun(id)
   }
 
-  const res = await fetch(`/api/jobs/${id}/runs`, {
+  const skipSteps = options?.skipSteps
+  const init: RequestInit = {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json'
     },
     credentials: 'same-origin'
-  })
+  }
+  if (skipSteps && skipSteps.length > 0) {
+    init.body = JSON.stringify({ skipSteps })
+  }
+
+  const res = await fetch(`/api/jobs/${id}/runs`, init)
 
   if (!res.ok) {
     let errMessage = `Yêu cầu thất bại với mã lỗi ${res.status}`
