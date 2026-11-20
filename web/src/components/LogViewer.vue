@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, computed } from 'vue'
+import { ref, watch, nextTick, onMounted, onBeforeUnmount, computed } from 'vue'
 import { Copy, Download, Radio, Check, ChevronDown, ChevronRight, Filter, Search, ChevronUp, X } from 'lucide-vue-next'
 import type { LogLine, RunStatus, RunTask } from '../api/types'
 import { useToast } from '../composables/useToast'
@@ -29,6 +29,9 @@ const emit = defineEmits<{
 }>()
 
 const scrollContainer = ref<HTMLElement | null>(null)
+const toolbarRef = ref<HTMLElement | null>(null)
+const searchInputRef = ref<HTMLInputElement | null>(null)
+const toolbarWidth = ref(900)
 const autoScroll = ref(true)
 const copied = ref(false)
 const selectedTaskFilter = ref<string | number>('all')
@@ -36,6 +39,16 @@ const collapsedGroups = ref<Set<string | number>>(new Set())
 const searchQuery = ref('')
 const activeMatchIndex = ref(0)
 const toast = useToast()
+
+const isCompactToolbar = computed(() => toolbarWidth.value < 900)
+const isWrapToolbar = computed(() => toolbarWidth.value < 620)
+
+let toolbarObserver: ResizeObserver | null = null
+
+function focusSearch() {
+  searchInputRef.value?.focus()
+  searchInputRef.value?.select()
+}
 
 watch(selectedTaskFilter, (val) => {
   emit('update:selectedTask', val)
@@ -71,6 +84,7 @@ function focusTask(position: number) {
 
 defineExpose({
   focusTask,
+  focusSearch,
   scrollToBottom,
   selectedTaskFilter
 })
@@ -268,6 +282,22 @@ onMounted(() => {
   if (autoScroll.value) {
     scrollToBottom()
   }
+  if (typeof ResizeObserver !== 'undefined' && toolbarRef.value) {
+    toolbarWidth.value = toolbarRef.value.clientWidth || 900
+    toolbarObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        toolbarWidth.value = entry.contentRect.width
+      }
+    })
+    toolbarObserver.observe(toolbarRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (toolbarObserver) {
+    toolbarObserver.disconnect()
+    toolbarObserver = null
+  }
 })
 
 async function copyLogs() {
@@ -315,19 +345,35 @@ const statusMessage = computed(() => {
   }
   return null
 })
+
+const shortStatusMessage = computed(() => {
+  if (props.status === 'success') return 'Thành công'
+  if (props.status === 'failed') return 'Thất bại'
+  if (props.status === 'running') return 'Đang chạy'
+  if (props.status === 'queued') return 'Đang chờ'
+  return null
+})
 </script>
 
 <template>
   <div class="flex flex-col flex-1 min-h-0 w-full rounded-[2px] overflow-hidden border border-border bg-bg-input text-fg font-mono">
-    <!-- Toolbar -->
-    <div class="shrink-0 flex flex-nowrap items-center justify-between gap-1.5 px-2.5 py-1.5 bg-bg-surface border-b border-border text-xs select-none overflow-x-auto">
-      <div class="flex items-center gap-1.5 flex-nowrap min-w-0">
+    <!-- Toolbar (container-width responsive via ResizeObserver) -->
+    <div
+      ref="toolbarRef"
+      data-testid="log-viewer-toolbar"
+      :data-compact="isCompactToolbar ? 'true' : 'false'"
+      :class="[
+        'shrink-0 flex items-center justify-between gap-2 px-2.5 py-1.5 bg-bg-surface border-b border-border text-xs select-none',
+        isWrapToolbar ? 'flex-wrap' : 'flex-nowrap'
+      ]"
+    >
+      <div class="flex items-center gap-1.5 flex-nowrap min-w-0 shrink">
         <span class="font-mono text-fg-muted whitespace-nowrap shrink-0">Nhật ký ({{ lines.length }} dòng)</span>
 
         <!-- Task Filter Dropdown for Grouped Job Mode -->
-        <div v-if="isGrouped && tasks.length > 0" class="flex items-center gap-1 ml-1 shrink-0">
+        <div v-if="isGrouped && tasks.length > 0" class="flex items-center gap-1 ml-0.5 shrink-0">
           <Filter class="w-3.5 h-3.5 text-fg-muted shrink-0" aria-hidden="true" />
-          <div class="w-[180px]">
+          <div class="w-[145px] shrink-0">
             <AppSelect
               id="task-filter"
               v-model="selectedTaskFilter"
@@ -346,27 +392,29 @@ const statusMessage = computed(() => {
         <span
           v-if="statusMessage"
           role="status"
-          class="px-2 py-0.5 rounded-[2px] text-[11px] font-medium whitespace-nowrap shrink-0"
+          :title="statusMessage"
+          class="px-1.5 py-0.5 rounded-[2px] text-[11px] font-medium whitespace-nowrap shrink-0"
           :class="[
             status === 'success' ? 'bg-phosphor-bg text-phosphor border border-phosphor/30' : '',
             status === 'failed' ? 'bg-danger-bg text-danger border border-danger/30' : '',
             status === 'running' ? 'bg-accent-bg text-accent border border-accent/30' : 'text-fg-muted'
           ]"
         >
-          {{ statusMessage }}
+          {{ isCompactToolbar ? shortStatusMessage : statusMessage }}
         </span>
       </div>
 
-      <div class="flex items-center gap-1 flex-nowrap shrink-0">
+      <div class="flex items-center gap-1.5 flex-nowrap min-w-0 shrink-0">
         <!-- Search in Log -->
-        <div class="flex items-center gap-1 bg-bg-input border border-border focus-within:border-border-focus rounded-[2px] px-1.5 h-7">
+        <div class="flex items-center gap-1 bg-bg-input border border-border focus-within:border-border-focus rounded-[2px] px-1.5 h-7 min-w-[140px] flex-1 max-w-[240px]">
           <Search class="w-3.5 h-3.5 text-fg-dim shrink-0" aria-hidden="true" />
           <input
+            ref="searchInputRef"
             v-model="searchQuery"
             type="text"
             aria-label="Tìm trong nhật ký"
             placeholder="Tìm log..."
-            class="w-20 bg-transparent text-fg-strong placeholder:text-fg-dim text-xs focus:outline-none"
+            class="flex-1 min-w-0 bg-transparent text-fg-strong placeholder:text-fg-dim text-xs focus:outline-none"
             @keydown.enter.exact.prevent="goToNextMatch"
             @keydown.enter.shift.prevent="goToPrevMatch"
           />
@@ -374,7 +422,7 @@ const statusMessage = computed(() => {
             v-if="searchQuery"
             type="button"
             aria-label="Xoá tìm kiếm"
-            class="p-0.5 text-fg-muted hover:text-fg-strong cursor-pointer"
+            class="p-0.5 text-fg-muted hover:text-fg-strong cursor-pointer shrink-0"
             @click="clearSearch"
           >
             <X class="w-3 h-3" aria-hidden="true" />
@@ -382,7 +430,7 @@ const statusMessage = computed(() => {
           <span
             v-if="normalizedQuery"
             data-testid="log-search-count"
-            class="text-[11px] font-mono tabular-nums text-fg-muted whitespace-nowrap pl-1 border-l border-border"
+            class="text-[11px] font-mono tabular-nums text-fg-muted whitespace-nowrap pl-1 border-l border-border shrink-0"
           >
             {{ matchedLineSeqs.length > 0 ? `${activeMatchIndex + 1}/${matchedLineSeqs.length}` : '0/0' }}
           </span>
@@ -392,7 +440,7 @@ const statusMessage = computed(() => {
             aria-label="Kết quả trước"
             title="Kết quả trước"
             :disabled="matchedLineSeqs.length === 0"
-            class="p-0.5 rounded-[2px] text-fg-muted hover:text-fg-strong hover:bg-bg-hover disabled:opacity-40 cursor-pointer disabled:cursor-default"
+            class="p-0.5 rounded-[2px] text-fg-muted hover:text-fg-strong hover:bg-bg-hover disabled:opacity-40 cursor-pointer disabled:cursor-default shrink-0"
             @click="goToPrevMatch"
           >
             <ChevronUp class="w-3.5 h-3.5" aria-hidden="true" />
@@ -403,7 +451,7 @@ const statusMessage = computed(() => {
             aria-label="Kết quả sau"
             title="Kết quả sau"
             :disabled="matchedLineSeqs.length === 0"
-            class="p-0.5 rounded-[2px] text-fg-muted hover:text-fg-strong hover:bg-bg-hover disabled:opacity-40 cursor-pointer disabled:cursor-default"
+            class="p-0.5 rounded-[2px] text-fg-muted hover:text-fg-strong hover:bg-bg-hover disabled:opacity-40 cursor-pointer disabled:cursor-default shrink-0"
             @click="goToNextMatch"
           >
             <ChevronDown class="w-3.5 h-3.5" aria-hidden="true" />
@@ -413,8 +461,11 @@ const statusMessage = computed(() => {
         <!-- Follow / Auto-scroll Toggle Button -->
         <button
           type="button"
+          :aria-label="autoScroll ? 'Tắt tự động cuộn theo dõi' : 'Bật tự động cuộn theo dõi'"
+          title="Theo dõi nhật ký (cuộn tự động)"
           :class="[
-            'inline-flex items-center gap-1 h-7 px-1.5 rounded-[2px] text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap',
+            'inline-flex items-center justify-center gap-1 h-7 rounded-[2px] text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap shrink-0',
+            isCompactToolbar ? 'w-7 px-0' : 'px-2',
             autoScroll
               ? 'bg-phosphor-bg text-phosphor border-phosphor/50 hover:bg-phosphor hover:text-bg'
               : 'bg-bg-elevated text-fg-muted border-border hover:text-fg-strong hover:bg-bg-hover'
@@ -422,31 +473,39 @@ const statusMessage = computed(() => {
           :aria-pressed="autoScroll ? 'true' : 'false'"
           @click="toggleAutoScroll"
         >
-          <Radio class="w-3.5 h-3.5" :class="autoScroll ? 'live-pulse' : ''" aria-hidden="true" />
-          <span>Theo dõi</span>
+          <Radio class="w-3.5 h-3.5 shrink-0" :class="autoScroll ? 'live-pulse' : ''" aria-hidden="true" />
+          <span v-if="!isCompactToolbar">Theo dõi</span>
         </button>
 
         <!-- Copy Button -->
         <button
           type="button"
           aria-label="Sao chép nhật ký"
-          class="inline-flex items-center gap-1 h-7 px-1.5 rounded-[2px] text-xs font-medium border border-border bg-bg-elevated text-fg-muted hover:text-fg-strong hover:bg-bg-hover transition-colors cursor-pointer whitespace-nowrap"
+          title="Sao chép nhật ký"
+          :class="[
+            'inline-flex items-center justify-center gap-1 h-7 rounded-[2px] text-xs font-medium border border-border bg-bg-elevated text-fg-muted hover:text-fg-strong hover:bg-bg-hover transition-colors cursor-pointer whitespace-nowrap shrink-0',
+            isCompactToolbar ? 'w-7 px-0' : 'px-2'
+          ]"
           @click="copyLogs"
         >
-          <Check v-if="copied" class="w-3.5 h-3.5 text-phosphor" aria-hidden="true" />
-          <Copy v-else class="w-3.5 h-3.5" aria-hidden="true" />
-          <span>Sao chép</span>
+          <Check v-if="copied" class="w-3.5 h-3.5 text-phosphor shrink-0" aria-hidden="true" />
+          <Copy v-else class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          <span v-if="!isCompactToolbar">Sao chép</span>
         </button>
 
         <!-- Download Button -->
         <button
           type="button"
           aria-label="Tải xuống nhật ký"
-          class="inline-flex items-center gap-1 h-7 px-1.5 rounded-[2px] text-xs font-medium border border-border bg-bg-elevated text-fg-muted hover:text-fg-strong hover:bg-bg-hover transition-colors cursor-pointer whitespace-nowrap"
+          title="Tải xuống nhật ký"
+          :class="[
+            'inline-flex items-center justify-center gap-1 h-7 rounded-[2px] text-xs font-medium border border-border bg-bg-elevated text-fg-muted hover:text-fg-strong hover:bg-bg-hover transition-colors cursor-pointer whitespace-nowrap shrink-0',
+            isCompactToolbar ? 'w-7 px-0' : 'px-2'
+          ]"
           @click="downloadLogs"
         >
-          <Download class="w-3.5 h-3.5" aria-hidden="true" />
-          <span>Tải xuống</span>
+          <Download class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          <span v-if="!isCompactToolbar">Tải xuống</span>
         </button>
       </div>
     </div>

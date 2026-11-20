@@ -240,4 +240,69 @@ describe('LogViewer', () => {
     expect(lineTextSpan.exists()).toBe(true)
     expect(wrapper.findAll('.whitespace-pre-wrap').length).toBe(0)
   })
+
+  it('collapses secondary toolbar labels below 900px and wraps below 620px via ResizeObserver', async () => {
+    let observerCb: ((entries: Array<{ contentRect: { width: number } }>) => void) | null = null
+    const origRO = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      constructor(cb: any) {
+        observerCb = cb
+      }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    } as any
+
+    try {
+      const wrapper = mount(LogViewer, {
+        props: {
+          lines: sampleLines,
+          status: 'success'
+        }
+      })
+
+      const toolbar = wrapper.find('[data-testid="log-viewer-toolbar"]')
+      expect(toolbar.exists()).toBe(true)
+      expect(toolbar.attributes('data-compact')).toBe('false')
+      expect(toolbar.classes()).toContain('flex-nowrap')
+      expect(wrapper.text()).toContain('Theo dõi')
+      expect(wrapper.text()).toContain('Sao chép')
+      expect(wrapper.text()).toContain('Tải xuống')
+
+      // Simulate 720px right pane (1366x768 default split)
+      observerCb!([{ contentRect: { width: 720 } }])
+      await wrapper.vm.$nextTick()
+
+      expect(toolbar.attributes('data-compact')).toBe('true')
+      expect(toolbar.classes()).toContain('flex-nowrap')
+      expect(wrapper.find('button[aria-label="Sao chép nhật ký"]').attributes('title')).toBe('Sao chép nhật ký')
+      expect(wrapper.find('button[aria-label="Tải xuống nhật ký"]').attributes('title')).toBe('Tải xuống nhật ký')
+      expect(wrapper.find('[role="status"]').text()).toBe('Thành công')
+      expect(wrapper.find('[role="status"]').attributes('title')).toBe('Run đã kết thúc: thành công')
+
+      // Simulate very narrow pane (< 620px)
+      observerCb!([{ contentRect: { width: 520 } }])
+      await wrapper.vm.$nextTick()
+      expect(toolbar.classes()).toContain('flex-wrap')
+
+      wrapper.unmount()
+    } finally {
+      globalThis.ResizeObserver = origRO
+    }
+  })
+
+  it('exposes focusSearch() to focus the log search input', () => {
+    const wrapper = mount(LogViewer, {
+      attachTo: document.body,
+      props: {
+        lines: sampleLines,
+        status: 'running'
+      }
+    })
+
+    ;(wrapper.vm as any).focusSearch()
+    const searchInput = wrapper.find('input[aria-label="Tìm trong nhật ký"]').element
+    expect(document.activeElement).toBe(searchInput)
+    wrapper.unmount()
+  })
 })

@@ -147,7 +147,7 @@ function handleTableKeydown(e: KeyboardEvent) {
       <thead class="sticky top-0 z-10 bg-bg-surface text-[11px] font-bold uppercase tracking-[0.04em] text-fg-muted border-b border-border-strong">
         <slot name="header">
           <tr v-if="$slots['header-columns']">
-            <th v-if="selectable" scope="col" class="w-9 text-center">
+            <th v-if="selectable" scope="col" class="w-12 text-center">
               <div class="inline-flex items-center justify-center">
                 <AppCheckbox
                   :model-value="allSelected"
@@ -186,7 +186,7 @@ function handleTableKeydown(e: KeyboardEvent) {
             ]"
             @click="setActiveIndex(idx)"
           >
-            <td v-if="selectable" class="w-9 text-center" @click.stop>
+            <td v-if="selectable" class="w-12 text-center" @click.stop>
               <div class="inline-flex items-center justify-center">
                 <AppCheckbox
                   :model-value="selectedKeys.includes(getRowKey(row, idx))"
