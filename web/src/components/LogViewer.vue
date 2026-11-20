@@ -205,7 +205,7 @@ function getLineClass(severity: LogSeverity): string {
     case 'system':
       return 'log-sys text-phosphor italic'
     case 'muted':
-      return 'text-fg-muted text-slate-400'
+      return 'text-fg-muted'
     case 'normal':
     default:
       return 'text-fg'
@@ -487,7 +487,7 @@ const statusMessage = computed(() => {
           </button>
 
           <div v-show="isGroupExpanded('prep')" class="p-2 bg-bg-input space-y-0.5 overflow-x-auto">
-            <div v-if="prepLines.length === 0" class="text-fg-dim text-slate-500 italic py-2 px-3 text-xs">
+            <div v-if="prepLines.length === 0" class="text-fg-dim italic py-2 px-3 text-xs">
               Chưa có dữ liệu nhật ký chuẩn bị...
             </div>
             <div
@@ -557,7 +557,7 @@ const statusMessage = computed(() => {
           </button>
 
           <div v-show="isGroupExpanded(group.task.position)" class="p-2 bg-bg-input space-y-0.5 overflow-x-auto">
-            <div v-if="group.lines.length === 0" class="text-fg-dim text-slate-500 italic py-2 px-3 text-xs">
+            <div v-if="group.lines.length === 0" class="text-fg-dim italic py-2 px-3 text-xs">
               Chưa có dữ liệu nhật ký cho tác vụ này...
             </div>
             <div
@@ -594,7 +594,7 @@ const statusMessage = computed(() => {
 
       <!-- Flat View (For Standard Pipeline Runs) -->
       <template v-else>
-        <div v-if="lines.length === 0" class="text-fg-dim text-slate-500 italic py-8 text-center">
+        <div v-if="lines.length === 0" class="text-fg-dim italic py-8 text-center">
           Chưa có dữ liệu nhật ký...
         </div>
 

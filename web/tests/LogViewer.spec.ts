@@ -93,9 +93,8 @@ describe('LogViewer', () => {
     const redElements = wrapper.findAll('.text-rose-400, .text-danger')
     expect(redElements.length).toBe(0)
 
-    // Muted lines should use muted text style (text-slate-400)
-    const mutedElements = wrapper.findAll('.text-slate-400')
-    // Toolbar heading also uses text-slate-400, so we check that line elements have text-slate-400
+    // Muted lines should use muted text style (text-fg-muted)
+    const mutedElements = wrapper.findAll('.text-fg-muted')
     expect(mutedElements.length).toBeGreaterThanOrEqual(4)
   })
 

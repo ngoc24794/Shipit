@@ -57,28 +57,28 @@
   --bg: #f4f5f0;
   --bg-elevated: #ffffff;
   --bg-surface: #eaece5;
-  --bg-hover: #e1e4db;
-  --bg-selected: #d6e4dc;
+  --bg-hover: #dfe3d8;
+  --bg-selected: #d1e3d9;
   --bg-input: #fbfcf9;
 
-  --border: #c8cfc3;
-  --border-strong: #939e8d;
+  --border: #b8c1b1;
+  --border-strong: #7b8774;
   --border-focus: #0369a1;
 
-  --fg: #18201b;
+  --fg: #161e19;
   --fg-strong: #0b100d;
-  --fg-muted: #526058;
-  --fg-dim: #7f8d84;
+  --fg-muted: #425048;
+  --fg-dim: #5b6a61;
 
   --accent: #0369a1;
-  --accent-bg: rgba(3, 105, 161, 0.1);
+  --accent-bg: rgba(3, 105, 161, 0.10);
   --phosphor: #047857;
-  --phosphor-bg: rgba(4, 120, 87, 0.1);
-  --warn: #b45309;
-  --warn-bg: rgba(180, 83, 9, 0.1);
+  --phosphor-bg: rgba(4, 120, 87, 0.10);
+  --warn: #92400e;
+  --warn-bg: rgba(180, 83, 9, 0.10);
   --danger: #b91c1c;
-  --danger-bg: rgba(185, 28, 28, 0.1);
-  --muted-badge-bg: rgba(82, 96, 88, 0.1);
+  --danger-bg: rgba(185, 28, 28, 0.10);
+  --muted-badge-bg: rgba(66, 80, 72, 0.10);
 
   --shadow-overlay: 0 10px 28px rgba(15, 23, 18, 0.16);
   --backdrop: rgba(20, 28, 23, 0.45);
@@ -114,31 +114,31 @@
 
 /* Dark Theme ("Phosphor Refined", default) */
 .dark {
-  --bg: #070b09;
-  --bg-elevated: #0b110e;
-  --bg-surface: #101915;
-  --bg-hover: #15221c;
-  --bg-selected: #162921;
-  --bg-input: #050807;
+  --bg: #121719;
+  --bg-elevated: #181f22;
+  --bg-surface: #20292d;
+  --bg-hover: #283439;
+  --bg-selected: #1e3832;
+  --bg-input: #0e1214;
 
-  --border: #1e2f27;
-  --border-strong: #2d473b;
-  --border-focus: #38bdf8;
+  --border: #37454a;
+  --border-strong: #63767d;
+  --border-focus: #58ccf2;
 
-  --fg: #d6e6dc;
-  --fg-strong: #f0f7f3;
-  --fg-muted: #7c9688;
-  --fg-dim: #4c6357;
+  --fg: #e1eae5;
+  --fg-strong: #eff5f2;
+  --fg-muted: #afc0b7;
+  --fg-dim: #8fa298;
 
-  --accent: #38bdf8;
-  --accent-bg: rgba(56, 189, 248, 0.12);
-  --phosphor: #34d399;
-  --phosphor-bg: rgba(52, 211, 153, 0.12);
-  --warn: #f59e0b;
-  --warn-bg: rgba(245, 158, 11, 0.12);
-  --danger: #f87171;
-  --danger-bg: rgba(248, 113, 113, 0.12);
-  --muted-badge-bg: rgba(124, 150, 136, 0.12);
+  --accent: #58ccf2;
+  --accent-bg: rgba(88, 204, 242, 0.14);
+  --phosphor: #56dba2;
+  --phosphor-bg: rgba(86, 219, 162, 0.14);
+  --warn: #fbbf24;
+  --warn-bg: rgba(251, 191, 36, 0.14);
+  --danger: #f88686;
+  --danger-bg: rgba(248, 134, 134, 0.14);
+  --muted-badge-bg: rgba(175, 192, 183, 0.14);
 
   --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.65);
   --backdrop: rgba(3, 6, 5, 0.72);
