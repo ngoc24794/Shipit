@@ -9,7 +9,6 @@ import {
   EyeOff,
   FileQuestion
 } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import AppButton from '../../components/AppButton.vue'
 import AppInput from '../../components/AppInput.vue'
 import AppSecretInput from '../../components/AppSecretInput.vue'
@@ -164,8 +163,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <AppLayout>
-    <div class="flex-1 w-full flex flex-col min-h-0 gap-4">
+  <div class="flex-1 w-full flex flex-col min-h-0 gap-4">
       <!-- Top Header Bar -->
       <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap">
         <div class="flex items-center gap-3 min-w-0">
@@ -368,6 +366,5 @@ onMounted(async () => {
           </div>
         </div>
       </form>
-    </div>
-  </AppLayout>
+  </div>
 </template>

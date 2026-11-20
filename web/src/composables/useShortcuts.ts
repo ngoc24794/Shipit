@@ -1,4 +1,4 @@
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onActivated, onDeactivated, onUnmounted, ref } from 'vue'
 
 export interface ShortcutBinding {
   id: string
@@ -155,12 +155,27 @@ export function registerShortcut(binding: ShortcutBinding): () => void {
 
 export function useShortcuts() {
   ensureListener()
+  const localBindings: ShortcutBinding[] = []
   const localCleanups: Array<() => void> = []
 
+  function clearLocalCleanups(): void {
+    for (const cleanup of localCleanups) {
+      cleanup()
+    }
+    localCleanups.length = 0
+  }
+
   function register(binding: ShortcutBinding): () => void {
+    if (!localBindings.some((b) => b.id === binding.id)) {
+      localBindings.push(binding)
+    }
     const unregister = registerShortcut(binding)
     localCleanups.push(unregister)
-    return unregister
+    return () => {
+      const idx = localBindings.findIndex((b) => b.id === binding.id)
+      if (idx !== -1) localBindings.splice(idx, 1)
+      unregister()
+    }
   }
 
   function registerMany(list: ShortcutBinding[]): void {
@@ -169,11 +184,21 @@ export function useShortcuts() {
     }
   }
 
-  onUnmounted(() => {
-    for (const cleanup of localCleanups) {
-      cleanup()
+  onDeactivated(() => {
+    clearLocalCleanups()
+  })
+
+  onActivated(() => {
+    if (localCleanups.length === 0 && localBindings.length > 0) {
+      for (const binding of localBindings) {
+        localCleanups.push(registerShortcut(binding))
+      }
     }
-    localCleanups.length = 0
+  })
+
+  onUnmounted(() => {
+    clearLocalCleanups()
+    localBindings.length = 0
   })
 
   const activeShortcuts = computed<ShortcutBinding[]>(() =>

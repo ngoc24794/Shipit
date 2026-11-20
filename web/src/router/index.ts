@@ -1,5 +1,121 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import AppLayout from '../layouts/AppLayout.vue'
+
+const authenticatedChildren: RouteRecordRaw[] = [
+  {
+    path: '',
+    name: 'runs',
+    component: () => import('../views/runs/RunsView.vue'),
+    meta: { title: 'Lượt chạy', keepAlive: true }
+  },
+  {
+    path: 'runs/:id',
+    name: 'run-detail',
+    component: () => import('../views/runs/RunDetailView.vue'),
+    meta: { title: 'Chi tiết lượt chạy' }
+  },
+  {
+    path: 'pipelines',
+    name: 'pipelines',
+    component: () => import('../views/config/PipelinesView.vue'),
+    meta: { title: 'Pipeline', keepAlive: true }
+  },
+  {
+    path: 'pipelines/new',
+    name: 'pipeline-new',
+    component: () => import('../views/config/PipelineFormView.vue'),
+    meta: { title: 'Thêm pipeline' }
+  },
+  {
+    path: 'pipelines/:id/edit',
+    name: 'pipeline-edit',
+    component: () => import('../views/config/PipelineFormView.vue'),
+    meta: { title: 'Sửa pipeline' }
+  },
+  {
+    path: 'jobs',
+    name: 'jobs',
+    component: () => import('../views/jobs/JobsView.vue'),
+    meta: { title: 'Job', keepAlive: true }
+  },
+  {
+    path: 'jobs/new',
+    name: 'job-new',
+    component: () => import('../views/jobs/JobFormView.vue'),
+    meta: { title: 'Tạo Job' }
+  },
+  {
+    path: 'jobs/:id',
+    name: 'job-edit',
+    component: () => import('../views/jobs/JobFormView.vue'),
+    meta: { title: 'Cấu hình Job' }
+  },
+  {
+    path: 'settings/allowlist',
+    name: 'allowlist',
+    component: () => import('../views/config/AllowlistView.vue'),
+    meta: { title: 'Allowlist', keepAlive: true }
+  },
+  {
+    path: 'settings/job-allow',
+    redirect: { path: '/settings/allowlist', query: { tab: 'job' } }
+  },
+  {
+    path: 'job-allow',
+    redirect: { path: '/settings/allowlist', query: { tab: 'job' } }
+  },
+  {
+    path: 'deploy-targets',
+    redirect: { path: '/settings/allowlist', query: { tab: 'deployment' } }
+  },
+  {
+    path: 'slaves',
+    name: 'slaves',
+    component: () => import('../views/config/SlavesView.vue'),
+    meta: { title: 'Máy build', keepAlive: true }
+  },
+  {
+    path: 'slaves/new',
+    name: 'slave-new',
+    component: () => import('../views/config/SlaveFormView.vue'),
+    meta: { title: 'Thêm máy build' }
+  },
+  {
+    path: 'slaves/:id/edit',
+    name: 'slave-edit',
+    component: () => import('../views/config/SlaveFormView.vue'),
+    meta: { title: 'Sửa máy build' }
+  },
+  {
+    path: 'credentials',
+    name: 'credentials',
+    component: () => import('../views/config/CredentialsView.vue'),
+    meta: { title: 'Thông tin xác thực', keepAlive: true }
+  },
+  {
+    path: 'credentials/new',
+    name: 'credential-new',
+    component: () => import('../views/config/CredentialFormView.vue'),
+    meta: { title: 'Thêm thông tin xác thực' }
+  },
+  {
+    path: 'credentials/:id/edit',
+    name: 'credential-edit',
+    component: () => import('../views/config/CredentialFormView.vue'),
+    meta: { title: 'Sửa thông tin xác thực' }
+  },
+  ...(import.meta.env.DEV || import.meta.env.MODE === 'mock'
+    ? [
+        {
+          path: 'dev/components',
+          name: 'dev-components',
+          component: () => import('../views/dev/ComponentsGalleryView.vue'),
+          meta: { title: 'Thư viện thành phần' }
+        }
+      ]
+    : [])
+]
 
 const routes: RouteRecordRaw[] = [
   {
@@ -10,116 +126,9 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/',
-    name: 'runs',
-    component: () => import('../views/runs/RunsView.vue'),
-    meta: { title: 'Lượt chạy' }
+    component: AppLayout,
+    children: authenticatedChildren
   },
-  {
-    path: '/runs/:id',
-    name: 'run-detail',
-    component: () => import('../views/runs/RunDetailView.vue'),
-    meta: { title: 'Chi tiết lượt chạy' }
-  },
-  {
-    path: '/pipelines',
-    name: 'pipelines',
-    component: () => import('../views/config/PipelinesView.vue'),
-    meta: { title: 'Pipeline' }
-  },
-  {
-    path: '/pipelines/new',
-    name: 'pipeline-new',
-    component: () => import('../views/config/PipelineFormView.vue'),
-    meta: { title: 'Thêm pipeline' }
-  },
-  {
-    path: '/pipelines/:id/edit',
-    name: 'pipeline-edit',
-    component: () => import('../views/config/PipelineFormView.vue'),
-    meta: { title: 'Sửa pipeline' }
-  },
-  {
-    path: '/jobs',
-    name: 'jobs',
-    component: () => import('../views/jobs/JobsView.vue'),
-    meta: { title: 'Job' }
-  },
-  {
-    path: '/jobs/new',
-    name: 'job-new',
-    component: () => import('../views/jobs/JobFormView.vue'),
-    meta: { title: 'Tạo Job' }
-  },
-  {
-    path: '/jobs/:id',
-    name: 'job-edit',
-    component: () => import('../views/jobs/JobFormView.vue'),
-    meta: { title: 'Cấu hình Job' }
-  },
-  {
-    path: '/settings/allowlist',
-    name: 'allowlist',
-    component: () => import('../views/config/AllowlistView.vue'),
-    meta: { title: 'Allowlist' }
-  },
-  {
-    path: '/settings/job-allow',
-    redirect: { path: '/settings/allowlist', query: { tab: 'job' } }
-  },
-  {
-    path: '/job-allow',
-    redirect: { path: '/settings/allowlist', query: { tab: 'job' } }
-  },
-  {
-    path: '/deploy-targets',
-    redirect: { path: '/settings/allowlist', query: { tab: 'deployment' } }
-  },
-  {
-    path: '/slaves',
-    name: 'slaves',
-    component: () => import('../views/config/SlavesView.vue'),
-    meta: { title: 'Máy build' }
-  },
-  {
-    path: '/slaves/new',
-    name: 'slave-new',
-    component: () => import('../views/config/SlaveFormView.vue'),
-    meta: { title: 'Thêm máy build' }
-  },
-  {
-    path: '/slaves/:id/edit',
-    name: 'slave-edit',
-    component: () => import('../views/config/SlaveFormView.vue'),
-    meta: { title: 'Sửa máy build' }
-  },
-  {
-    path: '/credentials',
-    name: 'credentials',
-    component: () => import('../views/config/CredentialsView.vue'),
-    meta: { title: 'Thông tin xác thực' }
-  },
-  {
-    path: '/credentials/new',
-    name: 'credential-new',
-    component: () => import('../views/config/CredentialFormView.vue'),
-    meta: { title: 'Thêm thông tin xác thực' }
-  },
-  {
-    path: '/credentials/:id/edit',
-    name: 'credential-edit',
-    component: () => import('../views/config/CredentialFormView.vue'),
-    meta: { title: 'Sửa thông tin xác thực' }
-  },
-  ...(import.meta.env.DEV || import.meta.env.MODE === 'mock'
-    ? [
-        {
-          path: '/dev/components',
-          name: 'dev-components',
-          component: () => import('../views/dev/ComponentsGalleryView.vue'),
-          meta: { title: 'Thư viện thành phần' }
-        }
-      ]
-    : []),
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',

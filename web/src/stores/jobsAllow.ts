@@ -3,11 +3,14 @@ import { ref, computed } from 'vue'
 import type { JobAllowEntry, JobAllowEntryInput } from '../api/types'
 import { ApiError } from '../api/client'
 import { getApi } from '../api'
+import { createSwrChannel, type SwrOptions } from '../utils/swr'
 
 export const useJobsAllowStore = defineStore('jobsAllow', () => {
   const entries = ref<JobAllowEntry[]>([])
+  const hasLoaded = ref<boolean>(false)
   const loading = ref<boolean>(false)
   const error = ref<string | null>(null)
+  const entriesSwr = createSwrChannel<JobAllowEntry[]>()
 
   const namespaces = computed(() => {
     const nsSet = new Set<string>()
@@ -42,20 +45,28 @@ export const useJobsAllowStore = defineStore('jobsAllow', () => {
       .sort()
   }
 
-  async function fetchEntries(): Promise<JobAllowEntry[]> {
+  async function fetchEntries(opts?: SwrOptions): Promise<JobAllowEntry[]> {
     const api = getApi()
-    loading.value = true
-    error.value = null
-    try {
-      const data = await api.getJobAllowEntries()
-      entries.value = data
-      return data
-    } catch (err: any) {
-      error.value = err.message || 'Không thể tải danh sách allowlist'
-      throw err
-    } finally {
-      loading.value = false
-    }
+    const result = await entriesSwr.run(
+      opts,
+      () => hasLoaded.value,
+      async () => {
+        error.value = null
+        try {
+          const data = await api.getJobAllowEntries()
+          entries.value = data
+          hasLoaded.value = true
+          return data
+        } catch (err: any) {
+          error.value = err.message || 'Không thể tải danh sách allowlist'
+          throw err
+        }
+      },
+      (v) => {
+        loading.value = v
+      }
+    )
+    return result ?? entries.value
   }
 
   async function createEntry(input: JobAllowEntryInput): Promise<JobAllowEntry> {
@@ -64,7 +75,8 @@ export const useJobsAllowStore = defineStore('jobsAllow', () => {
     error.value = null
     try {
       const created = await api.createJobAllowEntry(input)
-      await fetchEntries()
+      entriesSwr.invalidate()
+      await fetchEntries({ force: true, silent: true })
       return created
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 409) {
@@ -84,7 +96,8 @@ export const useJobsAllowStore = defineStore('jobsAllow', () => {
     error.value = null
     try {
       await api.deleteJobAllowEntry(id)
-      await fetchEntries()
+      entriesSwr.invalidate()
+      await fetchEntries({ force: true, silent: true })
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 409) {
         error.value = err.problem?.detail || 'Không thể xoá mục allowlist đang được Job sử dụng'
