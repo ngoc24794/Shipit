@@ -248,6 +248,13 @@ describe('Form Primitives (D1 Terminal-native)', () => {
       expect(clearableWrap.find('button[aria-label="Xoá lựa chọn"]').exists()).toBe(true)
       await clearableWrap.get('button[aria-label="Xoá lựa chọn"]').trigger('click')
       expect(clearableWrap.emitted('update:modelValue')?.[0]).toEqual([''])
+
+      // Popup uses width: max-content so long option labels are not clipped to trigger width
+      await clearableWrap.get('[role="combobox"]').trigger('click')
+      const listbox = document.body.querySelector('[role="listbox"]') as HTMLElement
+      const popup = listbox?.parentElement as HTMLElement
+      expect(popup.style.width).toBe('max-content')
+      clearableWrap.unmount()
     })
   })
 

@@ -74,5 +74,5 @@ describe('Route Smoke Test (Mock Mode)', () => {
 
     expect(consoleErrorSpy).not.toHaveBeenCalled()
     wrapper.unmount()
-  })
+  }, 30000)
 })

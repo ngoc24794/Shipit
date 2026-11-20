@@ -84,6 +84,32 @@ describe('DataToolbar', () => {
     await clearAllBtn.trigger('click')
     expect(wrapper.emitted('clear')).toHaveLength(1)
   })
+
+  it('sizes select filter wrapper to fit longest option label without fixed 175px clipping', () => {
+    const wrapper = mount(DataToolbar, {
+      props: {
+        q: '',
+        searchPlaceholder: 'Tìm tên, tag...',
+        filters: [
+          {
+            key: 'target',
+            label: 'Pipeline / Job',
+            type: 'select',
+            options: [
+              { label: 'Tất cả Pipeline / Job', value: '' },
+              { label: 'avina-api', value: 'avina-api' }
+            ]
+          }
+        ],
+        filterValues: { target: '' }
+      }
+    })
+
+    const selectWrap = wrapper.findComponent(AppSelect).element.parentElement as HTMLElement
+    const widthPx = Number.parseInt(selectWrap.style.width, 10)
+    expect(widthPx).toBeGreaterThanOrEqual(195)
+    expect(wrapper.get('input[type="text"]').attributes('title')).toBe('Tìm tên, tag...')
+  })
 })
 
 describe('DataPagination', () => {
