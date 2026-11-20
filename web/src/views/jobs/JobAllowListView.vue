@@ -382,7 +382,7 @@ async function handleDelete() {
                 sort-key="kind"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
-                class="py-3 px-4"
+                class="py-3 px-4 w-[120px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -398,10 +398,10 @@ async function handleDelete() {
                 sort-key="createdAt"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
-                class="py-3 px-4"
+                class="py-3 px-4 w-[155px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
+              <th scope="col" class="w-[100px] text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
                 Thao tác
               </th>
             </tr>

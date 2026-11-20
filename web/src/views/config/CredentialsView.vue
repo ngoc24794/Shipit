@@ -231,6 +231,7 @@ onMounted(() => {
                 sort-key="kind"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[145px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -238,17 +239,19 @@ onMounted(() => {
                 sort-key="username"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[155px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="py-3 whitespace-nowrap">Giá trị bí mật</th>
+              <th scope="col" class="py-3 w-[145px] whitespace-nowrap">Giá trị bí mật</th>
               <SortableHeader
                 label="Cập nhật lúc"
                 sort-key="updatedAt"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[155px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="py-3 text-right whitespace-nowrap">Thao tác</th>
+              <th scope="col" class="py-3 w-[145px] text-right whitespace-nowrap">Thao tác</th>
             </tr>
           </template>
 

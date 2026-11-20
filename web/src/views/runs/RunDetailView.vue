@@ -582,7 +582,7 @@ onBeforeUnmount(() => {
         <!-- tmux-like SplitPane Body -->
         <SplitPane
           storage-key="shipit-run-detail-split"
-          :default-size="390"
+          :default-size="340"
           :min-size="280"
           :max-size="560"
           aria-label="Điều chỉnh độ rộng cột trái"
