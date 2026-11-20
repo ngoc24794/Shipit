@@ -90,6 +90,12 @@ function onSegmentedClick(key: string, value: string) {
   emit('update:filter', key, value)
 }
 
+function getFilterSelectWidth(filter: DataToolbarFilter): string {
+  const maxLen = filter.options.reduce((max, o) => Math.max(max, o.label.length), 8)
+  const px = Math.min(280, Math.max(132, Math.ceil(maxLen * 7.5) + 42))
+  return `${px}px`
+}
+
 function handleClearAll() {
   clearTimer()
   localQ.value = ''
@@ -104,9 +110,9 @@ onBeforeUnmount(() => {
 <template>
   <div class="shrink-0 flex flex-row items-center justify-between gap-2 flex-nowrap px-3 py-2 border-b border-border bg-bg-elevated font-mono overflow-x-auto">
     <!-- Left: Search + Filters -->
-    <div class="flex flex-row items-center gap-2 flex-nowrap min-w-0">
+    <div class="flex flex-row items-center gap-2 flex-nowrap flex-1 min-w-0">
       <!-- Search input -->
-      <div class="relative w-[220px] shrink-0">
+      <div class="relative flex-1 min-w-[230px] max-w-[340px]">
         <Search
           class="w-3.5 h-3.5 text-fg-dim absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none"
           aria-hidden="true"
@@ -116,6 +122,7 @@ onBeforeUnmount(() => {
           :value="localQ"
           :placeholder="searchPlaceholder"
           :aria-label="searchPlaceholder"
+          :title="searchPlaceholder"
           class="w-full h-7 pl-7 pr-6 text-[12px] rounded-[2px] bg-bg-input text-fg-strong border border-border placeholder:text-fg-dim focus:outline-none focus:border-border-focus transition-colors duration-[80ms]"
           @input="onSearchInput"
         />
@@ -143,7 +150,11 @@ onBeforeUnmount(() => {
         />
 
         <!-- Select -->
-        <div v-else class="w-[175px] shrink-0">
+        <div
+          v-else
+          class="shrink-0"
+          :style="{ width: getFilterSelectWidth(filter) }"
+        >
           <AppSelect
             :model-value="filterValues[filter.key] ?? ''"
             :options="filter.options"

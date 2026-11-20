@@ -299,11 +299,11 @@ registerMany([
 
     <!-- Middle Shell: Left Rail + Main Workspace -->
     <div class="h-full flex-1 min-h-0 overflow-hidden flex flex-row">
-      <!-- Left Rail (196px expanded, 52px collapsed) -->
+      <!-- Left Rail (224px expanded, 52px collapsed) -->
       <aside
         :class="[
           'shrink-0 h-full bg-bg-elevated border-r border-border flex flex-col z-10 transition-[width] duration-[var(--dur-fast)]',
-          railCollapsed ? 'w-[52px]' : 'w-[196px]'
+          railCollapsed ? 'w-[52px]' : 'w-[224px]'
         ]"
       >
         <nav aria-label="Điều hướng chính" class="flex-1 min-h-0 py-3 px-2 space-y-4 overflow-y-auto">
