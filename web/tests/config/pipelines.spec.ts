@@ -135,24 +135,27 @@ describe('Pipelines View, Form & Store', () => {
     await new Promise((resolve) => setTimeout(resolve, 150))
     await flushPromises()
 
-    const gitSelect = wrapper
-      .findAll('select')
-      .map((s) => s.element as HTMLSelectElement)
-      .find((s) => Array.from(s.options).some((o) => o.text.includes('gitlab-token')))
-    expect(gitSelect).toBeDefined()
-    const gitOptions = Array.from(gitSelect!.options).filter((o) => o.value !== '')
-    expect(gitOptions.every((o) => !o.text.includes('ssh-key') && !o.text.includes('registry'))).toBe(true)
+    const gitCombo = wrapper.find('[role="combobox"]')
+    expect(gitCombo.exists()).toBe(true)
+    await gitCombo.trigger('click')
+    const gitOptTexts = Array.from(document.body.querySelectorAll('[role="option"]')).map((o) =>
+      o.textContent?.trim() || ''
+    )
+    expect(gitOptTexts.some((t) => t.includes('gitlab-token'))).toBe(true)
+    expect(gitOptTexts.every((t) => !t.includes('ssh-key') && !t.includes('registry'))).toBe(true)
+    await gitCombo.trigger('keydown', { key: 'Escape' })
 
     await router.replace('/pipelines/new?step=3')
     await wrapper.vm.$nextTick()
 
-    const regSelect = wrapper
-      .findAll('select')
-      .map((s) => s.element as HTMLSelectElement)
-      .find((s) => Array.from(s.options).some((o) => o.text.includes('registry-secret')))
-    expect(regSelect).toBeDefined()
-    const regOptions = Array.from(regSelect!.options).filter((o) => o.value !== '')
-    expect(regOptions.every((o) => !o.text.includes('ssh-key') && !o.text.includes('gitlab-token'))).toBe(true)
+    const regCombo = wrapper.find('[role="combobox"]')
+    expect(regCombo.exists()).toBe(true)
+    await regCombo.trigger('click')
+    const regOptTexts = Array.from(document.body.querySelectorAll('[role="option"]')).map((o) =>
+      o.textContent?.trim() || ''
+    )
+    expect(regOptTexts.some((t) => t.includes('registry-secret'))).toBe(true)
+    expect(regOptTexts.every((t) => !t.includes('ssh-key') && !t.includes('gitlab-token'))).toBe(true)
   })
 
   it('validates client-side inputs for gitUrl, imageName, deployNamespace (validate)', async () => {
@@ -382,10 +385,9 @@ describe('Pipelines View, Form & Store', () => {
   })
 
   it('defaults to "Không cần đăng nhập" when no registry credentials exist', async () => {
-    const credStore = useConfigCredentialsStore()
-    await credStore.fetchCredentials()
+    const allCreds = await mockApi.getCredentials()
     vi.spyOn(mockApi, 'getCredentials').mockResolvedValueOnce(
-      credStore.credentials.filter((c) => c.kind !== 'registry')
+      allCreds.filter((c) => c.kind !== 'registry')
     )
 
     await router.push('/pipelines/new')

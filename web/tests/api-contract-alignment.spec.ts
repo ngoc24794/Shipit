@@ -100,7 +100,7 @@ describe('Web - API Contract Alignment (Task J6)', () => {
     expect(created.tasks[1].position).toBe(1)
 
     // Preview should also return 0-based positions
-    const preview = await mockApi.previewJob(input)
+    const preview = await mockApi.previewJob(input, created.id)
     expect(preview.tasks).toHaveLength(2)
     expect(preview.tasks[0].position).toBe(0)
     expect(preview.tasks[1].position).toBe(1)

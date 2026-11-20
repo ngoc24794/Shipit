@@ -8,6 +8,7 @@ import AppField from '../components/AppField.vue'
 import AppInput from '../components/AppInput.vue'
 import AppSecretInput from '../components/AppSecretInput.vue'
 import AppButton from '../components/AppButton.vue'
+import AppCheckbox from '../components/AppCheckbox.vue'
 import AppToast from '../components/AppToast.vue'
 
 const router = useRouter()
@@ -128,20 +129,13 @@ async function onSubmit() {
           </template>
         </AppField>
 
-        <div class="flex items-center gap-2">
-          <input
+        <div class="flex items-center">
+          <AppCheckbox
             id="login-remember-me"
             v-model="rememberMe"
-            type="checkbox"
             name="rememberMe"
-            class="w-4 h-4 rounded border-border text-primary focus:ring-ring focus-visible:outline-2 focus-visible:outline-ring cursor-pointer"
+            label="Ghi nhớ đăng nhập (30 ngày)"
           />
-          <label
-            for="login-remember-me"
-            class="text-xs text-muted-fg hover:text-fg cursor-pointer select-none"
-          >
-            Ghi nhớ đăng nhập (30 ngày)
-          </label>
         </div>
 
         <div class="pt-2">

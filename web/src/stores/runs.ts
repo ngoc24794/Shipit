@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { Run, RunDetail, Pipeline, GetRunsParams, PagedResult } from '../api/types'
 import { getApi } from '../api'
 import { runJob as apiRunJob } from '../api/runs-job'
+import { createSwrChannel, type SwrOptions } from '../utils/swr'
 
 export const useRunsStore = defineStore('runs', () => {
   const runs = ref<Run[]>([])
@@ -11,9 +12,15 @@ export const useRunsStore = defineStore('runs', () => {
   const jobs = ref<Array<{ id: number; name: string }>>([])
   const currentRun = ref<RunDetail | null>(null)
 
+  const hasLoadedRuns = ref(false)
+  const hasLoadedPipelines = ref(false)
+  const hasLoadedJobs = ref(false)
   const loading = ref(false)
   const loadingPipelines = ref(false)
   const error = ref<string | null>(null)
+
+  const jobsSwr = createSwrChannel<Array<{ id: number; name: string }>>()
+  const pipelinesSwr = createSwrChannel<Pipeline[]>()
 
   const pipelinesMap = computed(() => {
     const map = new Map<number, Pipeline>()
@@ -33,63 +40,85 @@ export const useRunsStore = defineStore('runs', () => {
     return j?.name || `Job #${jobId}`
   }
 
-  async function fetchJobs(): Promise<Array<{ id: number; name: string }>> {
+  async function fetchJobs(opts?: SwrOptions): Promise<Array<{ id: number; name: string }>> {
     const api = getApi()
     try {
-      const list = await api.getJobs()
-      const mapped = list.map((j) => ({ id: j.id, name: j.name }))
-      jobs.value = mapped
-      return mapped
+      const result = await jobsSwr.run(
+        opts,
+        () => hasLoadedJobs.value,
+        async () => {
+          const list = await api.getJobs()
+          const mapped = list.map((j) => ({ id: j.id, name: j.name }))
+          jobs.value = mapped
+          hasLoadedJobs.value = true
+          return mapped
+        },
+        () => {}
+      )
+      return result ?? jobs.value
     } catch {
       return jobs.value
     }
   }
 
-  async function fetchPipelines(): Promise<Pipeline[]> {
+  async function fetchPipelines(opts?: SwrOptions): Promise<Pipeline[]> {
     const api = getApi()
-    loadingPipelines.value = true
     try {
-      const list = await api.getPipelines()
-      pipelines.value = list
-      return list
+      const result = await pipelinesSwr.run(
+        opts,
+        () => hasLoadedPipelines.value,
+        async () => {
+          const list = await api.getPipelines()
+          pipelines.value = list
+          hasLoadedPipelines.value = true
+          return list
+        },
+        (v) => {
+          loadingPipelines.value = v
+        }
+      )
+      return result ?? pipelines.value
     } catch {
       return pipelines.value
-    } finally {
-      loadingPipelines.value = false
     }
   }
 
-  async function fetchRuns(params?: GetRunsParams): Promise<Run[]> {
+  async function fetchRuns(params?: GetRunsParams, opts?: SwrOptions): Promise<Run[]> {
     const api = getApi()
-    loading.value = true
+    const showLoading = !opts?.silent && !hasLoadedRuns.value
+    if (showLoading) loading.value = true
     error.value = null
     try {
       const list = await api.getRuns(params)
       runs.value = list
       totalRuns.value = list.length
+      hasLoadedRuns.value = true
       return list
     } catch (err: any) {
       error.value = err.message || 'Không thể tải danh sách lượt chạy'
       throw err
     } finally {
-      loading.value = false
+      if (showLoading) loading.value = false
     }
   }
 
-  async function fetchRunsPaged(params?: GetRunsParams): Promise<PagedResult<Run>> {
+  async function fetchRunsPaged(params?: GetRunsParams, opts?: SwrOptions): Promise<PagedResult<Run>> {
     const api = getApi()
-    loading.value = true
+    const showLoading = !opts?.silent && !hasLoadedRuns.value
+    if (showLoading) loading.value = true
     error.value = null
     try {
       if (api.getRunsPaged) {
         const res = await api.getRunsPaged(params)
         runs.value = res.items
         totalRuns.value = res.total
+        hasLoadedRuns.value = true
         return res
       }
       const list = await api.getRuns(params)
       runs.value = list
       totalRuns.value = list.length
+      hasLoadedRuns.value = true
       return { items: list, total: list.length }
     } catch (err: any) {
       error.value = err.message || 'Không thể tải danh sách lượt chạy'

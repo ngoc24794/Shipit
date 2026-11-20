@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Boxes,
@@ -9,8 +9,9 @@ import {
   Play,
   GitBranch
 } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import AppTable from '../../components/AppTable.vue'
+
+defineOptions({ name: 'JobsView' })
 import AppButton from '../../components/AppButton.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import EmptyState from '../../components/EmptyState.vue'
@@ -21,12 +22,15 @@ import SortableHeader from '../../components/SortableHeader.vue'
 import { useJobsStore } from '../../stores/jobs'
 import { useToast } from '../../composables/useToast'
 import { useDataTable } from '../../composables/useDataTable'
+import { useShortcuts } from '../../composables/useShortcuts'
 import type { Job } from '../../api/types'
 import { ApiError } from '../../api/client'
 
 const router = useRouter()
 const store = useJobsStore()
 const toast = useToast()
+const { registerMany } = useShortcuts()
+const selectedIndex = ref(0)
 
 const isConfirmOpen = ref(false)
 const deletingJob = ref<Job | null>(null)
@@ -88,12 +92,19 @@ const toolbarFilters = computed<DataToolbarFilter[]>(() => {
   ]
 })
 
+let hasMountedJobs = false
 onMounted(async () => {
+  hasMountedJobs = true
   try {
     await store.fetchJobs()
   } catch (err: any) {
     toast.error(err.message || 'Không thể tải danh sách Job')
   }
+})
+
+onActivated(() => {
+  if (!hasMountedJobs) return
+  store.fetchJobs({ silent: true }).catch(() => {})
 })
 
 function navigateToNew() {
@@ -103,6 +114,24 @@ function navigateToNew() {
 function navigateToEdit(id: number) {
   router.push(`/jobs/${id}`)
 }
+
+function moveJobSelection(delta: number) {
+  const len = table.items.value.length
+  if (len === 0) return
+  selectedIndex.value = (selectedIndex.value + delta + len) % len
+}
+
+function openSelectedJob() {
+  const item = table.items.value[selectedIndex.value]
+  if (item) navigateToEdit(item.id)
+}
+
+registerMany([
+  { id: 'jobs-new', keys: 'n', label: 'Tạo Job mới', scope: 'Danh sách Job', handler: navigateToNew },
+  { id: 'jobs-next', keys: 'j', label: 'Chọn dòng tiếp theo', scope: 'Danh sách Job', handler: () => moveJobSelection(1) },
+  { id: 'jobs-prev', keys: 'k', label: 'Chọn dòng trước đó', scope: 'Danh sách Job', handler: () => moveJobSelection(-1) },
+  { id: 'jobs-open', keys: 'Enter', label: 'Mở Job đang chọn', scope: 'Danh sách Job', when: () => !isConfirmOpen.value, handler: openSelectedJob }
+])
 
 async function handleTriggerRun(job: Job) {
   triggeringJobId.value = job.id
@@ -147,7 +176,7 @@ async function handleDelete() {
 </script>
 
 <template>
-  <AppLayout>
+  <div class="flex-1 min-h-0 flex flex-col">
     <div class="flex-1 min-h-0 flex flex-col gap-4">
       <!-- Page Header -->
       <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap">
@@ -238,6 +267,7 @@ async function handleDelete() {
                 sort-key="namespace"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[135px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -246,6 +276,7 @@ async function handleDelete() {
                 align="center"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[105px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -253,9 +284,10 @@ async function handleDelete() {
                 sort-key="lastRun"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[172px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
+              <th scope="col" class="w-[258px] text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
                 Thao tác
               </th>
             </tr>
@@ -379,5 +411,5 @@ async function handleDelete() {
       :danger="true"
       @confirm="handleDelete"
     />
-  </AppLayout>
+  </div>
 </template>

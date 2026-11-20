@@ -91,6 +91,7 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     await router.isReady()
 
     const wrapper = mount(JobFormView, {
+      attachTo: document.body,
       global: {
         plugins: [pinia, router]
       }
@@ -105,14 +106,23 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     await router.replace('/jobs/new?step=4')
     await wrapper.vm.$nextTick()
 
-    const selects = wrapper.findAll('select')
-    const selectTexts = selects.map((s) => s.text())
+    const comboboxes = wrapper.findAll('[role="combobox"]')
+    const collectedOptions: string[] = []
+    for (const cb of comboboxes) {
+      await cb.trigger('click')
+      await wrapper.vm.$nextTick()
+      document.body.querySelectorAll('[role="option"]').forEach((opt) => {
+        collectedOptions.push(opt.textContent?.trim() || '')
+      })
+      await cb.trigger('keydown', { key: 'Escape' })
+    }
 
-    expect(selectTexts.some((t) => t.includes('avina-files-config'))).toBe(true)
-    expect(selectTexts.some((t) => t.includes('avina-users-config'))).toBe(true)
-    expect(selectTexts.some((t) => t.includes('avina-files-secret'))).toBe(true)
-    expect(selectTexts.some((t) => t.includes('avina-users-secret'))).toBe(true)
-    expect(selectTexts.some((t) => t.includes('root-secret') || t.includes('unallowed-secret'))).toBe(false)
+    expect(collectedOptions.some((t) => t.includes('avina-files-config'))).toBe(true)
+    expect(collectedOptions.some((t) => t.includes('avina-users-config'))).toBe(true)
+    expect(collectedOptions.some((t) => t.includes('avina-files-secret'))).toBe(true)
+    expect(collectedOptions.some((t) => t.includes('avina-users-secret'))).toBe(true)
+    expect(collectedOptions.some((t) => t.includes('root-secret') || t.includes('unallowed-secret'))).toBe(false)
+    wrapper.unmount()
   })
 
   it('guarantees NO input exists for entering secret value (không có ô nhập giá trị secret)', async () => {
@@ -120,6 +130,7 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     await router.isReady()
 
     const wrapper = mount(JobFormView, {
+      attachTo: document.body,
       global: {
         plugins: [pinia, router]
       }
@@ -132,9 +143,17 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     expect(addEnvBtn).toBeDefined()
     await addEnvBtn!.trigger('click')
 
-    const sourceSelect = wrapper.findAll('select').find((s) => s.text().includes('Giá trị trực tiếp') && s.text().includes('Lấy từ Secret'))
-    expect(sourceSelect).toBeDefined()
-    await sourceSelect!.setValue('secret')
+    const sourceCombobox = wrapper.findAll('[role="combobox"]').find((cb) => cb.text().includes('Giá trị trực tiếp'))
+    expect(sourceCombobox).toBeDefined()
+    await sourceCombobox!.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const secretOpt = Array.from(document.body.querySelectorAll('[role="option"]')).find((o) =>
+      o.textContent?.includes('Lấy từ Secret')
+    ) as HTMLElement | undefined
+    expect(secretOpt).toBeDefined()
+    secretOpt!.click()
+    await wrapper.vm.$nextTick()
 
     const inputs = wrapper.findAll('input')
     const placeholders = inputs.map((i) => i.attributes('placeholder') || '')
@@ -143,6 +162,7 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     expect(placeholders.some((p) => p.toLowerCase().includes('key'))).toBe(true)
     expect(placeholders.some((p) => p.toLowerCase().includes('mật khẩu') || p.toLowerCase().includes('giá trị secret'))).toBe(false)
     expect(ariaLabels.some((a) => a.toLowerCase().includes('giá trị secret'))).toBe(false)
+    wrapper.unmount()
   })
 
   it('enforces required timeout validation (timeout bắt buộc và > 0)', async () => {
@@ -315,5 +335,90 @@ describe('Job Form View & Store (Step-by-step Wizard)', () => {
     expect(wrapper.text()).toContain('Tên Job không hợp lệ từ máy chủ')
     expect(wrapper.text()).toContain('Git URL không thể kết nối')
     expect(wrapper.find('button[data-step-id="source"]').attributes('data-step-status')).toBe('error')
+  })
+
+  it('validates existing job on edit with existingId so own name does not conflict', async () => {
+    const validateSpy = vi.spyOn(mockApi, 'validateJob')
+
+    await router.push('/jobs/1?step=5')
+    await router.isReady()
+
+    const wrapper = mount(JobFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('button[aria-label="Kiểm tra cấu hình"]').exists()).toBe(true)
+    }, { timeout: 3000 })
+
+    const validateBtn = wrapper.find('button[aria-label="Kiểm tra cấu hình"]')
+    await validateBtn.trigger('click')
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushPromises()
+
+    expect(validateSpy).toHaveBeenCalledWith(expect.objectContaining({ name: 'avina-dbmigrator' }), 1)
+    expect(wrapper.text()).not.toContain('Tên Job đã tồn tại')
+  })
+
+  it('auto-loads YAML preview on entering review step and shows error state with retry on failure', async () => {
+    const previewSpy = vi.spyOn(mockApi, 'previewJob')
+      .mockRejectedValue(new Error('Lỗi kết nối máy chủ'))
+
+    await router.push('/jobs/1?step=5')
+    await router.isReady()
+
+    const wrapper = mount(JobFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-testid="yaml-preview-error"]').exists()).toBe(true)
+    }, { timeout: 3000 })
+
+    expect(previewSpy).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Lỗi kết nối máy chủ')
+
+    // Restore normal mock implementation and click retry
+    previewSpy.mockRestore()
+    const retrySpy = vi.spyOn(mockApi, 'previewJob')
+    const retryBtn = wrapper.find('[data-testid="yaml-preview-error"] button')
+    expect(retryBtn.exists()).toBe(true)
+    await retryBtn.trigger('click')
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('kind: Job')
+    }, { timeout: 3000 })
+
+    expect(retrySpy).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="yaml-preview-error"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('renders human-readable names (not raw IDs) in review summary with ID as tooltip', async () => {
+    await router.push('/jobs/1?step=5')
+    await router.isReady()
+
+    const wrapper = mount(JobFormView, {
+      global: {
+        plugins: [pinia, router]
+      }
+    })
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-testid="job-review-summary"]').exists()).toBe(true)
+    }, { timeout: 3000 })
+
+    const summary = wrapper.find('[data-testid="job-review-summary"]')
+    expect(summary.exists()).toBe(true)
+    const summaryText = summary.text()
+    expect(summaryText).toContain('slave-staging-01 (192.168.1.49)')
+    expect(summaryText).toContain('gitlab-token')
+    expect(summaryText).toContain('avina-files-config')
+    expect(summaryText).toContain('avina-files-secret')
+    expect(summaryText).not.toMatch(/Máy build:\s*1\b/)
+    expect(summary.html()).toContain('title="ID: 1"')
   })
 })

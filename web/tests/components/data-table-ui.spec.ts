@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DataToolbar from '../../src/components/DataToolbar.vue'
 import DataPagination from '../../src/components/DataPagination.vue'
+import AppSelect from '../../src/components/AppSelect.vue'
 
 describe('DataToolbar', () => {
   afterEach(() => {
@@ -74,13 +75,40 @@ describe('DataToolbar', () => {
     await jobBtn.trigger('click')
     expect(wrapper.emitted('update:filter')?.[0]).toEqual(['kind', 'job'])
 
-    const select = wrapper.get('select[aria-label="Trạng thái"]')
-    await select.setValue('success')
+    const selectComp = wrapper.findComponent(AppSelect)
+    selectComp.vm.$emit('update:modelValue', 'success')
+    await wrapper.vm.$nextTick()
     expect(wrapper.emitted('update:filter')?.[1]).toEqual(['status', 'success'])
 
     const clearAllBtn = wrapper.findAll('button').find((b) => b.text().includes('Xoá bộ lọc'))!
     await clearAllBtn.trigger('click')
     expect(wrapper.emitted('clear')).toHaveLength(1)
+  })
+
+  it('sizes select filter wrapper to fit longest option label without fixed 175px clipping', () => {
+    const wrapper = mount(DataToolbar, {
+      props: {
+        q: '',
+        searchPlaceholder: 'Tìm tên, tag...',
+        filters: [
+          {
+            key: 'target',
+            label: 'Pipeline / Job',
+            type: 'select',
+            options: [
+              { label: 'Tất cả Pipeline / Job', value: '' },
+              { label: 'avina-api', value: 'avina-api' }
+            ]
+          }
+        ],
+        filterValues: { target: '' }
+      }
+    })
+
+    const selectWrap = wrapper.findComponent(AppSelect).element.parentElement as HTMLElement
+    const widthPx = Number.parseInt(selectWrap.style.width, 10)
+    expect(widthPx).toBeGreaterThanOrEqual(195)
+    expect(wrapper.get('input[type="text"]').attributes('title')).toBe('Tìm tên, tag...')
   })
 })
 
@@ -103,8 +131,9 @@ describe('DataPagination', () => {
 
     expect(wrapper.emitted('update:page')).toEqual([[1], [4], [6], [10]])
 
-    const pageSizeSelect = wrapper.get('select[aria-label="Số dòng mỗi trang"]')
-    await pageSizeSelect.setValue('50')
+    const pageSizeSelect = wrapper.findComponent(AppSelect)
+    pageSizeSelect.vm.$emit('update:modelValue', 50)
+    await wrapper.vm.$nextTick()
     expect(wrapper.emitted('update:pageSize')).toEqual([[50]])
 
     const jumpInput = wrapper.get('input[aria-label="Nhảy tới trang"]')

@@ -100,25 +100,25 @@ function focusInput() {
 <template>
   <div
     :class="[
-      'min-h-[42px] w-full px-2.5 py-1.5 rounded-[6px] border bg-card text-fg transition-colors flex flex-wrap items-center gap-1.5 cursor-text',
+      'min-h-[34px] w-full px-2 py-1 rounded-[2px] border bg-bg-input text-fg transition-colors flex flex-wrap items-center gap-1.5 cursor-text font-mono',
       error
-        ? 'border-danger focus-within:ring-2 focus-within:ring-danger'
-        : 'border-border focus-within:ring-2 focus-within:ring-ring focus-within:border-transparent',
-      disabled ? 'opacity-50 cursor-not-allowed bg-muted/50' : 'hover:border-muted-fg/50'
+        ? 'border-danger focus-within:border-danger'
+        : 'border-border focus-within:border-border-focus',
+      disabled ? 'opacity-50 cursor-not-allowed bg-bg-surface' : 'hover:border-border-strong'
     ]"
     @click="focusInput"
   >
     <span
       v-for="(chip, idx) in modelValue"
       :key="idx"
-      class="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-xs font-mono bg-muted text-fg border border-border/60 max-w-full break-all select-none"
+      class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] text-xs font-mono bg-bg-surface text-fg-strong border border-border max-w-full break-all select-none"
     >
       <span>{{ chip }}</span>
       <button
         v-if="!disabled"
         type="button"
         :aria-label="`Xoá đối số ${chip}`"
-        class="text-muted-fg hover:text-danger hover:bg-card p-0.5 rounded-[2px] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+        class="text-fg-muted hover:text-danger hover:bg-bg-hover p-0.5 rounded-[2px] transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus"
         @click.stop="removeChip(idx)"
       >
         <X class="w-3 h-3" aria-hidden="true" />
@@ -134,7 +134,7 @@ function focusInput() {
       :disabled="disabled"
       :aria-describedby="ariaDescribedby"
       :aria-invalid="!!error ? 'true' : undefined"
-      class="flex-1 min-w-[140px] bg-transparent text-sm text-fg outline-none border-none py-1 placeholder:text-muted-fg/70"
+      class="flex-1 min-w-[140px] bg-transparent text-xs text-fg-strong outline-none border-none py-0.5 placeholder:text-fg-dim"
       @keydown="onKeydown"
       @paste="onPaste"
       @blur="onBlur"

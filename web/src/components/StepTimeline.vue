@@ -83,95 +83,95 @@ const mappedSteps = computed(() => {
   })
 })
 
+function getStatusGlyph(status: StepStatus): { glyph: string; class: string } {
+  switch (status) {
+    case 'success':
+      return { glyph: '●', class: 'text-phosphor' }
+    case 'failed':
+      return { glyph: '✕', class: 'text-danger' }
+    case 'cancelled':
+      return { glyph: '○', class: 'text-warn' }
+    case 'running':
+      return { glyph: '▲', class: 'text-accent' }
+    case 'skipped':
+    case 'pending':
+    default:
+      return { glyph: '◌', class: 'text-fg-dim' }
+  }
+}
+
 function getStatusBadge(status: StepStatus) {
   switch (status) {
     case 'success':
-      return { icon: CheckCircle2, class: 'text-success' }
+      return { icon: CheckCircle2, class: 'text-phosphor' }
     case 'failed':
       return { icon: XCircle, class: 'text-danger' }
     case 'cancelled':
       return { icon: CircleStop, class: 'text-warn' }
     case 'running':
-      return { icon: Loader2, class: 'text-info animate-spin' }
+      return { icon: Loader2, class: 'text-accent animate-spin' }
     case 'skipped':
-      return { icon: MinusCircle, class: 'text-muted-fg' }
+      return { icon: MinusCircle, class: 'text-fg-muted' }
     case 'pending':
     default:
-      return { icon: Circle, class: 'text-muted-fg' }
+      return { icon: Circle, class: 'text-fg-dim' }
   }
 }
 </script>
 
 <template>
-  <div v-if="orientation === 'vertical'" class="w-full">
-    <ol class="flex flex-col w-full">
+  <div v-if="orientation === 'vertical'" class="w-full font-mono">
+    <ol class="flex flex-col w-full space-y-1">
       <li
         v-for="(step, index) in mappedSteps"
         :key="step.name"
         :data-step-name="step.name"
         :data-step-status="step.status"
-        class="relative flex items-center gap-2.5 py-1 min-w-0"
+        :class="[
+          'flex items-center justify-between gap-2 px-2 py-1.5 rounded-[2px] border text-xs min-w-0 transition-colors',
+          step.status === 'running'
+            ? 'border-accent bg-accent-bg'
+            : step.status === 'failed'
+              ? 'border-danger/50 bg-danger-bg'
+              : 'border-border bg-bg-surface'
+        ]"
       >
-        <!-- Vertical connecting line -->
-        <div
-          v-if="index < mappedSteps.length - 1"
-          aria-hidden="true"
-          class="absolute left-[11px] top-[24px] bottom-[-4px] w-0.5 transition-colors"
-          :class="[
-            step.status === 'failed' || mappedSteps[index + 1]?.status === 'failed'
-              ? 'bg-danger/40'
-              : step.status === 'success'
-                ? 'bg-success'
-                : 'bg-border'
-          ]"
-        />
-
-        <!-- Compact Step Icon Circle -->
-        <div
-          :class="[
-            'relative z-10 flex items-center justify-center w-6 h-6 rounded-full border-2 shrink-0 transition-colors bg-card',
-            step.status === 'success' ? 'border-success text-success' : '',
-            step.status === 'failed' ? 'border-danger text-danger' : '',
-            step.status === 'running' ? 'border-info text-info ring-2 ring-info/15' : '',
-            step.status === 'cancelled' ? 'border-warn text-warn' : '',
-            step.status === 'skipped' ? 'border-border text-muted-fg' : '',
-            step.status === 'pending' ? 'border-border text-muted-fg' : ''
-          ]"
-        >
-          <component :is="step.icon" class="w-3.5 h-3.5" aria-hidden="true" />
+        <div class="flex items-center gap-1.5 min-w-0">
+          <span class="text-fg-dim select-none shrink-0" aria-hidden="true">
+            {{ index === mappedSteps.length - 1 ? '└─' : '├─' }}
+          </span>
+          <span
+            :class="['font-bold shrink-0 select-none', getStatusGlyph(step.status).class]"
+            aria-hidden="true"
+          >
+            {{ getStatusGlyph(step.status).glyph }}
+          </span>
+          <component :is="step.icon" class="w-3.5 h-3.5 text-fg-muted shrink-0" aria-hidden="true" />
+          <span class="font-medium text-fg-strong whitespace-nowrap truncate">{{ step.label }}</span>
         </div>
 
-        <!-- Step Label + Status Icon + Duration -->
-        <div class="flex items-center justify-between gap-2 flex-1 min-w-0">
-          <div class="flex items-center gap-1.5 min-w-0">
-            <span class="text-xs font-medium text-fg whitespace-nowrap truncate">{{ step.label }}</span>
-            <component
-              :is="getStatusBadge(step.status).icon"
-              :class="['w-3.5 h-3.5 shrink-0', getStatusBadge(step.status).class]"
-              aria-hidden="true"
-            />
-          </div>
+        <div class="flex items-center gap-1.5 shrink-0">
           <span
             v-if="step.status === 'running'"
-            class="text-[11px] text-info whitespace-nowrap shrink-0"
+            class="text-[11px] text-accent whitespace-nowrap"
           >
             Đang chạy...
           </span>
           <span
             v-else-if="step.status === 'cancelled'"
-            class="text-[11px] text-warn whitespace-nowrap shrink-0 tabular-nums"
+            class="text-[11px] text-warn whitespace-nowrap tabular-nums"
           >
             {{ step.duration ? `Đã dừng (${step.duration})` : 'Đã dừng' }}
           </span>
           <span
             v-else-if="step.duration"
-            class="text-[11px] text-muted-fg tabular-nums whitespace-nowrap shrink-0"
+            class="text-[11px] text-fg-muted tabular-nums whitespace-nowrap"
           >
             {{ step.duration }}
           </span>
           <span
             v-else
-            class="text-[11px] text-muted-fg whitespace-nowrap shrink-0"
+            class="text-[11px] text-fg-dim whitespace-nowrap"
           >
             {{ step.status === 'skipped' ? 'Bỏ qua' : 'Chưa chạy' }}
           </span>

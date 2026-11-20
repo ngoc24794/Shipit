@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import {
   ShieldCheck,
   Plus,
   Trash2,
   AlertCircle
 } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import AppTable from '../../components/AppTable.vue'
 import AppButton from '../../components/AppButton.vue'
 import AppInput from '../../components/AppInput.vue'
@@ -165,13 +164,20 @@ async function handleConfirmDelete() {
   }
 }
 
+let hasMountedDeployTargets = false
 onMounted(() => {
+  hasMountedDeployTargets = true
   store.fetchDeployTargets().catch(() => {})
+})
+
+onActivated(() => {
+  if (!hasMountedDeployTargets) return
+  store.fetchDeployTargets({ silent: true }).catch(() => {})
 })
 </script>
 
 <template>
-  <component :is="props.embedded ? 'div' : AppLayout" :class="props.embedded ? 'flex-1 min-h-0 flex flex-col' : undefined">
+  <div class="flex-1 min-h-0 flex flex-col">
     <div class="flex-1 min-h-0 flex flex-col gap-4">
       <!-- Header -->
       <div v-if="!props.embedded" class="shrink-0">
@@ -327,10 +333,10 @@ onMounted(() => {
                 sort-key="createdAt"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
-                class="py-3 px-4"
+                class="py-3 px-4 w-[155px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="py-3 px-4 text-right text-xs font-semibold text-muted-fg whitespace-nowrap">
+              <th scope="col" class="py-3 px-4 w-[100px] text-right text-xs font-semibold text-muted-fg whitespace-nowrap">
                 Thao tác
               </th>
             </tr>
@@ -389,5 +395,5 @@ onMounted(() => {
         @cancel="isConfirmOpen = false"
       />
     </div>
-  </component>
+  </div>
 </template>

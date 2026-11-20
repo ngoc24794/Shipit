@@ -210,18 +210,27 @@ describe('Job Run UI (Task J3: job-ui-run)', () => {
     expect(wrapper.text()).toContain('Migration failed error')
 
     // Task filter dropdown
-    const select = wrapper.find('select#task-filter')
+    const select = wrapper.find('#task-filter[role="combobox"]')
     expect(select.exists()).toBe(true)
 
     // Filter to task 0 only
-    await select.setValue('0')
+    await select.trigger('click')
+    const task0Opt = Array.from(document.body.querySelectorAll('[role="option"]')).find((el) =>
+      el.textContent?.includes('Tác vụ 1:')
+    ) as HTMLElement | undefined
+    task0Opt?.click()
+    await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('Schema created')
     expect(wrapper.find('#task-group-prep').attributes('style')).toContain('display: none')
     expect(wrapper.find('#task-group-1').attributes('style')).toContain('display: none')
     expect(wrapper.find('#task-group-0').attributes('style') || '').not.toContain('display: none')
 
     // Filter back to all
-    await select.setValue('all')
+    await select.trigger('click')
+    const allOpt = Array.from(document.body.querySelectorAll('[role="option"]')).find((el) =>
+      el.textContent?.includes('Tất cả tác vụ')
+    ) as HTMLElement | undefined
+    allOpt?.click()
     await wrapper.vm.$nextTick()
     expect(wrapper.find('#task-group-prep').attributes('style') || '').not.toContain('display: none')
     expect(wrapper.find('#task-group-1').attributes('style') || '').not.toContain('display: none')

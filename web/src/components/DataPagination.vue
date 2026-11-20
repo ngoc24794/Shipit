@@ -7,6 +7,7 @@ import {
   ChevronsRight,
   Loader2
 } from 'lucide-vue-next'
+import AppSelect from './AppSelect.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -90,42 +91,41 @@ function handleJumpSubmit() {
   }
 }
 
-function onPageSizeChange(event: Event) {
-  const val = Number((event.target as HTMLSelectElement).value)
-  if (props.pageSizeOptions.includes(val)) {
-    emit('update:pageSize', val)
+function onPageSizeChange(val: string | number) {
+  const num = Number(val)
+  if (props.pageSizeOptions.includes(num)) {
+    emit('update:pageSize', num)
   }
 }
 </script>
 
 <template>
   <div
-    class="shrink-0 flex flex-row items-center justify-between gap-3 flex-nowrap px-3 py-2 border-t border-border bg-card text-xs text-muted-fg overflow-x-auto"
+    class="shrink-0 h-[34px] flex flex-row items-center justify-between gap-3 flex-nowrap px-3 border-t border-border bg-bg-surface text-[11.5px] text-fg-muted font-mono overflow-x-auto"
     data-testid="data-pagination"
   >
     <!-- Left: Page size + Loading indicator -->
     <div class="flex flex-row items-center gap-2 shrink-0 whitespace-nowrap">
-      <label class="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <div class="inline-flex items-center gap-1.5 whitespace-nowrap">
         <span>Số dòng</span>
-        <select
-          :value="pageSize"
-          aria-label="Số dòng mỗi trang"
-          :disabled="loading"
-          class="h-7 px-2 text-xs rounded-[6px] bg-bg text-fg border border-border cursor-pointer focus-visible:outline-2 focus-visible:outline-ring focus-visible:border-primary disabled:opacity-50"
-          @change="onPageSizeChange"
-        >
-          <option v-for="size in pageSizeOptions" :key="size" :value="size">
-            {{ size }}
-          </option>
-        </select>
-      </label>
+        <div class="w-[68px]">
+          <AppSelect
+            :model-value="pageSize"
+            :options="pageSizeOptions.map((s) => ({ label: String(s), value: s }))"
+            aria-label="Số dòng mỗi trang"
+            :disabled="loading"
+            size="sm"
+            @update:model-value="onPageSizeChange"
+          />
+        </div>
+      </div>
 
       <span
         v-if="loading"
-        class="inline-flex items-center gap-1 text-primary whitespace-nowrap"
+        class="inline-flex items-center gap-1 text-accent whitespace-nowrap"
         aria-live="polite"
       >
-        <Loader2 class="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+        <Loader2 class="w-3 h-3 animate-spin" aria-hidden="true" />
         <span>Đang tải...</span>
       </span>
     </div>
@@ -137,7 +137,7 @@ function onPageSizeChange(event: Event) {
         aria-label="Trang đầu"
         title="Trang đầu"
         :disabled="loading || page <= 1"
-        class="inline-flex items-center justify-center w-7 h-7 rounded-[6px] border border-border bg-bg text-fg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+        class="inline-flex items-center justify-center w-6 h-6 rounded-[2px] border border-border bg-bg-elevated text-fg hover:bg-bg-hover disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors duration-[80ms]"
         @click="goToPage(1)"
       >
         <ChevronsLeft class="w-3.5 h-3.5" aria-hidden="true" />
@@ -148,7 +148,7 @@ function onPageSizeChange(event: Event) {
         aria-label="Trang trước"
         title="Trang trước"
         :disabled="loading || page <= 1"
-        class="inline-flex items-center justify-center w-7 h-7 rounded-[6px] border border-border bg-bg text-fg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+        class="inline-flex items-center justify-center w-6 h-6 rounded-[2px] border border-border bg-bg-elevated text-fg hover:bg-bg-hover disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors duration-[80ms]"
         @click="goToPage(page - 1)"
       >
         <ChevronLeft class="w-3.5 h-3.5" aria-hidden="true" />
@@ -157,7 +157,7 @@ function onPageSizeChange(event: Event) {
       <template v-for="token in pageTokens" :key="token">
         <span
           v-if="typeof token === 'string'"
-          class="px-1.5 text-muted-fg select-none"
+          class="px-1 text-fg-dim select-none"
           aria-hidden="true"
         >
           ...
@@ -169,10 +169,10 @@ function onPageSizeChange(event: Event) {
           :aria-current="token === page ? 'page' : undefined"
           :disabled="loading"
           :class="[
-            'inline-flex items-center justify-center min-w-7 h-7 px-2 rounded-[6px] text-xs font-medium tabular-nums transition-colors cursor-pointer disabled:opacity-50',
+            'inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-[2px] text-[11.5px] font-medium tabular-nums transition-colors duration-[80ms] cursor-pointer disabled:opacity-50',
             token === page
-              ? 'bg-primary text-on-primary border border-primary'
-              : 'border border-border bg-bg text-fg hover:bg-muted'
+              ? 'bg-[var(--phosphor-bg)] text-phosphor border border-phosphor font-bold'
+              : 'border border-border bg-bg-elevated text-fg hover:bg-bg-hover'
           ]"
           @click="goToPage(token)"
         >
@@ -185,7 +185,7 @@ function onPageSizeChange(event: Event) {
         aria-label="Trang sau"
         title="Trang sau"
         :disabled="loading || page >= totalPages"
-        class="inline-flex items-center justify-center w-7 h-7 rounded-[6px] border border-border bg-bg text-fg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+        class="inline-flex items-center justify-center w-6 h-6 rounded-[2px] border border-border bg-bg-elevated text-fg hover:bg-bg-hover disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors duration-[80ms]"
         @click="goToPage(page + 1)"
       >
         <ChevronRight class="w-3.5 h-3.5" aria-hidden="true" />
@@ -196,7 +196,7 @@ function onPageSizeChange(event: Event) {
         aria-label="Trang cuối"
         title="Trang cuối"
         :disabled="loading || page >= totalPages"
-        class="inline-flex items-center justify-center w-7 h-7 rounded-[6px] border border-border bg-bg text-fg hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+        class="inline-flex items-center justify-center w-6 h-6 rounded-[2px] border border-border bg-bg-elevated text-fg hover:bg-bg-hover disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors duration-[80ms]"
         @click="goToPage(totalPages)"
       >
         <ChevronsRight class="w-3.5 h-3.5" aria-hidden="true" />
@@ -217,13 +217,13 @@ function onPageSizeChange(event: Event) {
           :max="totalPages"
           aria-label="Nhảy tới trang"
           :disabled="loading"
-          class="w-14 h-7 px-2 text-xs text-center tabular-nums rounded-[6px] bg-bg text-fg border border-border focus-visible:outline-2 focus-visible:outline-ring focus-visible:border-primary disabled:opacity-50"
+          class="w-12 h-6 px-1.5 text-[11.5px] text-center tabular-nums rounded-[2px] bg-bg-input text-fg-strong border border-border focus:outline-none focus:border-border-focus disabled:opacity-50"
         />
       </label>
       <button
         type="submit"
         :disabled="loading"
-        class="h-7 px-2.5 text-xs font-medium rounded-[6px] border border-border bg-bg text-fg hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
+        class="h-6 px-2 text-[11.5px] font-medium rounded-[2px] border border-border-strong bg-bg-elevated text-fg hover:bg-bg-hover transition-colors duration-[80ms] cursor-pointer disabled:opacity-50"
       >
         Đi
       </button>

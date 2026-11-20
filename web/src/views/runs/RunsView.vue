@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Play, RotateCw, PlayCircle, Search, Check, ChevronDown } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import AppTable from '../../components/AppTable.vue'
+
+defineOptions({ name: 'RunsView' })
 import AppButton from '../../components/AppButton.vue'
 import AppDialog from '../../components/AppDialog.vue'
 import AppField from '../../components/AppField.vue'
@@ -15,6 +16,7 @@ import EmptyState from '../../components/EmptyState.vue'
 import { useRunsStore } from '../../stores/runs'
 import { useToast } from '../../composables/useToast'
 import { useDataTable } from '../../composables/useDataTable'
+import { useShortcuts } from '../../composables/useShortcuts'
 import { formatDateTime, formatDuration } from './formatters'
 import { ApiError } from '../../api/client'
 import type { GetRunsParams, Run, RunStatus } from '../../api/types'
@@ -22,6 +24,8 @@ import type { GetRunsParams, Run, RunStatus } from '../../api/types'
 const router = useRouter()
 const runsStore = useRunsStore()
 const toast = useToast()
+const { registerMany } = useShortcuts()
+const selectedIndex = ref(0)
 
 const showTriggerDialog = ref(false)
 const triggerKind = ref<'pipeline' | 'job'>('pipeline')
@@ -193,8 +197,25 @@ function currentFetchParams(): GetRunsParams {
   })
 }
 
+let isViewActive = true
+let hasMountedRuns = false
+
+function startSecondTimer() {
+  if (secondInterval) return
+  secondInterval = setInterval(() => {
+    currentTime.value = Date.now()
+  }, 1000)
+}
+
+function stopSecondTimer() {
+  if (secondInterval) {
+    clearInterval(secondInterval)
+    secondInterval = null
+  }
+}
+
 function startPolling() {
-  if (pollInterval) return
+  if (!isViewActive || pollInterval) return
   pollInterval = setInterval(async () => {
     await table.load({ silent: true }).catch(() => {})
   }, 3000)
@@ -208,7 +229,7 @@ function stopPolling() {
 }
 
 watch(hasActiveRuns, (active) => {
-  if (active) {
+  if (active && isViewActive) {
     startPolling()
   } else {
     stopPolling()
@@ -235,27 +256,44 @@ watch(triggerKind, (nextKind) => {
 })
 
 onMounted(async () => {
-  secondInterval = setInterval(() => {
-    currentTime.value = Date.now()
-  }, 1000)
+  isViewActive = true
+  startSecondTimer()
 
   await Promise.all([
     runsStore.fetchPipelines(),
     runsStore.fetchJobs(),
     table.load().catch(() => {})
   ])
+  hasMountedRuns = true
 
+  if (hasActiveRuns.value && isViewActive) {
+    startPolling()
+  }
+})
+
+onActivated(() => {
+  isViewActive = true
+  startSecondTimer()
+  if (!hasMountedRuns) return
+  // Silent background refresh on keep-alive revisit (never show skeleton)
+  table.load({ silent: true }).catch(() => {})
+  runsStore.fetchPipelines().catch(() => {})
+  runsStore.fetchJobs().catch(() => {})
   if (hasActiveRuns.value) {
     startPolling()
   }
 })
 
-onBeforeUnmount(() => {
+onDeactivated(() => {
+  isViewActive = false
   stopPolling()
-  if (secondInterval) {
-    clearInterval(secondInterval)
-    secondInterval = null
-  }
+  stopSecondTimer()
+})
+
+onBeforeUnmount(() => {
+  isViewActive = false
+  stopPolling()
+  stopSecondTimer()
 })
 
 function openTriggerDialog() {
@@ -326,11 +364,28 @@ async function manualRefresh() {
 function navigateToRun(id: number) {
   router.push(`/runs/${id}`)
 }
+
+function moveRunSelection(delta: number) {
+  const len = table.items.value.length
+  if (len === 0) return
+  selectedIndex.value = (selectedIndex.value + delta + len) % len
+}
+
+function openSelectedRun() {
+  const item = table.items.value[selectedIndex.value]
+  if (item) navigateToRun(item.id)
+}
+
+registerMany([
+  { id: 'runs-new', keys: 'n', label: 'Mở hộp thoại Chạy ngay', scope: 'Danh sách lượt chạy', handler: openTriggerDialog },
+  { id: 'runs-next', keys: 'j', label: 'Chọn dòng tiếp theo', scope: 'Danh sách lượt chạy', handler: () => moveRunSelection(1) },
+  { id: 'runs-prev', keys: 'k', label: 'Chọn dòng trước đó', scope: 'Danh sách lượt chạy', handler: () => moveRunSelection(-1) },
+  { id: 'runs-open', keys: 'Enter', label: 'Mở lượt chạy đang chọn', scope: 'Danh sách lượt chạy', when: () => !showTriggerDialog.value, handler: openSelectedRun }
+])
 </script>
 
 <template>
-  <AppLayout>
-    <div class="flex-1 min-h-0 flex flex-col gap-4 w-full">
+  <div class="flex-1 min-h-0 flex flex-col gap-4 w-full">
       <!-- Header -->
       <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap">
         <div class="min-w-0">
@@ -394,7 +449,7 @@ function navigateToRun(id: number) {
       >
         <DataToolbar
           :q="table.q.value"
-          search-placeholder="Tìm theo tên, tag, image, mã..."
+          search-placeholder="Tìm tên, tag..."
           :filters="toolbarFilters"
           :filter-values="table.filters"
           :start-item="table.startItem.value"
@@ -439,7 +494,7 @@ function navigateToRun(id: number) {
                 sort-key="id"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
-                class="w-20"
+                class="w-[68px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -447,6 +502,7 @@ function navigateToRun(id: number) {
                 sort-key="kind"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[96px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -461,18 +517,20 @@ function navigateToRun(id: number) {
                 sort-key="status"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[132px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="whitespace-nowrap">Tag (SHA)</th>
+              <th scope="col" class="w-[130px] whitespace-nowrap">Tag (SHA)</th>
               <th scope="col" class="whitespace-nowrap">Image</th>
               <SortableHeader
                 label="Bắt đầu lúc"
                 sort-key="startedAt"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[155px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="whitespace-nowrap">Thời lượng</th>
+              <th scope="col" class="w-[100px] whitespace-nowrap">Thời lượng</th>
             </tr>
           </template>
 
@@ -718,6 +776,5 @@ function navigateToRun(id: number) {
           </AppButton>
         </template>
       </AppDialog>
-    </div>
-  </AppLayout>
+  </div>
 </template>

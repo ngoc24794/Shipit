@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Boxes,
@@ -46,8 +46,12 @@ const pageLoading = ref(true)
 const saveLoading = ref(false)
 const validateLoading = ref(false)
 const previewLoading = ref(false)
+const previewError = ref<string | null>(null)
+const previewDirty = ref(true)
+const isHydrating = ref(true)
 const showAdvanced = ref(false)
 const activeTaskIndex = ref(0)
+let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const STEP_DEFS = [
   { id: 'source', label: 'Nguồn mã' },
@@ -84,6 +88,9 @@ watch(
     if (parsed !== currentStep.value) {
       currentStep.value = parsed
       visitedSteps.value = new Set([...visitedSteps.value, parsed])
+      if (parsed === 4 && !pageLoading.value && (previewDirty.value || previewTasks.value.length === 0)) {
+        refreshPreview()
+      }
     }
   }
 )
@@ -96,7 +103,7 @@ function goToStep(index: number) {
     path: route.path,
     query: { ...route.query, step: String(index + 1) }
   })
-  if (index === 4) {
+  if (index === 4 && (previewDirty.value || previewTasks.value.length === 0)) {
     refreshPreview()
   }
 }
@@ -230,7 +237,6 @@ onMounted(async () => {
           ttlSeconds: t.ttlSeconds
         }))
       }
-      await refreshPreview()
     } else {
       if (allowStore.namespaces.length > 0 && !form.value.namespace) {
         form.value.namespace = allowStore.namespaces[0]
@@ -245,7 +251,34 @@ onMounted(async () => {
   } catch (err: any) {
     toast.error(err.message || 'Lỗi khi tải dữ liệu khởi tạo')
   } finally {
+    await nextTick()
+    isHydrating.value = false
     pageLoading.value = false
+    if (currentStep.value === 4) {
+      await refreshPreview()
+    }
+  }
+})
+
+watch(
+  form,
+  () => {
+    if (isHydrating.value || pageLoading.value) return
+    previewDirty.value = true
+    if (currentStep.value === 4) {
+      if (previewDebounceTimer) clearTimeout(previewDebounceTimer)
+      previewDebounceTimer = setTimeout(() => {
+        refreshPreview()
+      }, 300)
+    }
+  },
+  { deep: true }
+)
+
+onBeforeUnmount(() => {
+  if (previewDebounceTimer) {
+    clearTimeout(previewDebounceTimer)
+    previewDebounceTimer = null
   }
 })
 
@@ -496,7 +529,7 @@ async function handleValidate() {
   validateLoading.value = true
   try {
     const payload = buildPayload()
-    const res = await jobsStore.validateJob(payload)
+    const res = await jobsStore.validateJob(payload, isEditing.value ? jobId.value : undefined)
     formErrors.value = res.errors
     if (res.valid) {
       toast.success('Cấu hình hợp lệ!')
@@ -511,13 +544,22 @@ async function handleValidate() {
 }
 
 async function refreshPreview() {
+  if (previewDebounceTimer) {
+    clearTimeout(previewDebounceTimer)
+    previewDebounceTimer = null
+  }
   previewLoading.value = true
+  previewError.value = null
   try {
     const payload = buildPayload()
-    const res = await jobsStore.previewJob(payload)
+    const res = await jobsStore.previewJob(payload, isEditing.value ? jobId.value : undefined)
     previewTasks.value = res.tasks
-  } catch {
-    // Keep previous preview if partial
+    previewDirty.value = false
+    if (res.tasks.length === 0 && Object.keys(res.errors || {}).length > 0) {
+      previewError.value = 'Cấu hình còn lỗi nên chưa thể tạo bản xem trước YAML. Vui lòng kiểm tra các mục báo lỗi.'
+    }
+  } catch (err: any) {
+    previewError.value = err?.message || 'Không thể tạo bản xem trước YAML'
   } finally {
     previewLoading.value = false
   }
@@ -567,10 +609,67 @@ async function handleSave() {
   }
 }
 
-function findOptionLabel(options: Array<{ label: string; value: string | number }>, val: string | number | null): string {
-  if (val === '' || val === null || val === undefined) return 'Không có'
-  return options.find((o) => o.value === val)?.label || String(val)
-}
+const gitCredentialSummary = computed(() => {
+  const raw = form.value.gitCredentialId
+  if (raw === '' || raw === null || raw === undefined) {
+    return { label: 'Chưa chọn', idTitle: '' }
+  }
+  const idNum = Number(raw)
+  const cred = credStore.credentials.find((c) => c.id === idNum)
+  return {
+    label: cred ? cred.name : 'Không xác định',
+    idTitle: `ID: ${raw}`
+  }
+})
+
+const registryCredentialSummary = computed(() => {
+  const raw = form.value.registryCredentialId
+  if (raw === '' || raw === null || raw === undefined) {
+    return { label: 'Không cần đăng nhập', idTitle: '' }
+  }
+  const idNum = Number(raw)
+  const cred = credStore.credentials.find((c) => c.id === idNum)
+  return {
+    label: cred ? cred.name : 'Không xác định',
+    idTitle: `ID: ${raw}`
+  }
+})
+
+const slaveSummary = computed(() => {
+  const raw = form.value.slaveId
+  if (raw === '' || raw === null || raw === undefined) {
+    return { label: 'Chưa chọn', idTitle: '' }
+  }
+  const idNum = Number(raw)
+  const slave = slaveStore.slaves.find((s) => s.id === idNum)
+  return {
+    label: slave ? `${slave.name} (${slave.host})` : 'Không xác định',
+    idTitle: `ID: ${raw}`
+  }
+})
+
+const allowlistedConfigMapsSummary = computed(() => {
+  const set = new Set<string>()
+  for (const t of form.value.tasks) {
+    for (const cm of t.envFromConfigMaps || []) {
+      if (cm) set.add(cm)
+    }
+  }
+  return Array.from(set)
+})
+
+const allowlistedSecretsSummary = computed(() => {
+  const set = new Set<string>()
+  for (const t of form.value.tasks) {
+    for (const sec of t.envFromSecrets || []) {
+      if (sec) set.add(sec)
+    }
+    for (const env of t.env || []) {
+      if (env.secretName) set.add(env.secretName)
+    }
+  }
+  return Array.from(set)
+})
 </script>
 
 <template>
@@ -1044,25 +1143,59 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
         </div>
 
         <!-- Summary Cards -->
-        <div class="shrink-0 grid grid-cols-2 gap-4">
-          <div class="p-4 rounded-[8px] border border-border bg-bg/40 space-y-1.5 text-xs">
+        <div class="shrink-0 grid grid-cols-2 gap-4" data-testid="job-review-summary">
+          <div class="p-4 rounded-[2px] border border-border bg-bg-surface space-y-1.5 text-xs">
             <div class="flex items-center justify-between">
-              <h3 class="font-semibold text-fg">1. Nguồn mã</h3>
-              <button type="button" class="text-primary hover:underline cursor-pointer" @click="goToStep(0)">Sửa</button>
+              <h3 class="font-semibold text-fg-strong">1. Nguồn mã &amp; Tác vụ</h3>
+              <button type="button" class="text-phosphor hover:underline cursor-pointer" @click="goToStep(0)">Sửa</button>
             </div>
-            <div class="text-muted-fg">Tên: <span class="text-fg font-medium">{{ form.name || '—' }}</span></div>
-            <div class="text-muted-fg truncate">Git: <span class="text-fg font-mono">{{ form.gitUrl || '—' }}@{{ form.gitBranch || 'main' }}</span></div>
-            <div class="text-muted-fg">Token Git: <span class="text-fg">{{ findOptionLabel(gitCredentialOptions, form.gitCredentialId) }}</span></div>
+            <div class="text-fg-muted">Tên: <span class="text-fg-strong font-medium">{{ form.name || '—' }}</span></div>
+            <div class="text-fg-muted truncate" :title="`${form.gitUrl || '—'}@${form.gitBranch || 'main'}`">
+              Git: <span class="text-fg font-mono">{{ form.gitUrl || '—' }}@{{ form.gitBranch || 'main' }}</span>
+            </div>
+            <div class="text-fg-muted">
+              Token Git:
+              <span class="text-fg-strong font-medium" :title="gitCredentialSummary.idTitle || undefined">
+                {{ gitCredentialSummary.label }}
+              </span>
+            </div>
+            <div class="text-fg-muted truncate">
+              ConfigMap / Secret:
+              <span class="text-fg font-mono">
+                {{ allowlistedConfigMapsSummary.length > 0 ? allowlistedConfigMapsSummary.join(', ') : 'Không' }}
+                /
+                {{ allowlistedSecretsSummary.length > 0 ? allowlistedSecretsSummary.join(', ') : 'Không' }}
+              </span>
+            </div>
           </div>
 
-          <div class="p-4 rounded-[8px] border border-border bg-bg/40 space-y-1.5 text-xs">
+          <div class="p-4 rounded-[2px] border border-border bg-bg-surface space-y-1.5 text-xs">
             <div class="flex items-center justify-between">
-              <h3 class="font-semibold text-fg">2. Build image & 3. Nơi chạy</h3>
-              <button type="button" class="text-primary hover:underline cursor-pointer" @click="goToStep(1)">Sửa</button>
+              <h3 class="font-semibold text-fg-strong">2. Build image &amp; 3. Nơi chạy</h3>
+              <button type="button" class="text-phosphor hover:underline cursor-pointer" @click="goToStep(1)">Sửa</button>
             </div>
-            <div class="text-muted-fg truncate">Image: <span class="text-fg font-mono">{{ form.registryHost }}/{{ form.imageName }}</span></div>
-            <div class="text-muted-fg">Máy build: <span class="text-fg">{{ findOptionLabel(slaveOptions, form.slaveId) }}</span></div>
-            <div class="text-muted-fg">Namespace / Container: <span class="text-fg font-mono">{{ form.namespace }} / {{ form.containerName }}</span></div>
+            <div class="text-fg-muted truncate" :title="`${form.deployRegistryHost || form.registryHost}/${form.imageName}`">
+              Image: <span class="text-fg font-mono">{{ form.registryHost }}/{{ form.imageName }}</span>
+              <span v-if="form.deployRegistryHost" class="text-fg-muted"> (deploy: {{ form.deployRegistryHost }})</span>
+            </div>
+            <div class="text-fg-muted">
+              Máy build:
+              <span class="text-fg-strong font-medium" :title="slaveSummary.idTitle || undefined">
+                {{ slaveSummary.label }}
+              </span>
+              <span class="mx-1.5 text-fg-dim">·</span>
+              Registry cred:
+              <span class="text-fg-strong font-medium" :title="registryCredentialSummary.idTitle || undefined">
+                {{ registryCredentialSummary.label }}
+              </span>
+            </div>
+            <div class="text-fg-muted truncate">
+              Namespace / Container:
+              <span class="text-fg font-mono">{{ form.namespace || '—' }} / {{ form.containerName || '—' }}</span>
+              <span v-if="form.imagePullSecrets.length > 0" class="text-fg-muted">
+                · PullSecret: {{ form.imagePullSecrets.join(', ') }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1107,7 +1240,9 @@ function findOptionLabel(options: Array<{ label: string; value: string | number 
             class="flex-1 min-h-0"
             :tasks="previewTasks"
             :loading="previewLoading"
+            :error="previewError"
             :errors="formErrors"
+            @retry="refreshPreview"
           />
         </div>
       </section>

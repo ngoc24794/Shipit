@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   KeyRound,
@@ -9,8 +9,9 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import AppTable from '../../components/AppTable.vue'
+
+defineOptions({ name: 'CredentialsView' })
 import AppButton from '../../components/AppButton.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import EmptyState from '../../components/EmptyState.vue'
@@ -126,15 +127,22 @@ async function handleDelete() {
   }
 }
 
+let hasMountedCredentials = false
 onMounted(() => {
+  hasMountedCredentials = true
   store.fetchCredentials().catch(() => {
     // handled in store
   })
 })
+
+onActivated(() => {
+  if (!hasMountedCredentials) return
+  store.fetchCredentials({ silent: true }).catch(() => {})
+})
 </script>
 
 <template>
-  <AppLayout>
+  <div class="flex-1 min-h-0 flex flex-col">
     <div class="flex-1 min-h-0 flex flex-col gap-4">
       <!-- Header -->
       <div class="shrink-0 flex flex-row items-center justify-between gap-4 flex-nowrap">
@@ -231,6 +239,7 @@ onMounted(() => {
                 sort-key="kind"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[145px]"
                 @sort="table.toggleSort"
               />
               <SortableHeader
@@ -238,17 +247,19 @@ onMounted(() => {
                 sort-key="username"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[155px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="py-3 whitespace-nowrap">Giá trị bí mật</th>
+              <th scope="col" class="py-3 w-[145px] whitespace-nowrap">Giá trị bí mật</th>
               <SortableHeader
                 label="Cập nhật lúc"
                 sort-key="updatedAt"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
+                class="w-[155px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="py-3 text-right whitespace-nowrap">Thao tác</th>
+              <th scope="col" class="py-3 w-[145px] text-right whitespace-nowrap">Thao tác</th>
             </tr>
           </template>
 
@@ -327,5 +338,5 @@ onMounted(() => {
       @confirm="handleDelete"
       @cancel="isConfirmOpen = false"
     />
-  </AppLayout>
+  </div>
 </template>

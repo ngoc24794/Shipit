@@ -5,16 +5,10 @@ import {
   ArrowLeft,
   RotateCw,
   AlertCircle,
-  Clock,
-  GitCommit,
-  Layers,
   Calendar,
   AlertTriangle,
-  CircleStop,
-  Copy,
-  Check
+  CircleStop
 } from 'lucide-vue-next'
-import AppLayout from '../../layouts/AppLayout.vue'
 import AppButton from '../../components/AppButton.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
@@ -22,10 +16,13 @@ import StepTimeline from '../../components/StepTimeline.vue'
 import LogViewer from '../../components/LogViewer.vue'
 import TaskTable from '../../components/run/TaskTable.vue'
 import EmptyState from '../../components/EmptyState.vue'
+import SplitPane from '../../components/SplitPane.vue'
+import KeyValueGrid, { type KeyValueItem } from '../../components/KeyValueGrid.vue'
 import { useApi, ApiError } from '../../api'
 import { useRunsStore } from '../../stores/runs'
 import type { RunDetail, LogLine, Pipeline, RunStatus } from '../../api/types'
 import { useToast } from '../../composables/useToast'
+import { useShortcuts } from '../../composables/useShortcuts'
 import { formatDateTime, formatDuration, formatFailureReason } from './formatters'
 
 const route = useRoute()
@@ -33,21 +30,7 @@ const router = useRouter()
 const api = useApi()
 const runsStore = useRunsStore()
 const toast = useToast()
-const copiedField = ref<'tag' | 'image' | null>(null)
-
-async function copyInfoValue(field: 'tag' | 'image', value?: string | null) {
-  if (!value) return
-  try {
-    await navigator.clipboard.writeText(value)
-    copiedField.value = field
-    toast.success('Đã sao chép vào bộ nhớ tạm')
-    setTimeout(() => {
-      if (copiedField.value === field) copiedField.value = null
-    }, 2000)
-  } catch {
-    toast.error('Không thể sao chép vào bộ nhớ tạm')
-  }
-}
+const { registerMany } = useShortcuts()
 
 const MAX_LOG_LINES = 5000
 
@@ -64,8 +47,6 @@ const isCancelling = ref(false)
 const logTruncated = ref(false)
 const currentTime = ref(Date.now())
 const selectedTaskPosition = ref<number | null>(null)
-const leftWidth = ref(390)
-let isResizing = false
 
 const seenSeqs = new Set<number>()
 
@@ -114,31 +95,42 @@ function handleSelectedTaskChange(value: string | number) {
   }
 }
 
-function startResize(e: MouseEvent) {
-  e.preventDefault()
-  isResizing = true
-  const startX = e.clientX
-  const startWidth = leftWidth.value
-
-  function onMouseMove(moveEvent: MouseEvent) {
-    if (!isResizing) return
-    const nextWidth = Math.min(520, Math.max(320, startWidth + (moveEvent.clientX - startX)))
-    leftWidth.value = nextWidth
-  }
-
-  function onMouseUp() {
-    isResizing = false
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mouseup', onMouseUp)
-  }
-
-  window.addEventListener('mousemove', onMouseMove)
-  window.addEventListener('mouseup', onMouseUp)
-}
-
 const isRunActive = computed(() => {
   return run.value?.status === 'queued' || run.value?.status === 'running'
 })
+
+const metadataItems = computed<KeyValueItem[]>(() => {
+  if (!run.value) return []
+  return [
+    { key: 'tag', label: 'Tag SHA', value: run.value.tag || 'Chưa có', copyable: Boolean(run.value.tag) },
+    { key: 'image', label: 'Image', value: run.value.image || 'Chưa tạo', copyable: Boolean(run.value.image) },
+    { key: 'started', label: 'Bắt đầu', value: formatDateTime(run.value.startedAt) },
+    { key: 'duration', label: 'Thời lượng', value: formatDuration(run.value.startedAt, run.value.finishedAt, currentTime.value), tone: isRunActive.value ? 'accent' : 'default' }
+  ]
+})
+
+registerMany([
+  {
+    id: 'run-detail-rerun',
+    keys: 'r',
+    label: 'Chạy lại lượt chạy hiện tại',
+    scope: 'Chi tiết lượt chạy',
+    when: () => Boolean(run.value) && !isTriggering.value,
+    handler: () => {
+      handleRerun()
+    }
+  },
+  {
+    id: 'run-detail-cancel',
+    keys: 'x',
+    label: 'Dừng lượt chạy đang chạy',
+    scope: 'Chi tiết lượt chạy',
+    when: () => Boolean(isRunActive.value) && !isCancelling.value,
+    handler: () => {
+      showCancelDialog.value = true
+    }
+  }
+])
 
 const statusAnnouncement = computed(() => {
   if (run.value?.status === 'success') return 'Run đã kết thúc: thành công'
@@ -416,7 +408,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <AppLayout>
+  <div class="flex-1 min-h-0 flex flex-col">
     <!-- Screen reader status announcement -->
     <div role="status" class="sr-only" aria-live="polite">
       {{ statusAnnouncement }}
@@ -479,29 +471,29 @@ onBeforeUnmount(() => {
 
       <!-- Main Run Detail Content -->
       <div v-else-if="run" class="flex-1 min-h-0 flex flex-col gap-2">
-        <!-- Compact Top Header Row (<= 56px) -->
-        <div class="shrink-0 flex flex-row items-center justify-between gap-3 flex-nowrap pb-2 border-b border-border min-h-[44px]">
+        <!-- Compact Top Header Row -->
+        <div class="shrink-0 flex flex-row items-center justify-between gap-3 flex-nowrap pb-2 border-b border-border min-h-[40px]">
           <div class="flex items-center gap-2.5 min-w-0 flex-nowrap">
             <button
               type="button"
-              class="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] border border-border bg-card text-xs font-medium text-muted-fg hover:text-fg hover:bg-muted transition-colors cursor-pointer shrink-0 whitespace-nowrap focus-visible:outline-2 focus-visible:outline-ring"
+              class="inline-flex items-center gap-1 h-7 px-2 rounded-[2px] border border-border bg-bg-surface text-xs font-medium text-fg-muted hover:text-fg-strong hover:bg-bg-hover transition-colors cursor-pointer shrink-0 whitespace-nowrap focus-visible:outline-2 focus-visible:outline-border-focus"
               aria-label="Quay lại danh sách"
               title="Quay lại danh sách"
               @click="router.push('/')"
             >
               <ArrowLeft class="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Quay lại danh sách</span>
+              <span>Quay lại</span>
             </button>
 
-            <h1 class="text-lg font-semibold text-fg tracking-tight truncate">
+            <h1 class="text-[15px] font-bold text-fg-strong tracking-tight truncate">
               {{ displayName }}
             </h1>
-            <span class="font-mono text-base text-muted-fg font-medium whitespace-nowrap shrink-0">
+            <span class="font-mono text-sm text-fg-muted font-medium whitespace-nowrap shrink-0">
               #{{ run.id }}
             </span>
             <StatusBadge :status="run.status" size="sm" />
 
-            <span class="text-xs text-muted-fg flex items-center gap-1 whitespace-nowrap shrink-0 pl-2 border-l border-border">
+            <span class="text-xs text-fg-muted flex items-center gap-1 whitespace-nowrap shrink-0 pl-2 border-l border-border">
               <Calendar class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               <span>Tạo lúc: {{ formatDateTime(run.createdAt) }}</span>
             </span>
@@ -534,80 +526,11 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Single-row Info Chip Strip -->
-        <div class="shrink-0 flex items-center gap-2 flex-nowrap overflow-x-auto">
-          <!-- Tag / SHA -->
-          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-card border border-border text-xs whitespace-nowrap shrink-0">
-            <GitCommit class="w-3.5 h-3.5 text-muted-fg shrink-0" aria-hidden="true" />
-            <span class="text-muted-fg">Tag SHA:</span>
-            <span
-              v-if="run.tag"
-              class="font-mono text-fg truncate max-w-[120px]"
-              :title="run.tag"
-            >
-              {{ run.tag }}
-            </span>
-            <span v-else class="text-muted-fg">Chưa có</span>
-            <button
-              v-if="run.tag"
-              type="button"
-              aria-label="Sao chép Tag (Git SHA)"
-              title="Sao chép"
-              class="p-0.5 rounded text-muted-fg hover:text-fg hover:bg-muted transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-ring"
-              @click="copyInfoValue('tag', run.tag)"
-            >
-              <Check v-if="copiedField === 'tag'" class="w-3 h-3 text-success" aria-hidden="true" />
-              <Copy v-else class="w-3 h-3" aria-hidden="true" />
-            </button>
-          </div>
-
-          <!-- Container Image -->
-          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-card border border-border text-xs whitespace-nowrap min-w-0">
-            <Layers class="w-3.5 h-3.5 text-muted-fg shrink-0" aria-hidden="true" />
-            <span class="text-muted-fg shrink-0">Image:</span>
-            <span
-              class="font-mono text-fg truncate max-w-[280px]"
-              :title="run.image || 'Chưa tạo'"
-            >
-              {{ run.image || 'Chưa tạo' }}
-            </span>
-            <button
-              v-if="run.image"
-              type="button"
-              aria-label="Sao chép Container Image"
-              title="Sao chép"
-              class="p-0.5 rounded text-muted-fg hover:text-fg hover:bg-muted transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-ring"
-              @click="copyInfoValue('image', run.image)"
-            >
-              <Check v-if="copiedField === 'image'" class="w-3 h-3 text-success" aria-hidden="true" />
-              <Copy v-else class="w-3 h-3" aria-hidden="true" />
-            </button>
-          </div>
-
-          <!-- Started At -->
-          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-card border border-border text-xs whitespace-nowrap shrink-0">
-            <Calendar class="w-3.5 h-3.5 text-muted-fg shrink-0" aria-hidden="true" />
-            <span class="text-muted-fg">Bắt đầu:</span>
-            <span class="text-fg font-medium tabular-nums" :title="formatDateTime(run.startedAt)">
-              {{ formatDateTime(run.startedAt) }}
-            </span>
-          </div>
-
-          <!-- Duration -->
-          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-card border border-border text-xs whitespace-nowrap shrink-0">
-            <Clock class="w-3.5 h-3.5 text-muted-fg shrink-0" aria-hidden="true" />
-            <span class="text-muted-fg">Thời lượng:</span>
-            <span class="font-mono font-semibold text-fg tabular-nums">
-              {{ formatDuration(run.startedAt, run.finishedAt, currentTime) }}
-            </span>
-          </div>
-        </div>
-
         <!-- Compact Failure Alert (Failed Task + Failure Reason) -->
         <div
           v-if="failedTask || (run.status === 'failed' && run.failureReason)"
           role="alert"
-          class="shrink-0 px-3 py-1.5 rounded-[6px] border border-danger/40 border-l-4 border-l-danger bg-danger/10 text-danger text-xs flex items-center justify-between gap-3 flex-nowrap"
+          class="shrink-0 px-3 py-1.5 rounded-[2px] border border-danger/40 border-l-4 border-l-danger bg-danger-bg text-danger text-xs flex items-center justify-between gap-3 flex-nowrap"
         >
           <div class="flex items-center gap-2 min-w-0 flex-nowrap">
             <AlertTriangle class="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -635,7 +558,7 @@ onBeforeUnmount(() => {
           <button
             v-if="failedTask"
             type="button"
-            class="text-xs font-semibold underline hover:text-danger/80 cursor-pointer focus-visible:outline-2 focus-visible:outline-ring rounded px-1.5 py-0.5 shrink-0 whitespace-nowrap"
+            class="text-xs font-semibold underline hover:text-danger/80 cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus rounded-[2px] px-1.5 py-0.5 shrink-0 whitespace-nowrap"
             @click="scrollToTaskLog(failedTask.position)"
           >
             Xem log tác vụ
@@ -646,7 +569,7 @@ onBeforeUnmount(() => {
         <div
           v-if="run.status === 'cancelled' && run.failureReason"
           role="note"
-          class="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-[6px] border border-warn/30 bg-warn/10 text-fg text-xs flex-nowrap"
+          class="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-[2px] border border-warn/30 bg-warn-bg text-fg text-xs flex-nowrap"
         >
           <CircleStop class="w-4 h-4 shrink-0 text-warn" aria-hidden="true" />
           <span class="font-semibold text-warn whitespace-nowrap shrink-0">Lý do dừng:</span>
@@ -655,77 +578,73 @@ onBeforeUnmount(() => {
           </span>
         </div>
 
-        <!-- Two-Column Workspace Body -->
-        <div class="flex-1 min-h-0 flex flex-row gap-1.5">
-          <!-- Left Column: Vertical StepTimeline + Task List -->
-          <div
-            data-testid="run-left-column"
-            class="shrink-0 min-h-0 flex flex-col gap-2"
-            :style="{ width: `${leftWidth}px` }"
-          >
-            <!-- Step Timeline Card -->
-            <div class="shrink-0 p-2.5 rounded-[8px] bg-card border border-border">
-              <h2 class="text-xs font-semibold text-muted-fg uppercase tracking-wide mb-1 whitespace-nowrap">
-                Tiến trình
-              </h2>
-              <StepTimeline :steps="run.steps" :kind="isJobRun ? 'job' : 'pipeline'" orientation="vertical" />
-            </div>
+        <!-- tmux-like SplitPane Body -->
+        <SplitPane
+          storage-key="shipit-run-detail-split"
+          :default-size="340"
+          :min-size="280"
+          :max-size="560"
+          aria-label="Điều chỉnh độ rộng cột trái"
+        >
+          <template #left>
+            <div data-testid="run-left-column" class="p-3 flex flex-col gap-3 min-h-0 flex-1">
+              <!-- Metadata KV Grid -->
+              <KeyValueGrid :items="metadataItems" />
 
-            <!-- Task Table Card (Job runs only) -->
-            <div
-              v-if="isJobRun"
-              data-testid="run-task-panel"
-              class="flex-1 min-h-0 p-2.5 rounded-[8px] bg-card border border-border flex flex-col gap-1.5"
-            >
-              <div class="shrink-0 flex items-center justify-between">
-                <h2 class="text-xs font-semibold text-muted-fg uppercase tracking-wide whitespace-nowrap">
-                  Danh sách tác vụ
+              <!-- Step Tree -->
+              <div class="shrink-0 space-y-1.5">
+                <h2 class="text-[10px] font-bold text-fg-dim uppercase tracking-wider whitespace-nowrap">
+                  Tiến trình
                 </h2>
-                <span class="text-[11px] font-mono text-muted-fg tabular-nums">
-                  {{ (run.tasks || []).length }} tác vụ
-                </span>
+                <StepTimeline :steps="run.steps" :kind="isJobRun ? 'job' : 'pipeline'" orientation="vertical" />
               </div>
-              <TaskTable
-                :tasks="run.tasks || []"
-                :selected-position="selectedTaskPosition"
-                @view-log="scrollToTaskLog"
+
+              <!-- Task Table (Job runs only) -->
+              <div
+                v-if="isJobRun"
+                data-testid="run-task-panel"
+                class="flex-1 min-h-[160px] flex flex-col gap-2"
+              >
+                <div class="shrink-0 flex items-center justify-between">
+                  <h2 class="text-[10px] font-bold text-fg-dim uppercase tracking-wider whitespace-nowrap">
+                    Danh sách tác vụ
+                  </h2>
+                  <span class="text-[11px] font-mono text-fg-muted tabular-nums">
+                    {{ (run.tasks || []).length }} tác vụ
+                  </span>
+                </div>
+                <TaskTable
+                  :tasks="run.tasks || []"
+                  :selected-position="selectedTaskPosition"
+                  @view-log="scrollToTaskLog"
+                />
+              </div>
+            </div>
+          </template>
+
+          <template #right>
+            <div data-testid="run-right-column" class="flex-1 min-w-0 min-h-0 flex flex-col gap-2 p-2">
+              <div
+                v-if="logTruncated"
+                role="note"
+                class="shrink-0 text-xs px-3 py-1 rounded-[2px] bg-warn-bg text-warn border border-warn/30"
+              >
+                Nhật ký vượt quá giới hạn, chỉ hiển thị {{ MAX_LOG_LINES.toLocaleString() }} dòng mới nhất.
+              </div>
+
+              <LogViewer
+                ref="logViewerRef"
+                :lines="lines"
+                :status="run.status"
+                :run-id="run.id"
+                :tasks="run.tasks"
+                :is-job="isJobRun"
+                class="border-0"
+                @update:selected-task="handleSelectedTaskChange"
               />
             </div>
-          </div>
-
-          <!-- Resize Handle -->
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Điều chỉnh độ rộng cột trái"
-            class="w-1.5 shrink-0 cursor-col-resize rounded hover:bg-primary/30 active:bg-primary/50 transition-colors self-stretch"
-            @mousedown="startResize"
-          />
-
-          <!-- Right Column: Full-height Log Viewer -->
-          <div
-            data-testid="run-right-column"
-            class="flex-1 min-w-0 min-h-0 flex flex-col gap-2"
-          >
-            <div
-              v-if="logTruncated"
-              role="note"
-              class="shrink-0 text-xs px-3 py-1 rounded-[6px] bg-warn/10 text-warn border border-warn/30"
-            >
-              Nhật ký vượt quá giới hạn, chỉ hiển thị {{ MAX_LOG_LINES.toLocaleString() }} dòng mới nhất.
-            </div>
-
-            <LogViewer
-              ref="logViewerRef"
-              :lines="lines"
-              :status="run.status"
-              :run-id="run.id"
-              :tasks="run.tasks"
-              :is-job="isJobRun"
-              @update:selected-task="handleSelectedTaskChange"
-            />
-          </div>
-        </div>
+          </template>
+        </SplitPane>
       </div>
     </div>
 
@@ -741,5 +660,5 @@ onBeforeUnmount(() => {
       @confirm="handleConfirmCancel"
       @cancel="showCancelDialog = false"
     />
-  </AppLayout>
+  </div>
 </template>

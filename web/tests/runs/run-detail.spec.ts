@@ -476,7 +476,7 @@ describe('RunDetailView (Chi tiết lượt chạy)', () => {
     expect(stoppingBtn.exists()).toBe(true)
     expect(stoppingBtn.text()).toContain('Đang dừng…')
     expect(stoppingBtn.attributes('disabled')).toBeDefined()
-    expect(stoppingBtn.find('.animate-spin').exists()).toBe(true)
+    expect(stoppingBtn.attributes('aria-busy')).toBe('true')
 
     // Complete cancellation
     const cancelledDetail: RunDetail = {
@@ -496,9 +496,9 @@ describe('RunDetailView (Chi tiết lượt chạy)', () => {
     expect(wrapper.find('button[aria-label="Dừng lượt chạy"]').exists()).toBe(false)
     expect(wrapper.find('button[aria-label="Đang dừng lượt chạy"]').exists()).toBe(false)
 
-    // StatusBadge displays "Đã dừng"
+    // StatusBadge displays "Đã huỷ"
     const badge = wrapper.findComponent(StatusBadge)
-    expect(badge.text()).toContain('Đã dừng')
+    expect(badge.text()).toContain('Đã huỷ')
     expect(badge.attributes('data-status')).toBe('cancelled')
   })
 
@@ -572,8 +572,8 @@ describe('RunDetailView (Chi tiết lượt chạy)', () => {
     await wrapper.vm.$nextTick()
 
     expect(firstRow.attributes('data-task-selected')).toBe('true')
-    const select = wrapper.find('select#task-filter').element as HTMLSelectElement
-    expect(select.value).toBe('0')
+    const select = wrapper.find('#task-filter[role="combobox"]')
+    expect(select.text()).toContain('Tác vụ 1')
     expect(wrapper.find('#task-group-1').attributes('style')).toContain('display: none')
     expect(wrapper.find('#task-group-0').attributes('style') || '').not.toContain('display: none')
   })

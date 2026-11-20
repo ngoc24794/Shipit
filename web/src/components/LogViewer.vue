@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, computed } from 'vue'
+import { ref, watch, nextTick, onMounted, onBeforeUnmount, computed } from 'vue'
 import { Copy, Download, Radio, Check, ChevronDown, ChevronRight, Filter, Search, ChevronUp, X } from 'lucide-vue-next'
 import type { LogLine, RunStatus, RunTask } from '../api/types'
 import { useToast } from '../composables/useToast'
 import { classifyLogLine, type LogSeverity } from '../utils/logSeverity'
 import StatusBadge from './StatusBadge.vue'
+import AppSelect from './AppSelect.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -28,6 +29,9 @@ const emit = defineEmits<{
 }>()
 
 const scrollContainer = ref<HTMLElement | null>(null)
+const toolbarRef = ref<HTMLElement | null>(null)
+const searchInputRef = ref<HTMLInputElement | null>(null)
+const toolbarWidth = ref(900)
 const autoScroll = ref(true)
 const copied = ref(false)
 const selectedTaskFilter = ref<string | number>('all')
@@ -35,6 +39,16 @@ const collapsedGroups = ref<Set<string | number>>(new Set())
 const searchQuery = ref('')
 const activeMatchIndex = ref(0)
 const toast = useToast()
+
+const isCompactToolbar = computed(() => toolbarWidth.value < 900)
+const isWrapToolbar = computed(() => toolbarWidth.value < 620)
+
+let toolbarObserver: ResizeObserver | null = null
+
+function focusSearch() {
+  searchInputRef.value?.focus()
+  searchInputRef.value?.select()
+}
 
 watch(selectedTaskFilter, (val) => {
   emit('update:selectedTask', val)
@@ -70,6 +84,7 @@ function focusTask(position: number) {
 
 defineExpose({
   focusTask,
+  focusSearch,
   scrollToBottom,
   selectedTaskFilter
 })
@@ -196,27 +211,27 @@ function getSeverity(line: LogLine): LogSeverity {
 function getLineClass(severity: LogSeverity): string {
   switch (severity) {
     case 'error':
-      return 'text-rose-400 font-medium'
+      return 'log-err text-danger font-medium'
     case 'warning':
-      return 'text-amber-400 font-medium'
+      return 'log-warn text-warn font-medium'
     case 'system-error':
-      return 'text-rose-400 font-bold'
+      return 'log-err text-danger font-bold'
     case 'system':
-      return 'text-sky-400 italic'
+      return 'log-sys text-phosphor italic'
     case 'muted':
-      return 'text-slate-400'
+      return 'text-fg-muted'
     case 'normal':
     default:
-      return 'text-slate-200'
+      return 'text-fg'
   }
 }
 
 function getBadge(severity: LogSeverity): { text: string; class: string } | null {
   if (severity === 'error') {
-    return { text: 'ERR', class: 'text-rose-400 font-bold' }
+    return { text: 'ERR', class: 'text-danger font-bold' }
   }
   if (severity === 'warning') {
-    return { text: 'WARN', class: 'text-amber-400 font-semibold' }
+    return { text: 'WARN', class: 'text-warn font-semibold' }
   }
   return null
 }
@@ -267,6 +282,22 @@ onMounted(() => {
   if (autoScroll.value) {
     scrollToBottom()
   }
+  if (typeof ResizeObserver !== 'undefined' && toolbarRef.value) {
+    toolbarWidth.value = toolbarRef.value.clientWidth || 900
+    toolbarObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        toolbarWidth.value = entry.contentRect.width
+      }
+    })
+    toolbarObserver.observe(toolbarRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (toolbarObserver) {
+    toolbarObserver.disconnect()
+    toolbarObserver = null
+  }
 })
 
 async function copyLogs() {
@@ -314,57 +345,76 @@ const statusMessage = computed(() => {
   }
   return null
 })
+
+const shortStatusMessage = computed(() => {
+  if (props.status === 'success') return 'Thành công'
+  if (props.status === 'failed') return 'Thất bại'
+  if (props.status === 'running') return 'Đang chạy'
+  if (props.status === 'queued') return 'Đang chờ'
+  return null
+})
 </script>
 
 <template>
-  <div class="flex flex-col flex-1 min-h-0 w-full rounded-[8px] overflow-hidden border border-border bg-[var(--log-bg,#090D16)] text-slate-200">
-    <!-- Toolbar -->
-    <div class="shrink-0 flex flex-nowrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 text-xs select-none overflow-x-auto">
-      <div class="flex items-center gap-2 flex-nowrap min-w-0">
-        <span class="font-mono text-slate-400 whitespace-nowrap shrink-0">Nhật ký thực thi ({{ lines.length }} dòng)</span>
+  <div class="flex flex-col flex-1 min-h-0 w-full rounded-[2px] overflow-hidden border border-border bg-bg-input text-fg font-mono">
+    <!-- Toolbar (container-width responsive via ResizeObserver) -->
+    <div
+      ref="toolbarRef"
+      data-testid="log-viewer-toolbar"
+      :data-compact="isCompactToolbar ? 'true' : 'false'"
+      :class="[
+        'shrink-0 flex items-center justify-between gap-2 px-2.5 py-1.5 bg-bg-surface border-b border-border text-xs select-none',
+        isWrapToolbar ? 'flex-wrap' : 'flex-nowrap'
+      ]"
+    >
+      <div class="flex items-center gap-1.5 flex-nowrap min-w-0 shrink">
+        <span class="font-mono text-fg-muted whitespace-nowrap shrink-0">Nhật ký ({{ lines.length }} dòng)</span>
 
         <!-- Task Filter Dropdown for Grouped Job Mode -->
-        <div v-if="isGrouped && tasks.length > 0" class="flex items-center gap-1 ml-1 shrink-0">
-          <Filter class="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />
-          <select
-            id="task-filter"
-            v-model="selectedTaskFilter"
-            aria-label="Lọc theo tác vụ"
-            class="bg-slate-800 text-slate-200 border border-slate-700 rounded px-2 py-1 text-xs max-w-[180px] truncate focus:ring-1 focus:ring-primary focus:outline-none cursor-pointer"
-          >
-            <option value="all">Tất cả tác vụ</option>
-            <option value="prep">Chuẩn bị</option>
-            <option v-for="t in tasks" :key="t.position" :value="t.position">
-              Tác vụ {{ t.position + 1 }}: {{ t.label }}
-            </option>
-          </select>
+        <div v-if="isGrouped && tasks.length > 0" class="flex items-center gap-1 ml-0.5 shrink-0">
+          <Filter class="w-3.5 h-3.5 text-fg-muted shrink-0" aria-hidden="true" />
+          <div class="w-[145px] shrink-0">
+            <AppSelect
+              id="task-filter"
+              v-model="selectedTaskFilter"
+              aria-label="Lọc theo tác vụ"
+              size="sm"
+              :options="[
+                { label: 'Tất cả tác vụ', value: 'all' },
+                { label: 'Chuẩn bị', value: 'prep' },
+                ...tasks.map((t) => ({ label: `Tác vụ ${t.position + 1}: ${t.label}`, value: t.position }))
+              ]"
+            />
+          </div>
         </div>
 
         <!-- Status Notification for Screen Readers and UI -->
         <span
           v-if="statusMessage"
           role="status"
-          class="px-2 py-0.5 rounded text-[11px] font-medium whitespace-nowrap shrink-0"
+          :title="statusMessage"
+          class="px-1.5 py-0.5 rounded-[2px] text-[11px] font-medium whitespace-nowrap shrink-0"
           :class="[
-            status === 'success' ? 'bg-success/20 text-success border border-success/40' : '',
-            status === 'failed' ? 'bg-danger/20 text-danger border border-danger/40' : '',
-            status === 'running' ? 'bg-info/20 text-info border border-info/40' : 'text-slate-400'
+            status === 'success' ? 'bg-phosphor-bg text-phosphor border border-phosphor/30' : '',
+            status === 'failed' ? 'bg-danger-bg text-danger border border-danger/30' : '',
+            status === 'running' ? 'bg-accent-bg text-accent border border-accent/30' : 'text-fg-muted'
           ]"
         >
-          {{ statusMessage }}
+          {{ isCompactToolbar ? shortStatusMessage : statusMessage }}
         </span>
       </div>
 
-      <div class="flex items-center gap-1.5 flex-nowrap shrink-0">
+      <div class="flex items-center gap-1.5 flex-nowrap min-w-0 shrink-0">
         <!-- Search in Log -->
-        <div class="flex items-center gap-1 bg-slate-800/90 border border-slate-700 rounded-[6px] px-2 py-0.5">
-          <Search class="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />
+        <div class="flex items-center gap-1 bg-bg-input border border-border focus-within:border-border-focus rounded-[2px] px-1.5 h-7 min-w-[140px] flex-1 max-w-[240px]">
+          <Search class="w-3.5 h-3.5 text-fg-dim shrink-0" aria-hidden="true" />
           <input
+            ref="searchInputRef"
             v-model="searchQuery"
             type="text"
             aria-label="Tìm trong nhật ký"
-            placeholder="Tìm trong log..."
-            class="w-32 bg-transparent text-slate-200 placeholder:text-slate-500 text-xs focus:outline-none"
+            placeholder="Tìm log..."
+            class="flex-1 min-w-0 bg-transparent text-fg-strong placeholder:text-fg-dim text-xs focus:outline-none"
             @keydown.enter.exact.prevent="goToNextMatch"
             @keydown.enter.shift.prevent="goToPrevMatch"
           />
@@ -372,7 +422,7 @@ const statusMessage = computed(() => {
             v-if="searchQuery"
             type="button"
             aria-label="Xoá tìm kiếm"
-            class="p-0.5 text-slate-400 hover:text-slate-200 cursor-pointer"
+            class="p-0.5 text-fg-muted hover:text-fg-strong cursor-pointer shrink-0"
             @click="clearSearch"
           >
             <X class="w-3 h-3" aria-hidden="true" />
@@ -380,7 +430,7 @@ const statusMessage = computed(() => {
           <span
             v-if="normalizedQuery"
             data-testid="log-search-count"
-            class="text-[11px] font-mono tabular-nums text-slate-400 whitespace-nowrap pl-1 border-l border-slate-700"
+            class="text-[11px] font-mono tabular-nums text-fg-muted whitespace-nowrap pl-1 border-l border-border shrink-0"
           >
             {{ matchedLineSeqs.length > 0 ? `${activeMatchIndex + 1}/${matchedLineSeqs.length}` : '0/0' }}
           </span>
@@ -390,7 +440,7 @@ const statusMessage = computed(() => {
             aria-label="Kết quả trước"
             title="Kết quả trước"
             :disabled="matchedLineSeqs.length === 0"
-            class="p-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-700 disabled:opacity-40 cursor-pointer disabled:cursor-default"
+            class="p-0.5 rounded-[2px] text-fg-muted hover:text-fg-strong hover:bg-bg-hover disabled:opacity-40 cursor-pointer disabled:cursor-default shrink-0"
             @click="goToPrevMatch"
           >
             <ChevronUp class="w-3.5 h-3.5" aria-hidden="true" />
@@ -401,7 +451,7 @@ const statusMessage = computed(() => {
             aria-label="Kết quả sau"
             title="Kết quả sau"
             :disabled="matchedLineSeqs.length === 0"
-            class="p-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-700 disabled:opacity-40 cursor-pointer disabled:cursor-default"
+            class="p-0.5 rounded-[2px] text-fg-muted hover:text-fg-strong hover:bg-bg-hover disabled:opacity-40 cursor-pointer disabled:cursor-default shrink-0"
             @click="goToNextMatch"
           >
             <ChevronDown class="w-3.5 h-3.5" aria-hidden="true" />
@@ -411,40 +461,51 @@ const statusMessage = computed(() => {
         <!-- Follow / Auto-scroll Toggle Button -->
         <button
           type="button"
+          :aria-label="autoScroll ? 'Tắt tự động cuộn theo dõi' : 'Bật tự động cuộn theo dõi'"
+          title="Theo dõi nhật ký (cuộn tự động)"
           :class="[
-            'inline-flex items-center gap-1 px-2 py-1 rounded-[6px] text-xs font-medium transition-colors cursor-pointer whitespace-nowrap',
+            'inline-flex items-center justify-center gap-1 h-7 rounded-[2px] text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap shrink-0',
+            isCompactToolbar ? 'w-7 px-0' : 'px-2',
             autoScroll
-              ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
-              : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+              ? 'bg-phosphor-bg text-phosphor border-phosphor/50 hover:bg-phosphor hover:text-bg'
+              : 'bg-bg-elevated text-fg-muted border-border hover:text-fg-strong hover:bg-bg-hover'
           ]"
           :aria-pressed="autoScroll ? 'true' : 'false'"
           @click="toggleAutoScroll"
         >
-          <Radio class="w-3.5 h-3.5" :class="autoScroll ? 'animate-pulse' : ''" aria-hidden="true" />
-          <span>Theo dõi</span>
+          <Radio class="w-3.5 h-3.5 shrink-0" :class="autoScroll ? 'live-pulse' : ''" aria-hidden="true" />
+          <span v-if="!isCompactToolbar">Theo dõi</span>
         </button>
 
         <!-- Copy Button -->
         <button
           type="button"
           aria-label="Sao chép nhật ký"
-          class="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] text-xs font-medium bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors cursor-pointer whitespace-nowrap"
+          title="Sao chép nhật ký"
+          :class="[
+            'inline-flex items-center justify-center gap-1 h-7 rounded-[2px] text-xs font-medium border border-border bg-bg-elevated text-fg-muted hover:text-fg-strong hover:bg-bg-hover transition-colors cursor-pointer whitespace-nowrap shrink-0',
+            isCompactToolbar ? 'w-7 px-0' : 'px-2'
+          ]"
           @click="copyLogs"
         >
-          <Check v-if="copied" class="w-3.5 h-3.5 text-success" aria-hidden="true" />
-          <Copy v-else class="w-3.5 h-3.5" aria-hidden="true" />
-          <span>Sao chép</span>
+          <Check v-if="copied" class="w-3.5 h-3.5 text-phosphor shrink-0" aria-hidden="true" />
+          <Copy v-else class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          <span v-if="!isCompactToolbar">Sao chép</span>
         </button>
 
         <!-- Download Button -->
         <button
           type="button"
           aria-label="Tải xuống nhật ký"
-          class="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] text-xs font-medium bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors cursor-pointer whitespace-nowrap"
+          title="Tải xuống nhật ký"
+          :class="[
+            'inline-flex items-center justify-center gap-1 h-7 rounded-[2px] text-xs font-medium border border-border bg-bg-elevated text-fg-muted hover:text-fg-strong hover:bg-bg-hover transition-colors cursor-pointer whitespace-nowrap shrink-0',
+            isCompactToolbar ? 'w-7 px-0' : 'px-2'
+          ]"
           @click="downloadLogs"
         >
-          <Download class="w-3.5 h-3.5" aria-hidden="true" />
-          <span>Tải xuống</span>
+          <Download class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          <span v-if="!isCompactToolbar">Tải xuống</span>
         </button>
       </div>
     </div>
@@ -455,7 +516,7 @@ const statusMessage = computed(() => {
       role="log"
       aria-live="off"
       tabindex="0"
-      class="flex-1 min-h-0 overflow-auto p-3 font-mono text-[13px] leading-relaxed select-text focus-visible:outline-2 focus-visible:outline-ring"
+      class="flex-1 min-h-0 overflow-auto p-2.5 font-mono text-[12px] leading-[1.55] tabular-nums select-text focus-visible:outline-2 focus-visible:outline-border-focus"
       @scroll="handleScroll"
     >
       <!-- Grouped View (For Job Runs) -->
@@ -464,11 +525,11 @@ const statusMessage = computed(() => {
         <div
           v-show="selectedTaskFilter === 'all' || selectedTaskFilter === 'prep'"
           id="task-group-prep"
-          class="mb-4 rounded-[6px] border border-slate-800 bg-slate-950/40 overflow-hidden"
+          class="mb-3 rounded-[2px] border border-border bg-bg-elevated overflow-hidden"
         >
           <button
             type="button"
-            class="w-full flex items-center justify-between px-3 py-2 bg-slate-900/80 hover:bg-slate-800/80 text-left transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+            class="w-full flex items-center justify-between px-2.5 py-1.5 bg-bg-surface hover:bg-bg-hover text-left transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus"
             :aria-expanded="isGroupExpanded('prep')"
             aria-label="Thu gọn hoặc mở rộng nhóm Chuẩn bị"
             @click="toggleGroup('prep')"
@@ -476,16 +537,16 @@ const statusMessage = computed(() => {
             <div class="flex items-center gap-2">
               <component
                 :is="isGroupExpanded('prep') ? ChevronDown : ChevronRight"
-                class="w-4 h-4 text-slate-400"
+                class="w-3.5 h-3.5 text-fg-muted"
                 aria-hidden="true"
               />
-              <span class="font-sans font-semibold text-xs text-slate-200">Chuẩn bị</span>
-              <span class="text-[11px] text-slate-400 font-mono">({{ prepLines.length }} dòng)</span>
+              <span class="font-semibold text-xs text-fg-strong">Chuẩn bị</span>
+              <span class="text-[11px] text-fg-muted font-mono">({{ prepLines.length }} dòng)</span>
             </div>
           </button>
 
-          <div v-show="isGroupExpanded('prep')" class="p-2 space-y-0.5 overflow-x-auto">
-            <div v-if="prepLines.length === 0" class="text-slate-500 italic py-2 px-3 text-xs">
+          <div v-show="isGroupExpanded('prep')" class="p-2 bg-bg-input space-y-0.5 overflow-x-auto">
+            <div v-if="prepLines.length === 0" class="text-fg-dim italic py-2 px-3 text-xs">
               Chưa có dữ liệu nhật ký chuẩn bị...
             </div>
             <div
@@ -494,11 +555,11 @@ const statusMessage = computed(() => {
               :data-log-seq="line.seq"
               :title="line.stream"
               :class="[
-                'flex items-start hover:bg-slate-800/40 rounded px-1 -mx-1 min-w-max',
-                activeMatchSeq === line.seq ? 'bg-primary/15 ring-1 ring-inset ring-primary/40' : matchedSeqSet.has(line.seq) ? 'bg-amber-400/5' : ''
+                'flex items-start hover:bg-bg-hover rounded-[1px] px-1 -mx-1 min-w-max',
+                activeMatchSeq === line.seq ? 'bg-warn-bg ring-1 ring-inset ring-warn' : matchedSeqSet.has(line.seq) ? 'bg-warn-bg/50' : ''
               ]"
             >
-              <span class="w-12 flex-shrink-0 text-slate-600 select-none text-right pr-4 tabular-nums text-xs">
+              <span class="w-12 flex-shrink-0 text-fg-dim select-none text-right pr-3 tabular-nums text-xs">
                 {{ line.seq }}
               </span>
               <span class="inline-block w-10 flex-shrink-0 select-none text-xs text-center mr-2">
@@ -510,7 +571,7 @@ const statusMessage = computed(() => {
                 <template v-for="(part, pIdx) in splitHighlight(line.text)" :key="pIdx">
                   <mark
                     v-if="part.match"
-                    :class="activeMatchSeq === line.seq ? 'bg-amber-400 text-slate-950 font-semibold rounded-[2px] px-0.5' : 'bg-amber-400/35 text-amber-100 rounded-[2px] px-0.5'"
+                    :class="activeMatchSeq === line.seq ? 'bg-warn text-bg font-semibold rounded-[1px] px-0.5' : 'bg-warn-bg text-warn rounded-[1px] px-0.5'"
                   >{{ part.text }}</mark>
                   <template v-else>{{ part.text }}</template>
                 </template>
@@ -525,11 +586,11 @@ const statusMessage = computed(() => {
           v-show="selectedTaskFilter === 'all' || String(selectedTaskFilter) === String(group.task.position)"
           :id="`task-group-${group.task.position}`"
           :key="group.task.position"
-          class="mb-4 rounded-[6px] border border-slate-800 bg-slate-950/40 overflow-hidden"
+          class="mb-3 rounded-[2px] border border-border bg-bg-elevated overflow-hidden"
         >
           <button
             type="button"
-            class="w-full flex items-center justify-between px-3 py-2 bg-slate-900/80 hover:bg-slate-800/80 text-left transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+            class="w-full flex items-center justify-between px-2.5 py-1.5 bg-bg-surface hover:bg-bg-hover text-left transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-border-focus"
             :aria-expanded="isGroupExpanded(group.task.position)"
             :aria-label="`Thu gọn hoặc mở rộng Tác vụ ${group.task.position + 1} — ${group.task.label}`"
             @click="toggleGroup(group.task.position)"
@@ -537,10 +598,10 @@ const statusMessage = computed(() => {
             <div class="flex items-center gap-2 min-w-0">
               <component
                 :is="isGroupExpanded(group.task.position) ? ChevronDown : ChevronRight"
-                class="w-4 h-4 text-slate-400 shrink-0"
+                class="w-3.5 h-3.5 text-fg-muted shrink-0"
                 aria-hidden="true"
               />
-              <span class="font-sans font-semibold text-xs text-slate-200 truncate">
+              <span class="font-semibold text-xs text-fg-strong truncate">
                 Tác vụ {{ group.task.position + 1 }} — {{ group.task.label }}
               </span>
               <StatusBadge
@@ -549,13 +610,13 @@ const statusMessage = computed(() => {
                 :label="group.task.status === 'pending' ? 'Đang chờ' : (group.task.status === 'cancelled' ? 'Đã huỷ' : undefined)"
               />
             </div>
-            <span class="text-[11px] text-slate-400 font-mono shrink-0 ml-2">
+            <span class="text-[11px] text-fg-muted font-mono shrink-0 ml-2">
               ({{ group.lines.length }} dòng)
             </span>
           </button>
 
-          <div v-show="isGroupExpanded(group.task.position)" class="p-2 space-y-0.5 overflow-x-auto">
-            <div v-if="group.lines.length === 0" class="text-slate-500 italic py-2 px-3 text-xs">
+          <div v-show="isGroupExpanded(group.task.position)" class="p-2 bg-bg-input space-y-0.5 overflow-x-auto">
+            <div v-if="group.lines.length === 0" class="text-fg-dim italic py-2 px-3 text-xs">
               Chưa có dữ liệu nhật ký cho tác vụ này...
             </div>
             <div
@@ -564,11 +625,11 @@ const statusMessage = computed(() => {
               :data-log-seq="line.seq"
               :title="line.stream"
               :class="[
-                'flex items-start hover:bg-slate-800/40 rounded px-1 -mx-1 min-w-max',
-                activeMatchSeq === line.seq ? 'bg-primary/15 ring-1 ring-inset ring-primary/40' : matchedSeqSet.has(line.seq) ? 'bg-amber-400/5' : ''
+                'flex items-start hover:bg-bg-hover rounded-[1px] px-1 -mx-1 min-w-max',
+                activeMatchSeq === line.seq ? 'bg-warn-bg ring-1 ring-inset ring-warn' : matchedSeqSet.has(line.seq) ? 'bg-warn-bg/50' : ''
               ]"
             >
-              <span class="w-12 flex-shrink-0 text-slate-600 select-none text-right pr-4 tabular-nums text-xs">
+              <span class="w-12 flex-shrink-0 text-fg-dim select-none text-right pr-3 tabular-nums text-xs">
                 {{ line.seq }}
               </span>
               <span class="inline-block w-10 flex-shrink-0 select-none text-xs text-center mr-2">
@@ -580,7 +641,7 @@ const statusMessage = computed(() => {
                 <template v-for="(part, pIdx) in splitHighlight(line.text)" :key="pIdx">
                   <mark
                     v-if="part.match"
-                    :class="activeMatchSeq === line.seq ? 'bg-amber-400 text-slate-950 font-semibold rounded-[2px] px-0.5' : 'bg-amber-400/35 text-amber-100 rounded-[2px] px-0.5'"
+                    :class="activeMatchSeq === line.seq ? 'bg-warn text-bg font-semibold rounded-[1px] px-0.5' : 'bg-warn-bg text-warn rounded-[1px] px-0.5'"
                   >{{ part.text }}</mark>
                   <template v-else>{{ part.text }}</template>
                 </template>
@@ -592,7 +653,7 @@ const statusMessage = computed(() => {
 
       <!-- Flat View (For Standard Pipeline Runs) -->
       <template v-else>
-        <div v-if="lines.length === 0" class="text-slate-500 italic py-8 text-center">
+        <div v-if="lines.length === 0" class="text-fg-dim italic py-8 text-center">
           Chưa có dữ liệu nhật ký...
         </div>
 
@@ -602,12 +663,12 @@ const statusMessage = computed(() => {
           :data-log-seq="line.seq"
           :title="line.stream"
           :class="[
-            'flex items-start hover:bg-slate-800/40 rounded px-1 -mx-1 min-w-max',
-            activeMatchSeq === line.seq ? 'bg-primary/15 ring-1 ring-inset ring-primary/40' : matchedSeqSet.has(line.seq) ? 'bg-amber-400/5' : ''
+            'flex items-start hover:bg-bg-hover rounded-[1px] px-1 -mx-1 min-w-max',
+            activeMatchSeq === line.seq ? 'bg-warn-bg ring-1 ring-inset ring-warn' : matchedSeqSet.has(line.seq) ? 'bg-warn-bg/50' : ''
           ]"
         >
           <!-- Sequence number -->
-          <span class="w-12 flex-shrink-0 text-slate-600 select-none text-right pr-4 tabular-nums text-xs">
+          <span class="w-12 flex-shrink-0 text-fg-dim select-none text-right pr-3 tabular-nums text-xs">
             {{ line.seq }}
           </span>
 
@@ -629,7 +690,7 @@ const statusMessage = computed(() => {
             <template v-for="(part, pIdx) in splitHighlight(line.text)" :key="pIdx">
               <mark
                 v-if="part.match"
-                :class="activeMatchSeq === line.seq ? 'bg-amber-400 text-slate-950 font-semibold rounded-[2px] px-0.5' : 'bg-amber-400/35 text-amber-100 rounded-[2px] px-0.5'"
+                :class="activeMatchSeq === line.seq ? 'bg-warn text-bg font-semibold rounded-[1px] px-0.5' : 'bg-warn-bg text-warn rounded-[1px] px-0.5'"
               >{{ part.text }}</mark>
               <template v-else>{{ part.text }}</template>
             </template>
