@@ -5,9 +5,11 @@ import { useFloating } from '../composables/useFloating'
 import AppTag from './AppTag.vue'
 import AppSpinner from './AppSpinner.vue'
 
+export type ComboboxValue = string | number | boolean
+
 export interface ComboboxOption {
   label: string
-  value: string | number
+  value: ComboboxValue
   disabled?: boolean
   group?: string
 }
@@ -19,7 +21,7 @@ export interface ComboboxGroup {
 
 const props = withDefaults(
   defineProps<{
-    modelValue?: string | number | Array<string | number> | null
+    modelValue?: ComboboxValue | ComboboxValue[] | null
     options?: ComboboxOption[]
     groups?: ComboboxGroup[]
     id?: string
@@ -57,8 +59,8 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: string | number | Array<string | number> | null): void
-  (e: 'change', value: string | number | Array<string | number> | null): void
+  (e: 'update:modelValue', value: ComboboxValue | ComboboxValue[] | null): void
+  (e: 'change', value: ComboboxValue | ComboboxValue[] | null): void
   (e: 'create', value: string): void
 }>()
 
@@ -172,34 +174,42 @@ const groupedRenderList = computed(() => {
   return Array.from(map.entries()).map(([group, items]) => ({ group, items }))
 })
 
-const selectedValues = computed<Array<string | number>>(() => {
+const selectedValues = computed<ComboboxValue[]>(() => {
   if (props.multiple) {
     return Array.isArray(props.modelValue) ? props.modelValue : []
   }
-  if (props.modelValue === null || props.modelValue === undefined || props.modelValue === '') {
+  if (props.modelValue === null || props.modelValue === undefined) {
     return []
   }
-  return [props.modelValue as string | number]
+  if (props.modelValue === '') {
+    const hasEmptyOpt = allFlatOptions.value.some((o) => o.value === '')
+    return hasEmptyOpt ? [''] : []
+  }
+  return [props.modelValue as ComboboxValue]
 })
 
-function isSelected(val: string | number): boolean {
-  return selectedValues.value.some((v) => String(v) === String(val))
+function isSelected(val: ComboboxValue): boolean {
+  return selectedValues.value.some((v) => v === val || String(v) === String(val))
 }
 
 const selectedSingleOption = computed(() => {
   if (props.multiple || selectedValues.value.length === 0) return null
   const val = selectedValues.value[0]
-  return allFlatOptions.value.find((o) => String(o.value) === String(val)) || {
-    label: String(val),
-    value: val
+  const matched = allFlatOptions.value.find(
+    (o) => o.value === val || String(o.value) === String(val)
+  )
+  if (matched) return matched
+  if (props.creatable && val !== '') {
+    return { label: String(val), value: val }
   }
+  return null
 })
 
 const selectedMultiOptions = computed(() => {
   if (!props.multiple) return []
   return selectedValues.value.map((val) => {
     return (
-      allFlatOptions.value.find((o) => String(o.value) === String(val)) || {
+      allFlatOptions.value.find((o) => o.value === val || String(o.value) === String(val)) || {
         label: String(val),
         value: val
       }
@@ -207,7 +217,15 @@ const selectedMultiOptions = computed(() => {
   })
 })
 
-const hasSelection = computed(() => selectedValues.value.length > 0)
+const hasSelection = computed(() => {
+  if (props.multiple) return selectedValues.value.length > 0
+  return (
+    props.modelValue !== null &&
+    props.modelValue !== undefined &&
+    props.modelValue !== '' &&
+    selectedSingleOption.value !== null
+  )
+})
 
 function getOptionId(idx: number): string {
   return `${listboxId}-opt-${idx}`
@@ -311,7 +329,7 @@ function createFromQuery() {
   }
 }
 
-function removeChip(val: string | number) {
+function removeChip(val: ComboboxValue) {
   if (props.disabled || !props.multiple) return
   const next = selectedValues.value.filter((v) => String(v) !== String(val))
   emit('update:modelValue', next)
@@ -482,7 +500,7 @@ watch(filteredOptions, () => {
         <template v-if="multiple && selectedMultiOptions.length > 0">
           <AppTag
             v-for="item in selectedMultiOptions"
-            :key="item.value"
+            :key="String(item.value)"
             size="sm"
             variant="phosphor"
             removable
@@ -558,7 +576,7 @@ watch(filteredOptions, () => {
               </div>
               <div
                 v-for="{ opt, idx } in grp.items"
-                :key="opt.value"
+                :key="String(opt.value)"
                 :ref="(el) => { optionRefs[idx] = el as HTMLElement | null }"
                 :id="getOptionId(idx)"
                 role="option"

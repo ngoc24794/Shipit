@@ -185,6 +185,70 @@ describe('Form Primitives (D1 Terminal-native)', () => {
       // Escape closes
       await wrapper.get('[role="combobox"]').trigger('keydown', { key: 'Escape' })
     })
+
+    it('displays matching option label for empty-string, 0, and false values, and placeholder only when no option matches', async () => {
+      const emptyWrap = mount(AppSelect, {
+        props: {
+          modelValue: '',
+          options: [
+            { label: 'Tất cả trạng thái', value: '' },
+            { label: 'Thành công', value: 'success' }
+          ]
+        }
+      })
+      expect(emptyWrap.get('[role="combobox"]').text()).toContain('Tất cả trạng thái')
+      expect(emptyWrap.get('[role="combobox"]').text()).not.toContain('Chọn...')
+
+      const zeroWrap = mount(AppCombobox, {
+        props: {
+          modelValue: 0,
+          options: [
+            { label: 'Không giới hạn', value: 0 },
+            { label: '10', value: 10 }
+          ]
+        }
+      })
+      expect(zeroWrap.get('[role="combobox"]').text()).toContain('Không giới hạn')
+
+      const falseWrap = mount(AppCombobox, {
+        props: {
+          modelValue: false,
+          options: [
+            { label: 'Tắt', value: false },
+            { label: 'Bật', value: true }
+          ]
+        }
+      })
+      expect(falseWrap.get('[role="combobox"]').text()).toContain('Tắt')
+
+      const noMatchWrap = mount(AppSelect, {
+        props: {
+          modelValue: '',
+          options: [
+            { label: 'Alpha', value: 'a' },
+            { label: 'Beta', value: 'b' }
+          ]
+        }
+      })
+      expect(noMatchWrap.get('[role="combobox"]').text()).toContain('Chọn...')
+
+      await noMatchWrap.setProps({ modelValue: 'nonexistent' })
+      expect(noMatchWrap.get('[role="combobox"]').text()).toContain('Chọn...')
+
+      const clearableWrap = mount(AppCombobox, {
+        props: {
+          modelValue: 'a',
+          clearable: true,
+          options: [
+            { label: 'Tất cả', value: '' },
+            { label: 'Alpha', value: 'a' }
+          ]
+        }
+      })
+      expect(clearableWrap.find('button[aria-label="Xoá lựa chọn"]').exists()).toBe(true)
+      await clearableWrap.get('button[aria-label="Xoá lựa chọn"]').trigger('click')
+      expect(clearableWrap.emitted('update:modelValue')?.[0]).toEqual([''])
+    })
   })
 
   describe('AppCheckbox, AppRadioGroup/AppRadio & AppSwitch', () => {
