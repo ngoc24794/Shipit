@@ -98,8 +98,8 @@ export interface ShipitApi {
   getJob(id: number): Promise<Job>
   updateJob(id: number, input: JobInput): Promise<Job>
   deleteJob(id: number): Promise<void>
-  validateJob(input: JobInput): Promise<JobValidation>
-  previewJob(input: JobInput): Promise<JobPreview>
+  validateJob(input: JobInput, existingId?: number | null): Promise<JobValidation>
+  previewJob(input: JobInput, existingId?: number | null): Promise<JobPreview>
   triggerJobRun(id: number): Promise<Run>
   runJob?(id: number): Promise<Run>
 
@@ -460,15 +460,17 @@ export class HttpShipitApi implements ShipitApi {
     })
   }
 
-  async validateJob(input: JobInput): Promise<JobValidation> {
-    return this.request<JobValidation>('/api/jobs/validate', {
+  async validateJob(input: JobInput, existingId?: number | null): Promise<JobValidation> {
+    const qs = existingId !== undefined && existingId !== null ? `?existingId=${encodeURIComponent(String(existingId))}` : ''
+    return this.request<JobValidation>(`/api/jobs/validate${qs}`, {
       method: 'POST',
       body: JSON.stringify(input)
     })
   }
 
-  async previewJob(input: JobInput): Promise<JobPreview> {
-    return this.request<JobPreview>('/api/jobs/preview', {
+  async previewJob(input: JobInput, existingId?: number | null): Promise<JobPreview> {
+    const qs = existingId !== undefined && existingId !== null ? `?existingId=${encodeURIComponent(String(existingId))}` : ''
+    return this.request<JobPreview>(`/api/jobs/preview${qs}`, {
       method: 'POST',
       body: JSON.stringify(input)
     })

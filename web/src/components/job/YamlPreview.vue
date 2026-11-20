@@ -1,20 +1,28 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Copy, Check, FileCode, Loader2 } from 'lucide-vue-next'
+import { Copy, Check, FileCode } from 'lucide-vue-next'
 import type { JobPreviewTask } from '../../api/types'
 import { useToast } from '../../composables/useToast'
+import AppSkeleton from '../AppSkeleton.vue'
+import ErrorState from '../ErrorState.vue'
 
 const props = withDefaults(
   defineProps<{
     tasks: JobPreviewTask[]
     loading?: boolean
+    error?: string | null
     errors?: Record<string, string[]>
   }>(),
   {
     loading: false,
+    error: null,
     errors: () => ({})
   }
 )
+
+const emit = defineEmits<{
+  (e: 'retry'): void
+}>()
 
 const toast = useToast()
 const activeIndex = ref(0)
@@ -98,9 +106,18 @@ async function copyYaml() {
 
     <!-- Content area: Code preview -->
     <div class="relative flex-1 min-h-[180px] overflow-auto bg-bg-input p-3 font-mono text-xs text-phosphor">
-      <div v-if="loading" class="flex items-center justify-center py-12 text-fg-muted gap-2">
-        <Loader2 class="w-4 h-4 animate-spin" aria-hidden="true" />
-        <span>Đang tạo bản xem trước YAML...</span>
+      <div v-if="loading" class="space-y-2 py-2" data-testid="yaml-preview-loading">
+        <div class="text-xs text-fg-muted">Đang tạo bản xem trước YAML...</div>
+        <AppSkeleton variant="rows" :count="5" />
+      </div>
+
+      <div v-else-if="error" data-testid="yaml-preview-error">
+        <ErrorState
+          title="Không thể tạo bản xem trước YAML"
+          :message="error"
+          retry-label="Thử lại"
+          @retry="emit('retry')"
+        />
       </div>
 
       <div v-else-if="tasks.length === 0" class="flex flex-col items-center justify-center py-12 text-fg-muted gap-2 text-center">

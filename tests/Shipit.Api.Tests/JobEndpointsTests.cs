@@ -712,4 +712,81 @@ public class JobEndpointsTests
             }
         }
     }
+
+    [Fact]
+    public async Task Validate_and_preview_exclude_existing_job_id_but_conflict_on_other_job_name()
+    {
+        using var factory = new ApiFactory();
+        var client = await factory.LoggedInClientAsync();
+
+        var (jobAId, slaveId, gitCredId, _) = await CreateTestPrerequisitesAsync(client, "job-alpha");
+
+        var createBPayload = new
+        {
+            name = "job-beta",
+            gitUrl = "https://github.com/example/repo.git",
+            gitCredentialId = gitCredId,
+            slaveId,
+            imageName = "beta-image",
+            registryHost = "reg.local",
+            @namespace = "devops",
+            containerName = "migrator",
+            tasks = new[] { new { label = "migrate", timeoutSeconds = 1800 } }
+        };
+        var createBResp = await client.PostAsJsonAsync("/api/jobs", createBPayload);
+        Assert.Equal(HttpStatusCode.Created, createBResp.StatusCode);
+
+        var editJobAPayload = new
+        {
+            name = "job-alpha",
+            gitUrl = "https://github.com/example/repo.git",
+            gitCredentialId = gitCredId,
+            slaveId,
+            imageName = "alpha-image",
+            registryHost = "reg.local",
+            @namespace = "devops",
+            containerName = "migrator",
+            tasks = new[] { new { label = "migrate", timeoutSeconds = 1800 } }
+        };
+
+        // 1. Without existingId (create mode), job-alpha conflicts
+        var createValResp = await client.PostAsJsonAsync("/api/jobs/validate", editJobAPayload);
+        Assert.Equal(HttpStatusCode.OK, createValResp.StatusCode);
+        var createVal = await createValResp.ReadJsonAsync();
+        Assert.False(createVal.GetProperty("valid").GetBoolean());
+        Assert.True(createVal.GetProperty("errors").TryGetProperty("name", out _));
+
+        // 2. With existingId=jobAId (edit mode), job-alpha's own name is valid
+        var editValResp = await client.PostAsJsonAsync($"/api/jobs/validate?existingId={jobAId}", editJobAPayload);
+        Assert.Equal(HttpStatusCode.OK, editValResp.StatusCode);
+        var editVal = await editValResp.ReadJsonAsync();
+        Assert.True(editVal.GetProperty("valid").GetBoolean());
+        Assert.Empty(editVal.GetProperty("errors").EnumerateObject().ToList());
+
+        // 3. Preview with existingId=jobAId succeeds and returns rendered tasks
+        var editPreviewResp = await client.PostAsJsonAsync($"/api/jobs/preview?existingId={jobAId}", editJobAPayload);
+        Assert.Equal(HttpStatusCode.OK, editPreviewResp.StatusCode);
+        var editPreview = await editPreviewResp.ReadJsonAsync();
+        Assert.Empty(editPreview.GetProperty("errors").EnumerateObject().ToList());
+        Assert.Single(editPreview.GetProperty("tasks").EnumerateArray().ToList());
+
+        // 4. With existingId=jobAId, renaming to job-beta (another job's name) still conflicts
+        var conflictPayload = new
+        {
+            name = "job-beta",
+            gitUrl = "https://github.com/example/repo.git",
+            gitCredentialId = gitCredId,
+            slaveId,
+            imageName = "alpha-image",
+            registryHost = "reg.local",
+            @namespace = "devops",
+            containerName = "migrator",
+            tasks = new[] { new { label = "migrate", timeoutSeconds = 1800 } }
+        };
+        var conflictResp = await client.PostAsJsonAsync($"/api/jobs/validate?existingId={jobAId}", conflictPayload);
+        Assert.Equal(HttpStatusCode.OK, conflictResp.StatusCode);
+        var conflictVal = await conflictResp.ReadJsonAsync();
+        Assert.False(conflictVal.GetProperty("valid").GetBoolean());
+        Assert.True(conflictVal.GetProperty("errors").TryGetProperty("name", out _));
+    }
 }
