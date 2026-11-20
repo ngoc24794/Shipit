@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Job, JobInput, JobValidation, JobPreview, Run } from '../api/types'
+import type { Job, JobInput, JobValidation, JobPreview, Run, TriggerRunOptions } from '../api/types'
 import { ApiError } from '../api/client'
 import { getApi } from '../api'
 import { createSwrChannel, type SwrOptions } from '../utils/swr'
@@ -139,12 +139,14 @@ export const useJobsStore = defineStore('jobs', () => {
     }
   }
 
-  async function triggerJobRun(id: number): Promise<Run> {
+  async function triggerJobRun(id: number, options?: TriggerRunOptions): Promise<Run> {
     const api = getApi()
     triggeringId.value = id
     error.value = null
     try {
-      const run = await api.triggerJobRun(id)
+      const run = options?.skipSteps?.length
+        ? await api.triggerJobRun(id, options)
+        : await api.triggerJobRun(id)
       await fetchJobs()
       return run
     } catch (err: any) {

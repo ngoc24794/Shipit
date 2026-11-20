@@ -14,6 +14,8 @@ import AppTable from '../../components/AppTable.vue'
 defineOptions({ name: 'PipelinesView' })
 import AppButton from '../../components/AppButton.vue'
 import ConfirmDialog from '../../components/ConfirmDialog.vue'
+import RunDialog from '../../components/RunDialog.vue'
+import type { StepName } from '../../api/types'
 import EmptyState from '../../components/EmptyState.vue'
 import StatusBadge from '../../components/StatusBadge.vue'
 import DataToolbar, { type DataToolbarFilter } from '../../components/DataToolbar.vue'
@@ -141,17 +143,41 @@ async function handleDelete() {
   }
 }
 
-async function handleTriggerRun(pipeline: Pipeline) {
+const isRunDialogOpen = ref(false)
+const runningPipeline = ref<Pipeline | null>(null)
+const runDialogError = ref<string | null>(null)
+const runDialogLoading = ref(false)
+
+function handleTriggerRun(pipeline: Pipeline) {
+  runningPipeline.value = pipeline
+  runDialogError.value = null
+  isRunDialogOpen.value = true
+}
+
+async function confirmTriggerRun(skipSteps: StepName[]) {
+  if (!runningPipeline.value) return
+  runDialogLoading.value = true
+  runDialogError.value = null
   try {
-    const run = await store.triggerRun(pipeline.id)
+    const opts = skipSteps.length > 0 ? { skipSteps } : undefined
+    const run = opts
+      ? await store.triggerRun(runningPipeline.value.id, opts)
+      : await store.triggerRun(runningPipeline.value.id)
+    isRunDialogOpen.value = false
     toast.success(`Đã kích hoạt lượt chạy #${run.id}`)
     router.push(`/runs/${run.id}`)
   } catch (err: any) {
     if (err instanceof ApiError && err.status === 409) {
-      toast.error('Pipeline đang có lượt chạy')
+      const msg = 'Pipeline đang có lượt chạy'
+      runDialogError.value = msg
+      toast.error(msg)
     } else {
-      toast.error(err.message || 'Kích hoạt lượt chạy thất bại')
+      const msg = err.message || 'Kích hoạt lượt chạy thất bại'
+      runDialogError.value = msg
+      toast.error(msg)
     }
+  } finally {
+    runDialogLoading.value = false
   }
 }
 
@@ -397,6 +423,15 @@ onActivated(() => {
       :danger="true"
       @confirm="handleDelete"
       @cancel="isConfirmOpen = false"
+    />
+
+    <RunDialog
+      v-model="isRunDialogOpen"
+      kind="pipeline"
+      :target-name="runningPipeline?.name ?? ''"
+      :loading="runDialogLoading"
+      :error="runDialogError"
+      @confirm="confirmTriggerRun"
     />
   </div>
 </template>

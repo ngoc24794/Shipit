@@ -25,7 +25,8 @@ import type {
   JobAllowEntryInput,
   GetRunsParams,
   PagedResult,
-  SearchResponse
+  SearchResponse,
+  TriggerRunOptions
 } from './types'
 
 export class ApiError extends Error {
@@ -100,8 +101,8 @@ export interface ShipitApi {
   deleteJob(id: number): Promise<void>
   validateJob(input: JobInput, existingId?: number | null): Promise<JobValidation>
   previewJob(input: JobInput, existingId?: number | null): Promise<JobPreview>
-  triggerJobRun(id: number): Promise<Run>
-  runJob?(id: number): Promise<Run>
+  triggerJobRun(id: number, options?: TriggerRunOptions): Promise<Run>
+  runJob?(id: number, options?: TriggerRunOptions): Promise<Run>
 
   // Job Allow Entries
   getJobAllowEntries(): Promise<JobAllowEntry[]>
@@ -109,7 +110,7 @@ export interface ShipitApi {
   deleteJobAllowEntry(id: number): Promise<void>
 
   // Runs
-  triggerRun(pipelineId: number): Promise<Run>
+  triggerRun(pipelineId: number, options?: TriggerRunOptions): Promise<Run>
   cancelRun(id: number): Promise<Run>
   getRuns(params?: GetRunsParams): Promise<Run[]>
   getRunsPaged?(params?: GetRunsParams): Promise<PagedResult<Run>>
@@ -318,10 +319,13 @@ export class HttpShipitApi implements ShipitApi {
     })
   }
 
-  async triggerRun(pipelineId: number): Promise<Run> {
-    return this.request<Run>(`/api/pipelines/${pipelineId}/runs`, {
-      method: 'POST'
-    })
+  async triggerRun(pipelineId: number, options?: TriggerRunOptions): Promise<Run> {
+    const skipSteps = options?.skipSteps
+    const init: RequestInit = { method: 'POST' }
+    if (skipSteps && skipSteps.length > 0) {
+      init.body = JSON.stringify({ skipSteps })
+    }
+    return this.request<Run>(`/api/pipelines/${pipelineId}/runs`, init)
   }
 
   async cancelRun(id: number): Promise<Run> {
@@ -476,14 +480,17 @@ export class HttpShipitApi implements ShipitApi {
     })
   }
 
-  async triggerJobRun(id: number): Promise<Run> {
-    return this.request<Run>(`/api/jobs/${id}/runs`, {
-      method: 'POST'
-    })
+  async triggerJobRun(id: number, options?: TriggerRunOptions): Promise<Run> {
+    const skipSteps = options?.skipSteps
+    const init: RequestInit = { method: 'POST' }
+    if (skipSteps && skipSteps.length > 0) {
+      init.body = JSON.stringify({ skipSteps })
+    }
+    return this.request<Run>(`/api/jobs/${id}/runs`, init)
   }
 
-  async runJob(id: number): Promise<Run> {
-    return this.triggerJobRun(id)
+  async runJob(id: number, options?: TriggerRunOptions): Promise<Run> {
+    return this.triggerJobRun(id, options)
   }
 
   async getJobAllowEntries(): Promise<JobAllowEntry[]> {

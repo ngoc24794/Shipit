@@ -29,9 +29,11 @@ import type {
   PagedResult,
   SearchGroup,
   SearchItem,
-  SearchResponse
+  SearchResponse,
+  TriggerRunOptions
 } from './types'
 import { ApiError } from './client'
+import { validateSkipSteps } from '../utils/runSteps'
 
 function delay(ms: number = 20): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -1054,11 +1056,17 @@ export class MockShipitApi implements ShipitApi {
     this.deployTargets = this.deployTargets.filter((t) => t.id !== id)
   }
 
-  async triggerRun(pipelineId: number): Promise<Run> {
+  async triggerRun(pipelineId: number, options?: TriggerRunOptions): Promise<Run> {
     await delay()
     this.checkAuth()
     const pipeline = this.pipelines.find((p) => p.id === pipelineId)
     if (!pipeline) throw new ApiError(404, 'Không tìm thấy pipeline')
+
+    const skipSteps = options?.skipSteps ?? []
+    const skipError = validateSkipSteps('pipeline', skipSteps)
+    if (skipError) {
+      throw new ApiError(400, skipError, { title: 'Invalid skipSteps', detail: skipError })
+    }
 
     const activeRun = this.runs.find(
       (r) => r.pipelineId === pipelineId && (r.status === 'running' || r.status === 'queued')
@@ -1080,10 +1088,10 @@ export class MockShipitApi implements ShipitApi {
       startedAt: null,
       finishedAt: null,
       steps: [
-        { name: 'checkout', status: 'pending', startedAt: null, finishedAt: null },
-        { name: 'build', status: 'pending', startedAt: null, finishedAt: null },
-        { name: 'push', status: 'pending', startedAt: null, finishedAt: null },
-        { name: 'deploy', status: 'pending', startedAt: null, finishedAt: null }
+        { name: 'checkout', status: skipSteps.includes('checkout') ? 'skipped' : 'pending', startedAt: null, finishedAt: null },
+        { name: 'build', status: skipSteps.includes('build') ? 'skipped' : 'pending', startedAt: null, finishedAt: null },
+        { name: 'push', status: skipSteps.includes('push') ? 'skipped' : 'pending', startedAt: null, finishedAt: null },
+        { name: 'deploy', status: skipSteps.includes('deploy') ? 'skipped' : 'pending', startedAt: null, finishedAt: null }
       ],
       tasks: []
     }
@@ -1092,8 +1100,8 @@ export class MockShipitApi implements ShipitApi {
     return newRun
   }
 
-  async runJob(jobId: number): Promise<Run> {
-    return this.triggerJobRun(jobId)
+  async runJob(jobId: number, options?: TriggerRunOptions): Promise<Run> {
+    return this.triggerJobRun(jobId, options)
   }
 
   async cancelRun(id: number): Promise<Run> {
@@ -1677,11 +1685,17 @@ export class MockShipitApi implements ShipitApi {
     this.jobs = this.jobs.filter((j) => j.id !== id)
   }
 
-  async triggerJobRun(id: number): Promise<Run> {
+  async triggerJobRun(id: number, options?: TriggerRunOptions): Promise<Run> {
     await delay()
     this.checkAuth()
     const job = this.jobs.find((j) => j.id === id)
     if (!job) throw new ApiError(404, 'Không tìm thấy Job')
+
+    const skipSteps = options?.skipSteps ?? []
+    const skipError = validateSkipSteps('job', skipSteps)
+    if (skipError) {
+      throw new ApiError(400, skipError, { title: 'Invalid skipSteps', detail: skipError })
+    }
 
     const activeRun = this.runs.find(
       (r) => r.jobId === id && (r.status === 'running' || r.status === 'queued')
@@ -1693,13 +1707,14 @@ export class MockShipitApi implements ShipitApi {
       })
     }
 
+    const isRunJobSkipped = skipSteps.includes('runjob')
     const nextId = this.runs.length > 0 ? Math.max(...this.runs.map((r) => r.id)) + 1 : 1
     const tasks: RunTask[] =
       job.tasks && job.tasks.length > 0
         ? job.tasks.map((t, idx) => ({
             position: t.position ?? idx,
             label: t.label,
-            status: 'pending' as const,
+            status: (isRunJobSkipped ? 'skipped' : 'pending') as RunTask['status'],
             exitCode: null,
             startedAt: null,
             finishedAt: null
@@ -1708,7 +1723,7 @@ export class MockShipitApi implements ShipitApi {
             {
               position: 0,
               label: 'Khởi tạo',
-              status: 'pending' as const,
+              status: (isRunJobSkipped ? 'skipped' : 'pending') as RunTask['status'],
               exitCode: null,
               startedAt: null,
               finishedAt: null
@@ -1728,10 +1743,10 @@ export class MockShipitApi implements ShipitApi {
       startedAt: null,
       finishedAt: null,
       steps: [
-        { name: 'checkout', status: 'pending', startedAt: null, finishedAt: null },
-        { name: 'build', status: 'pending', startedAt: null, finishedAt: null },
-        { name: 'push', status: 'pending', startedAt: null, finishedAt: null },
-        { name: 'runjob', status: 'pending', startedAt: null, finishedAt: null }
+        { name: 'checkout', status: skipSteps.includes('checkout') ? 'skipped' : 'pending', startedAt: null, finishedAt: null },
+        { name: 'build', status: skipSteps.includes('build') ? 'skipped' : 'pending', startedAt: null, finishedAt: null },
+        { name: 'push', status: skipSteps.includes('push') ? 'skipped' : 'pending', startedAt: null, finishedAt: null },
+        { name: 'runjob', status: isRunJobSkipped ? 'skipped' : 'pending', startedAt: null, finishedAt: null }
       ],
       tasks
     }
