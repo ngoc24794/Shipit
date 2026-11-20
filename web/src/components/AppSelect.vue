@@ -3,13 +3,13 @@ import AppCombobox from './AppCombobox.vue'
 
 export interface SelectOption {
   label: string
-  value: string | number
+  value: string | number | boolean
   disabled?: boolean
 }
 
 const props = withDefaults(
   defineProps<{
-    modelValue?: string | number | null
+    modelValue?: string | number | boolean | null
     options: SelectOption[]
     id?: string
     name?: string
@@ -38,14 +38,14 @@ const emit = defineEmits<{
   (e: 'change', value: string | number): void
 }>()
 
-function onUpdate(val: string | number | Array<string | number> | null) {
+function onUpdate(val: string | number | boolean | Array<string | number | boolean> | null) {
   const next = Array.isArray(val) ? (val[0] ?? '') : (val ?? '')
-  emit('update:modelValue', next)
+  emit('update:modelValue', next as string | number)
 }
 
-function onChange(val: string | number | Array<string | number> | null) {
+function onChange(val: string | number | boolean | Array<string | number | boolean> | null) {
   const next = Array.isArray(val) ? (val[0] ?? '') : (val ?? '')
-  emit('change', next)
+  emit('change', next as string | number)
 }
 </script>
 
