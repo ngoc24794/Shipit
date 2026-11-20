@@ -604,7 +604,7 @@ onBeforeUnmount(() => {
               <div
                 v-if="isJobRun"
                 data-testid="run-task-panel"
-                class="flex-1 min-h-0 flex flex-col gap-1.5"
+                class="flex-1 min-h-[160px] flex flex-col gap-2"
               >
                 <div class="shrink-0 flex items-center justify-between">
                   <h2 class="text-[10px] font-bold text-fg-dim uppercase tracking-wider whitespace-nowrap">

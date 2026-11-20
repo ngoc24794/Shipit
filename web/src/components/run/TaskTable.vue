@@ -47,16 +47,27 @@ function statusGlyph(status: StepStatus): { glyph: string; cls: string } {
 </script>
 
 <template>
-  <div class="w-full flex-1 min-h-0 overflow-auto rounded-[2px] border border-border bg-bg-elevated font-mono">
-    <table class="w-full text-left text-xs tabular-nums border-collapse table-fixed">
+  <div
+    class="w-full flex-1 min-h-0 overflow-auto rounded-[2px] border border-border bg-bg-elevated font-mono"
+    data-testid="task-table-scroll"
+  >
+    <table class="min-w-[500px] w-full text-left text-xs tabular-nums border-collapse table-fixed">
+      <colgroup>
+        <col class="w-[72px]" />
+        <col class="w-[130px]" />
+        <col class="w-[116px]" />
+        <col class="w-[52px]" />
+        <col class="w-[84px]" />
+        <col class="w-[46px]" />
+      </colgroup>
       <thead class="sticky top-0 z-10 bg-bg-surface text-[10px] font-bold uppercase tracking-wider text-fg-muted border-b border-border-strong">
         <tr>
-          <th scope="col" class="py-1.5 px-2 w-14 whitespace-nowrap">#</th>
-          <th scope="col" class="py-1.5 px-2 whitespace-nowrap">Tác vụ</th>
-          <th scope="col" class="py-1.5 px-2 w-28 whitespace-nowrap">Trạng thái</th>
-          <th scope="col" class="py-1.5 px-2 w-16 whitespace-nowrap">Mã</th>
-          <th scope="col" class="py-1.5 px-2 w-20 whitespace-nowrap">Thời lượng</th>
-          <th scope="col" class="py-1.5 px-2 w-12 text-right whitespace-nowrap">Log</th>
+          <th scope="col" class="py-1.5 px-2 whitespace-nowrap overflow-hidden text-ellipsis">#</th>
+          <th scope="col" class="py-1.5 px-2 whitespace-nowrap overflow-hidden text-ellipsis">Tác vụ</th>
+          <th scope="col" class="py-1.5 px-2 whitespace-nowrap overflow-hidden text-ellipsis">Trạng thái</th>
+          <th scope="col" class="py-1.5 px-2 whitespace-nowrap overflow-hidden text-ellipsis">Mã</th>
+          <th scope="col" class="py-1.5 px-2 whitespace-nowrap overflow-hidden text-ellipsis">Thời lượng</th>
+          <th scope="col" class="py-1.5 px-2 text-right whitespace-nowrap overflow-hidden text-ellipsis">Log</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-border text-fg">
