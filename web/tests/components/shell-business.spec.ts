@@ -103,4 +103,38 @@ describe('Shell & Business Components', () => {
     expect(wrapper.text()).toContain('●')
     expect(wrapper.text()).toContain('✕')
   })
+
+  it('TaskTable enforces explicit colgroup widths, sticky opaque header, and non-overlapping truncated th cells', () => {
+    const wrapper = mount(TaskTable, {
+      props: {
+        tasks: [
+          { position: 0, label: 'migrate-files', status: 'success', exitCode: 0, startedAt: '2026-11-20T00:00:00Z', finishedAt: '2026-11-20T00:00:10Z' }
+        ]
+      }
+    })
+
+    const scrollWrap = wrapper.find('[data-testid="task-table-scroll"]')
+    expect(scrollWrap.exists()).toBe(true)
+    expect(scrollWrap.classes()).toContain('overflow-auto')
+
+    const table = wrapper.find('table')
+    expect(table.classes()).toContain('min-w-[500px]')
+    expect(table.classes()).toContain('table-fixed')
+
+    const cols = wrapper.findAll('colgroup col')
+    expect(cols).toHaveLength(6)
+
+    const thead = wrapper.find('thead')
+    expect(thead.classes()).toContain('sticky')
+    expect(thead.classes()).toContain('top-0')
+    expect(thead.classes()).toContain('bg-bg-surface')
+
+    const ths = wrapper.findAll('thead th')
+    expect(ths).toHaveLength(6)
+    for (const th of ths) {
+      expect(th.classes()).toContain('whitespace-nowrap')
+      expect(th.classes()).toContain('overflow-hidden')
+      expect(th.classes()).toContain('text-ellipsis')
+    }
+  })
 })
