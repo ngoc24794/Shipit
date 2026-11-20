@@ -49,7 +49,7 @@ describe('Route Smoke Test (Mock Mode)', () => {
     document.body.innerHTML = ''
   })
 
-  it('renders every app route in mock mode without console errors', { timeout: 15000 }, async () => {
+  it('renders every app route in mock mode without console errors', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const authStore = useAuthStore()
