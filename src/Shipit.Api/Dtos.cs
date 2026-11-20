@@ -76,6 +76,8 @@ public sealed record RunDto(
 
 public sealed record RunStepDto(string Name, string Status, DateTime? StartedAt, DateTime? FinishedAt);
 
+public sealed record TriggerRunRequest(IReadOnlyList<string>? SkipSteps = null);
+
 public sealed record RunDetailDto(
     long Id,
     long? PipelineId,

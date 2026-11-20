@@ -23,14 +23,15 @@ public sealed class RunCoordinator(
     ILogger<RunCoordinator> logger,
     IK8sJobRunner? jobRunner = null) : BackgroundService, IRunCoordinator
 {
-    private static readonly StepName[] PipelineStepOrder = [StepName.Checkout, StepName.Build, StepName.Push, StepName.Deploy];
-    private static readonly StepName[] JobStepOrder = [StepName.Checkout, StepName.Build, StepName.Push, StepName.RunJob];
+    private static readonly StepName[] PipelineStepOrder = SkipStepsValidator.PipelineStepOrder;
+    private static readonly StepName[] JobStepOrder = SkipStepsValidator.JobStepOrder;
 
     private readonly Channel<long> _queue = Channel.CreateUnbounded<long>();
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _inFlight = new();
 
-    public async Task<Run> TriggerAsync(long pipelineId, CancellationToken cancellationToken = default)
+    public async Task<Run> TriggerAsync(long pipelineId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null)
     {
+        SkipStepsValidator.ValidateOrThrow(skipSteps, isJob: false);
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
         if (!await db.Pipelines.AnyAsync(p => p.Id == pipelineId, cancellationToken).ConfigureAwait(false))
@@ -48,7 +49,11 @@ public sealed class RunCoordinator(
             PipelineId = pipelineId,
             Status = RunStatus.Queued,
             CreatedAt = time.GetUtcNow().UtcDateTime,
-            Steps = PipelineStepOrder.Select(n => new RunStep { Name = n, Status = StepStatus.Pending }).ToList(),
+            Steps = PipelineStepOrder.Select(n => new RunStep
+            {
+                Name = n,
+                Status = skipSteps?.Contains(n) == true ? StepStatus.Skipped : StepStatus.Pending,
+            }).ToList(),
         };
         db.Runs.Add(run);
 
@@ -72,8 +77,9 @@ public sealed class RunCoordinator(
         return run;
     }
 
-    public async Task<Run> TriggerJobAsync(long jobId, CancellationToken cancellationToken = default)
+    public async Task<Run> TriggerJobAsync(long jobId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null)
     {
+        SkipStepsValidator.ValidateOrThrow(skipSteps, isJob: true);
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
         if (!await db.Jobs.AnyAsync(j => j.Id == jobId, cancellationToken).ConfigureAwait(false))
@@ -91,17 +97,22 @@ public sealed class RunCoordinator(
             .OrderBy(t => t.Position)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
+        var skipRunJob = skipSteps?.Contains(StepName.RunJob) == true;
         var run = new Run
         {
             JobId = jobId,
             Status = RunStatus.Queued,
             CreatedAt = time.GetUtcNow().UtcDateTime,
-            Steps = JobStepOrder.Select(n => new RunStep { Name = n, Status = StepStatus.Pending }).ToList(),
+            Steps = JobStepOrder.Select(n => new RunStep
+            {
+                Name = n,
+                Status = skipSteps?.Contains(n) == true ? StepStatus.Skipped : StepStatus.Pending,
+            }).ToList(),
             Tasks = tasks.Select(t => new RunTask
             {
                 Position = t.Position,
                 Label = t.Label,
-                Status = StepStatus.Pending,
+                Status = skipRunJob ? StepStatus.Skipped : StepStatus.Pending,
             }).ToList(),
         };
         db.Runs.Add(run);
