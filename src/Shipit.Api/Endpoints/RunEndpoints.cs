@@ -13,13 +13,51 @@ internal static class RunEndpoints
     private static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(15);
     private const int PageSize = 500;
 
+    internal static async Task<(bool Ok, IReadOnlySet<StepName>? SkipSteps, IResult? ErrorResult)> TryParseTriggerSkipStepsAsync(
+        HttpRequest http,
+        bool isJob,
+        CancellationToken ct)
+    {
+        TriggerRunRequest? body = null;
+        if (http.ContentLength != 0 && !string.IsNullOrWhiteSpace(http.ContentType))
+        {
+            using var reader = new StreamReader(http.Body, leaveOpen: true);
+            var raw = await reader.ReadToEndAsync(ct);
+            if (!string.IsNullOrWhiteSpace(raw))
+            {
+                try
+                {
+                    body = JsonSerializer.Deserialize<TriggerRunRequest>(raw, Json);
+                }
+                catch (JsonException)
+                {
+                    return (false, null, Problems.BadRequest("Invalid request body", "Request body must be valid JSON."));
+                }
+            }
+        }
+
+        if (!SkipStepsValidator.TryParse(body?.SkipSteps, isJob, out var parsed, out var error))
+        {
+            var fieldErrors = new Dictionary<string, string[]> { ["skipSteps"] = [error!] };
+            return (false, null, Problems.BadRequest("Invalid skipSteps", error!, fieldErrors));
+        }
+
+        return (true, parsed, null);
+    }
+
     public static void MapRuns(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/pipelines/{id:long}/runs", async (long id, IRunCoordinator coordinator, CancellationToken ct) =>
+        app.MapPost("/api/pipelines/{id:long}/runs", async (long id, HttpRequest http, IRunCoordinator coordinator, CancellationToken ct) =>
         {
+            var (ok, skipSteps, badRequest) = await TryParseTriggerSkipStepsAsync(http, isJob: false, ct);
+            if (!ok)
+            {
+                return badRequest!;
+            }
+
             try
             {
-                var run = await coordinator.TriggerAsync(id, ct);
+                var run = await coordinator.TriggerAsync(id, ct, skipSteps);
                 return Results.Json(run.ToDto(), statusCode: StatusCodes.Status202Accepted);
             }
             catch (PipelineNotFoundException)

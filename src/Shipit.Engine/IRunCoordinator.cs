@@ -14,18 +14,18 @@ public enum CancelResult
 public interface IRunCoordinator
 {
     /// <summary>
-    /// Creates a queued run (with its four pending steps) and schedules it.
+    /// Creates a queued run (with its four pending or pre-skipped steps) and schedules it.
     /// </summary>
     /// <exception cref="PipelineNotFoundException">No such pipeline.</exception>
     /// <exception cref="RunConflictException">The pipeline already has an active run.</exception>
-    Task<Run> TriggerAsync(long pipelineId, CancellationToken cancellationToken = default);
+    Task<Run> TriggerAsync(long pipelineId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null);
 
     /// <summary>
-    /// Creates a queued run for a Job (with its pending steps and tasks) and schedules it.
+    /// Creates a queued run for a Job (with its pending or pre-skipped steps and tasks) and schedules it.
     /// </summary>
     /// <exception cref="JobNotFoundException">No such job.</exception>
     /// <exception cref="JobRunConflictException">The job already has an active run.</exception>
-    Task<Run> TriggerJobAsync(long jobId, CancellationToken cancellationToken = default);
+    Task<Run> TriggerJobAsync(long jobId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null);
 
     /// <summary>
     /// Cancels a queued or currently executing run.

@@ -124,6 +124,14 @@ public sealed partial class PipelineRunner(
             foreach (var step in steps)
             {
                 combinedToken.ThrowIfCancellationRequested();
+                if (plan.SkippedSteps.Contains(step))
+                {
+                    writer.CurrentStep = step;
+                    writer.CurrentTaskPosition = null;
+                    await writer.WriteAsync($"== {step} (skipped) ==", LogStream.System, CancellationToken.None).ConfigureAwait(false);
+                    continue;
+                }
+
                 writer.CurrentStep = step;
                 writer.CurrentTaskPosition = null;
                 await SetStepAsync(runId, step, StepStatus.Running).ConfigureAwait(false);
@@ -596,6 +604,7 @@ public sealed partial class PipelineRunner(
     {
         await using var db = await dbFactory.CreateDbContextAsync().ConfigureAwait(false);
         var run = await db.Runs.AsNoTracking()
+            .Include(r => r.Steps)
             .Include(r => r.Pipeline).ThenInclude(p => p!.Slave).ThenInclude(s => s!.SshCredential)
             .Include(r => r.Pipeline).ThenInclude(p => p!.GitCredential)
             .Include(r => r.Pipeline).ThenInclude(p => p!.RegistryCredential)
@@ -609,6 +618,11 @@ public sealed partial class PipelineRunner(
         {
             return null;
         }
+
+        var skippedSteps = run.Steps
+            .Where(s => s.Status == StepStatus.Skipped)
+            .Select(s => s.Name)
+            .ToHashSet();
 
         if (run.PipelineId != null)
         {
@@ -642,7 +656,8 @@ public sealed partial class PipelineRunner(
                 RegistryUsername: p.RegistryCredential?.Username,
                 DeployNamespace: p.DeployNamespace,
                 DeployDeployment: p.DeployDeployment,
-                DeployContainer: p.DeployContainer);
+                DeployContainer: p.DeployContainer,
+                SkippedSteps: skippedSteps);
         }
 
         if (run.JobId != null)
@@ -680,7 +695,8 @@ public sealed partial class PipelineRunner(
                 JobNamespace: j.Namespace,
                 JobContainerName: j.ContainerName,
                 JobServiceAccount: j.ServiceAccount,
-                JobImagePullSecretsJson: j.ImagePullSecretsJson);
+                JobImagePullSecretsJson: j.ImagePullSecretsJson,
+                SkippedSteps: skippedSteps);
         }
 
         return null;
@@ -897,7 +913,11 @@ public sealed partial class PipelineRunner(
         string? JobNamespace = null,
         string? JobContainerName = null,
         string? JobServiceAccount = null,
-        string? JobImagePullSecretsJson = null);
+        string? JobImagePullSecretsJson = null,
+        IReadOnlySet<StepName>? SkippedSteps = null)
+    {
+        public IReadOnlySet<StepName> SkippedSteps { get; } = SkippedSteps ?? new HashSet<StepName>();
+    }
 
     private sealed class RunContext(RunPlan plan, RunLogWriter writer, LogMasker masker)
     {
