@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ShieldCheck, ListChecks, Rocket } from 'lucide-vue-next'
 import DeployTargetsView from './DeployTargetsView.vue'
@@ -12,11 +12,37 @@ type AllowlistTab = 'deployment' | 'job'
 const route = useRoute()
 const router = useRouter()
 
+const rememberedTab = ref<AllowlistTab>(route.query.tab === 'job' ? 'job' : 'deployment')
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (route.name === 'allowlist' && (tab === 'job' || tab === 'deployment')) {
+      rememberedTab.value = tab
+    }
+  }
+)
+
+onActivated(() => {
+  if (route.query.tab === 'job' || route.query.tab === 'deployment') {
+    rememberedTab.value = route.query.tab
+  } else if (rememberedTab.value !== 'deployment') {
+    router.replace({
+      path: '/settings/allowlist',
+      query: { ...route.query, tab: rememberedTab.value }
+    }).catch(() => {})
+  }
+})
+
 const activeTab = computed<AllowlistTab>(() => {
-  return route.query.tab === 'job' ? 'job' : 'deployment'
+  if (route.query.tab === 'job' || route.query.tab === 'deployment') {
+    return route.query.tab
+  }
+  return rememberedTab.value
 })
 
 function selectTab(tab: AllowlistTab) {
+  rememberedTab.value = tab
   if (activeTab.value === tab && route.query.tab === tab) return
   router.replace({
     path: '/settings/allowlist',

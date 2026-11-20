@@ -178,4 +178,122 @@ describe('Persistent AppLayout Shell & KeepAlive', () => {
 
     wrapper.unmount()
   })
+
+  it('preserves RunsView filter, search, and pageSize across navigation away and bare rail return', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: appRouter.options.routes
+    })
+    await router.push('/')
+    await router.isReady()
+
+    const wrapper = mount(App, {
+      global: { plugins: [router] }
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    await flushPromises()
+    await nextTick()
+
+    const initialRows = wrapper.findAll('tbody tr').length
+    expect(initialRows).toBeGreaterThan(0)
+
+    // Apply pipeline filter & search via route query (same as selecting in toolbar)
+    await router.replace({ path: '/', query: { target: 'pipeline:1', pageSize: '10' } })
+    await new Promise((r) => setTimeout(r, 150))
+    await flushPromises()
+    await nextTick()
+
+    const filteredRows = wrapper.findAll('tbody tr').length
+    expect(filteredRows).toBeGreaterThan(0)
+    expect(filteredRows).toBeLessThanOrEqual(initialRows)
+
+    // Navigate away to /pipelines via rail-style bare route
+    await router.push('/pipelines')
+    await flushPromises()
+    await nextTick()
+    expect(router.currentRoute.value.path).toBe('/pipelines')
+
+    // Return to / via bare rail link (no query params)
+    await router.push('/')
+    await new Promise((r) => setTimeout(r, 150))
+    await flushPromises()
+    await nextTick()
+
+    // Filter and query must be restored
+    expect(router.currentRoute.value.query.target).toBe('pipeline:1')
+    expect(router.currentRoute.value.query.pageSize).toBe('10')
+    expect(wrapper.findAll('tbody tr').length).toBe(filteredRows)
+
+    wrapper.unmount()
+  })
+
+  it('preserves PipelinesView search, sort, and page across navigation away and bare return', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: appRouter.options.routes
+    })
+    await router.push('/pipelines')
+    await router.isReady()
+
+    const wrapper = mount(App, {
+      global: { plugins: [router] }
+    })
+    await flushPromises()
+    await nextTick()
+
+    // Apply search + sort on PipelinesView
+    await router.replace({
+      path: '/pipelines',
+      query: { q: 'api', sortBy: 'name', sortDir: 'desc' }
+    })
+    await flushPromises()
+    await nextTick()
+
+    // Navigate away to /jobs and back to bare /pipelines
+    await router.push('/jobs')
+    await flushPromises()
+    await nextTick()
+
+    await router.push('/pipelines')
+    await flushPromises()
+    await nextTick()
+
+    expect(router.currentRoute.value.query.q).toBe('api')
+    expect(router.currentRoute.value.query.sortBy).toBe('name')
+    expect(router.currentRoute.value.query.sortDir).toBe('desc')
+
+    wrapper.unmount()
+  })
+
+  it('preserves AllowlistView tab across navigation away and bare return', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: appRouter.options.routes
+    })
+    await router.push('/settings/allowlist')
+    await router.isReady()
+
+    const wrapper = mount(App, {
+      global: { plugins: [router] }
+    })
+    await flushPromises()
+    await nextTick()
+
+    await wrapper.find('#tab-job').trigger('click')
+    await flushPromises()
+    await nextTick()
+    expect(router.currentRoute.value.query.tab).toBe('job')
+
+    await router.push('/pipelines')
+    await flushPromises()
+    await nextTick()
+
+    await router.push('/settings/allowlist')
+    await flushPromises()
+    await nextTick()
+
+    expect(router.currentRoute.value.query.tab).toBe('job')
+
+    wrapper.unmount()
+  })
 })

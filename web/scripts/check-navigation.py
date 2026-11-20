@@ -133,6 +133,9 @@ def main():
             page.locator("button[type='submit']").click()
             page.wait_for_load_state("networkidle")
             page.wait_for_timeout(400)
+        page.goto(f"{base_url}/", wait_until="networkidle")
+        page.wait_for_selector("tbody tr", timeout=10000)
+        page.wait_for_timeout(200)
 
         page.evaluate(INSTALL_OBSERVERS_JS)
         tag_info = page.evaluate(TAG_SHELL_JS)
@@ -184,10 +187,51 @@ def main():
                 "isRevisit": "revisit" in label
             })
 
+        # Verify filter preservation on RunsView across rail navigation (/ -> /pipelines -> /)
+        page.locator("aside a[href='/']").click()
+        page.wait_for_url(f"{base_url}/**")
+        page.wait_for_selector("tbody tr", timeout=10000)
+        page.wait_for_timeout(150)
+        unfiltered_rows = page.locator("tbody tr").count()
+
+        filter_trigger = page.locator("[role='combobox']:has-text('Tất cả Pipeline / Job')").first
+        filter_trigger.click()
+        first_pipeline_opt = page.locator("[role='option']:has-text('Pipeline:')").first
+        chosen_label = first_pipeline_opt.inner_text().strip()
+        first_pipeline_opt.click()
+        page.wait_for_timeout(300)
+        filtered_rows = page.locator("tbody tr").count()
+        filtered_url = page.url
+
+        page.locator("aside a[href='/pipelines']").click()
+        page.wait_for_url(f"{base_url}/pipelines**")
+        page.wait_for_timeout(150)
+
+        page.locator("aside a[href='/']").click()
+        page.wait_for_url(f"{base_url}/**")
+        page.wait_for_timeout(300)
+        restored_rows = page.locator("tbody tr").count()
+        restored_url = page.url
+        filter_preserved = (
+            "target=pipeline" in restored_url
+            and restored_rows == filtered_rows
+            and filtered_rows > 0
+        )
+        filter_check = {
+            "chosenFilter": chosen_label,
+            "unfilteredRows": unfiltered_rows,
+            "filteredRows": filtered_rows,
+            "restoredRows": restored_rows,
+            "filteredUrl": filtered_url,
+            "restoredUrl": restored_url,
+            "filterPreserved": filter_preserved,
+        }
+
         browser.close()
 
     print("TAG_INFO:", json.dumps(tag_info))
     print("NAV_RESULTS:", json.dumps(results, indent=2))
+    print("FILTER_PRESERVATION:", json.dumps(filter_check))
 
     if args.fail_on_regressions:
         failures = []
@@ -198,6 +242,8 @@ def main():
                 failures.append(f"CLS > 0.01 ({r['clsMax']}) on {r['step']}")
             if r["isRevisit"] and r["skeletonSeen"]:
                 failures.append(f"Skeleton shown on cached revisit {r['step']}")
+        if not filter_check["filterPreserved"]:
+            failures.append(f"Filter not preserved on RunsView revisit: {filter_check}")
         if failures:
             print("REGRESSIONS:", failures)
             sys.exit(1)

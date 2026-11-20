@@ -1,4 +1,4 @@
-import { ref, reactive, computed, watch, type Ref, type ComputedRef } from 'vue'
+import { ref, reactive, computed, watch, onActivated, onDeactivated, getCurrentInstance, type Ref, type ComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { PagedResult } from '../api/types'
 
@@ -108,8 +108,35 @@ export function useDataTable<T>(options: UseDataTableOptions<T>) {
   const serverError = ref<string | null>(null)
 
   let isSyncingFromUrl = false
+  let isActive = true
+  const ownerRouteName = route?.name
+  const ownerRoutePath = route?.path
   let pendingUrlPushes = 0
   let fetchSeq = 0
+
+  function isOnOwnerRoute(): boolean {
+    if (!route) return true
+    if (ownerRouteName !== undefined && ownerRouteName !== null) {
+      return route.name === ownerRouteName
+    }
+    if (ownerRoutePath !== undefined) {
+      return route.path === ownerRoutePath
+    }
+    return true
+  }
+
+  function hasTableQueryInUrl(): boolean {
+    if (!syncUrl || !route) return false
+    const keys = [
+      qKey,
+      pageKey,
+      pageSizeKey,
+      sortByKey,
+      sortDirKey,
+      ...filterKeys.map((k) => `${prefix}${k}`)
+    ]
+    return keys.some((k) => route!.query[k] !== undefined)
+  }
 
   function buildNextQuery(): Record<string, string | string[] | undefined> {
     const current = route ? { ...route.query } : {}
@@ -163,7 +190,7 @@ export function useDataTable<T>(options: UseDataTableOptions<T>) {
   }
 
   function pushStateToUrl() {
-    if (!syncUrl || !router || !route || isSyncingFromUrl) return
+    if (!syncUrl || !router || !route || isSyncingFromUrl || !isActive || !isOnOwnerRoute()) return
     const nextQuery = buildNextQuery()
     if (!queriesEqual(route.query, nextQuery)) {
       pendingUrlPushes++
@@ -176,40 +203,61 @@ export function useDataTable<T>(options: UseDataTableOptions<T>) {
     }
   }
 
+  function syncFromUrl() {
+    if (!syncUrl || !route) return
+    isSyncingFromUrl = true
+    try {
+      const nextQ = readQueryString(qKey)
+      if (q.value !== nextQ) q.value = nextQ
+
+      const nextPage = normalizePage(readQueryString(pageKey) || 1)
+      if (page.value !== nextPage) page.value = nextPage
+
+      const nextSize = normalizePageSize(readQueryString(pageSizeKey), defaultPageSize)
+      if (pageSize.value !== nextSize) pageSize.value = nextSize
+
+      const nextSortBy = readQueryString(sortByKey) || options.defaultSortBy || null
+      if (sortBy.value !== nextSortBy) sortBy.value = nextSortBy
+
+      const rawDir = readQueryString(sortDirKey)
+      const nextSortDir: SortDirection =
+        rawDir === 'asc' || rawDir === 'desc' ? rawDir : options.defaultSortDir ?? null
+      if (sortDir.value !== nextSortDir) sortDir.value = nextSortDir
+
+      for (const key of filterKeys) {
+        const nextVal = readQueryString(`${prefix}${key}`) || defaultFilters[key] || ''
+        if (filters[key] !== nextVal) filters[key] = nextVal
+      }
+    } finally {
+      isSyncingFromUrl = false
+    }
+  }
+
   if (syncUrl && route) {
     watch(
       () => route.query,
       () => {
-        if (pendingUrlPushes > 0) return
-        isSyncingFromUrl = true
-        try {
-          const nextQ = readQueryString(qKey)
-          if (q.value !== nextQ) q.value = nextQ
-
-          const nextPage = normalizePage(readQueryString(pageKey) || 1)
-          if (page.value !== nextPage) page.value = nextPage
-
-          const nextSize = normalizePageSize(readQueryString(pageSizeKey), defaultPageSize)
-          if (pageSize.value !== nextSize) pageSize.value = nextSize
-
-          const nextSortBy = readQueryString(sortByKey) || options.defaultSortBy || null
-          if (sortBy.value !== nextSortBy) sortBy.value = nextSortBy
-
-          const rawDir = readQueryString(sortDirKey)
-          const nextSortDir: SortDirection =
-            rawDir === 'asc' || rawDir === 'desc' ? rawDir : options.defaultSortDir ?? null
-          if (sortDir.value !== nextSortDir) sortDir.value = nextSortDir
-
-          for (const key of filterKeys) {
-            const nextVal = readQueryString(`${prefix}${key}`) || defaultFilters[key] || ''
-            if (filters[key] !== nextVal) filters[key] = nextVal
-          }
-        } finally {
-          isSyncingFromUrl = false
-        }
+        if (pendingUrlPushes > 0 || !isActive || !isOnOwnerRoute()) return
+        syncFromUrl()
       },
       { deep: true }
     )
+  }
+
+  if (getCurrentInstance()) {
+    onDeactivated(() => {
+      isActive = false
+    })
+
+    onActivated(() => {
+      isActive = true
+      if (!isOnOwnerRoute()) return
+      if (hasTableQueryInUrl()) {
+        syncFromUrl()
+      } else {
+        pushStateToUrl()
+      }
+    })
   }
 
   // Reset page to 1 when search or filters change interactively
@@ -400,6 +448,7 @@ export function useDataTable<T>(options: UseDataTableOptions<T>) {
     watch(
       [q, page, pageSize, sortBy, sortDir, () => filterKeys.map((k) => filters[k])],
       () => {
+        if (!isActive || !isOnOwnerRoute()) return
         load().catch(() => {})
       },
       { immediate: options.immediate ?? false }
