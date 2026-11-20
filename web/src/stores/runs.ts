@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Run, RunDetail, Pipeline, GetRunsParams, PagedResult } from '../api/types'
+import type { Run, RunDetail, Pipeline, GetRunsParams, PagedResult, TriggerRunOptions } from '../api/types'
 import { getApi } from '../api'
 import { runJob as apiRunJob } from '../api/runs-job'
 import { createSwrChannel, type SwrOptions } from '../utils/swr'
@@ -165,9 +165,11 @@ export const useRunsStore = defineStore('runs', () => {
     return detail
   }
 
-  async function triggerRun(pipelineId: number): Promise<Run> {
+  async function triggerRun(pipelineId: number, options?: TriggerRunOptions): Promise<Run> {
     const api = getApi()
-    const newRun = await api.triggerRun(pipelineId)
+    const newRun = options?.skipSteps?.length
+      ? await api.triggerRun(pipelineId, options)
+      : await api.triggerRun(pipelineId)
     const exists = runs.value.some((r) => r.id === newRun.id)
     if (!exists) {
       runs.value.unshift(newRun)
@@ -175,8 +177,10 @@ export const useRunsStore = defineStore('runs', () => {
     return newRun
   }
 
-  async function runJob(jobId: number): Promise<Run> {
-    const newRun = await apiRunJob(jobId)
+  async function runJob(jobId: number, options?: TriggerRunOptions): Promise<Run> {
+    const newRun = options?.skipSteps?.length
+      ? await apiRunJob(jobId, options)
+      : await apiRunJob(jobId)
     const exists = runs.value.some((r) => r.id === newRun.id)
     if (!exists) {
       runs.value.unshift(newRun)
