@@ -105,21 +105,21 @@ export const useJobsStore = defineStore('jobs', () => {
     }
   }
 
-  async function validateJob(input: JobInput): Promise<JobValidation> {
+  async function validateJob(input: JobInput, existingId?: number | null): Promise<JobValidation> {
     const api = getApi()
     validating.value = true
     try {
-      return await api.validateJob(input)
+      return await api.validateJob(input, existingId)
     } finally {
       validating.value = false
     }
   }
 
-  async function previewJob(input: JobInput): Promise<JobPreview> {
+  async function previewJob(input: JobInput, existingId?: number | null): Promise<JobPreview> {
     const api = getApi()
     previewing.value = true
     try {
-      return await api.previewJob(input)
+      return await api.previewJob(input, existingId)
     } finally {
       previewing.value = false
     }

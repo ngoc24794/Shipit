@@ -140,15 +140,15 @@ internal static partial class JobEndpoints
             }
         });
 
-        jobs.MapPost("validate", async (JobInput input, ShipitDbContext db, IJobAllowList allowList, CancellationToken ct) =>
+        jobs.MapPost("validate", async (long? existingId, JobInput input, ShipitDbContext db, IJobAllowList allowList, CancellationToken ct) =>
         {
-            var errors = await ValidateAsync(input, db, allowList, existingId: null, isValidateOnly: true, ct);
+            var errors = await ValidateAsync(input, db, allowList, existingId: existingId, isValidateOnly: true, ct);
             return Results.Ok(new JobValidationDto(!errors.Any, errors.ToDictionary()));
         });
 
-        jobs.MapPost("preview", async (JobInput input, ShipitDbContext db, IJobAllowList allowList, CancellationToken ct) =>
+        jobs.MapPost("preview", async (long? existingId, JobInput input, ShipitDbContext db, IJobAllowList allowList, CancellationToken ct) =>
         {
-            var errors = await ValidateAsync(input, db, allowList, existingId: null, isValidateOnly: true, ct);
+            var errors = await ValidateAsync(input, db, allowList, existingId: existingId, isValidateOnly: true, ct);
             if (errors.Any)
             {
                 return Results.Ok(new JobPreviewDto(errors.ToDictionary(), []));

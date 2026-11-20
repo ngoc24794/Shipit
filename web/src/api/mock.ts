@@ -1321,7 +1321,7 @@ export class MockShipitApi implements ShipitApi {
     return JSON.parse(JSON.stringify(job))
   }
 
-  async validateJob(input: JobInput): Promise<JobValidation> {
+  async validateJob(input: JobInput, existingId?: number | null): Promise<JobValidation> {
     await delay()
     this.checkAuth()
     const errors: Record<string, string[]> = {}
@@ -1331,6 +1331,8 @@ export class MockShipitApi implements ShipitApi {
       errors.name = ['Vui lòng nhập tên Job']
     } else if (name.length > 253 || !/^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$/.test(name)) {
       errors.name = ['Tên Job phải tuân theo chuẩn DNS-1123 subdomain (1-253 ký tự, chữ thường, số, dấu gạch ngang hoặc chấm)']
+    } else if (this.jobs.some((j) => j.id !== existingId && j.name === name)) {
+      errors.name = ['Tên Job đã tồn tại']
     }
 
     if (!input.gitUrl || !input.gitUrl.trim()) {
@@ -1461,10 +1463,10 @@ export class MockShipitApi implements ShipitApi {
     }
   }
 
-  async previewJob(input: JobInput): Promise<JobPreview> {
+  async previewJob(input: JobInput, existingId?: number | null): Promise<JobPreview> {
     await delay()
     this.checkAuth()
-    const validation = await this.validateJob(input)
+    const validation = await this.validateJob(input, existingId)
     if (!validation.valid || Object.keys(validation.errors).length > 0) {
       return {
         errors: validation.errors,
@@ -1605,7 +1607,7 @@ export class MockShipitApi implements ShipitApi {
     const idx = this.jobs.findIndex((j) => j.id === id)
     if (idx === -1) throw new ApiError(404, 'Không tìm thấy Job')
 
-    const validation = await this.validateJob(input)
+    const validation = await this.validateJob(input, id)
     if (!validation.valid) {
       throw new ApiError(400, 'Dữ liệu Job không hợp lệ', {
         title: 'Validation failed',
