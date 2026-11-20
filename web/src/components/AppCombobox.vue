@@ -93,7 +93,9 @@ const popupStyle = computed<CSSProperties>(() => {
     left: `${floatingX.value}px`,
     zIndex: 9999,
     maxHeight: '260px',
-    ...(triggerWidth ? { width: `${triggerWidth}px`, minWidth: `${triggerWidth}px` } : {})
+    width: 'max-content',
+    maxWidth: 'min(420px, calc(100vw - 16px))',
+    ...(triggerWidth ? { minWidth: `${triggerWidth}px` } : {})
   }
 })
 
@@ -510,7 +512,11 @@ watch(filteredOptions, () => {
             {{ item.label }}
           </AppTag>
         </template>
-        <span v-else-if="!multiple && selectedSingleOption" class="truncate text-fg-strong">
+        <span
+          v-else-if="!multiple && selectedSingleOption"
+          class="truncate text-fg-strong"
+          :title="selectedSingleOption.label"
+        >
           {{ selectedSingleOption.label }}
         </span>
         <span v-else class="truncate text-fg-dim">

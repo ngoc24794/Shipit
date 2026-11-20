@@ -171,7 +171,7 @@ onMounted(() => {
       >
         <DataToolbar
           :q="table.q.value"
-          search-placeholder="Tìm tên, host, người dùng, khoá SSH..."
+          search-placeholder="Tìm tên, host, user..."
           :start-item="table.startItem.value"
           :end-item="table.endItem.value"
           :total="table.total.value"

@@ -415,7 +415,7 @@ registerMany([
       >
         <DataToolbar
           :q="table.q.value"
-          search-placeholder="Tìm theo tên, tag, image, mã..."
+          search-placeholder="Tìm tên, tag..."
           :filters="toolbarFilters"
           :filter-values="table.filters"
           :start-item="table.startItem.value"

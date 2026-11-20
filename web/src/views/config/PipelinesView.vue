@@ -220,7 +220,7 @@ onMounted(() => {
       >
         <DataToolbar
           :q="table.q.value"
-          search-placeholder="Tìm tên, git, image, đích deploy..."
+          search-placeholder="Tìm tên, git, image..."
           :filters="toolbarFilters"
           :filter-values="table.filters"
           :start-item="table.startItem.value"
@@ -277,7 +277,7 @@ onMounted(() => {
                 sort-key="lastRun"
                 :sort-by="table.sortBy.value"
                 :sort-dir="table.sortDir.value"
-                class="!px-3"
+                class="!px-3 w-[185px]"
                 @sort="table.toggleSort"
               />
               <th scope="col" class="py-3 !px-3 text-right whitespace-nowrap">Thao tác</th>
