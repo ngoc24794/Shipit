@@ -25,6 +25,7 @@ import { useJobsAllowStore } from '../../stores/jobsAllow'
 import { useConfigSlavesStore } from '../../stores/configSlaves'
 import { useConfigCredentialsStore } from '../../stores/configCredentials'
 import { useToast } from '../../composables/useToast'
+import { useLinkedFields } from '../../composables/useLinkedFields'
 import type { Job, JobInput, JobTaskInput, JobPreviewTask } from '../../api/types'
 import { ApiError } from '../../api/client'
 
@@ -179,6 +180,36 @@ const form = ref<{
 const formErrors = ref<Record<string, string[]>>({})
 const previewTasks = ref<JobPreviewTask[]>([])
 
+function clearSyncedFieldErrors(keys: string[]) {
+  let changed = false
+  const nextErrors = { ...formErrors.value }
+  for (const key of keys) {
+    if (nextErrors[key] && String((form.value as Record<string, unknown>)[key] ?? '').trim()) {
+      delete nextErrors[key]
+      changed = true
+    }
+  }
+  if (!changed) return
+  formErrors.value = nextErrors
+  const nextFlags = new Set(stepErrorFlags.value)
+  for (let i = 0; i < 3; i++) {
+    const hasStepError = (STEP_FIELDS[i] || []).some((f) => Boolean(nextErrors[f]))
+    if (!hasStepError) {
+      nextFlags.delete(i)
+    }
+  }
+  stepErrorFlags.value = nextFlags
+}
+
+const { reset: resetLinkedFields } = useLinkedFields(
+  form,
+  ['name', 'imageName', 'containerName'] as const,
+  {
+    suspended: () => isHydrating.value || pageLoading.value,
+    onSync: (syncedKeys) => clearSyncedFieldErrors(syncedKeys)
+  }
+)
+
 const gitCredentialOptions = computed(() => {
   return credStore.credentials
     .filter((c) => c.kind === 'git_token')
@@ -314,6 +345,7 @@ onMounted(async () => {
     toast.error(err.message || 'Lỗi khi tải dữ liệu khởi tạo')
   } finally {
     await nextTick()
+    resetLinkedFields()
     isHydrating.value = false
     pageLoading.value = false
     if (currentStep.value === 4) {

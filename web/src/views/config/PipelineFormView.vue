@@ -22,6 +22,7 @@ import { useConfigCredentialsStore } from '../../stores/configCredentials'
 import { useConfigDeployTargetsStore } from '../../stores/configDeployTargets'
 import { useToast } from '../../composables/useToast'
 import { useUnsavedChangesGuard } from '../../composables/useUnsavedChangesGuard'
+import { useLinkedFields } from '../../composables/useLinkedFields'
 import type { Pipeline, PipelineInput } from '../../api/types'
 import { ApiError } from '../../api/client'
 
@@ -149,6 +150,36 @@ const form = ref<{
 })
 
 const formErrors = ref<Record<string, string>>({})
+
+function clearSyncedFieldErrors(keys: string[]) {
+  let changed = false
+  const nextErrors = { ...formErrors.value }
+  for (const key of keys) {
+    if (nextErrors[key] && String((form.value as Record<string, unknown>)[key] ?? '').trim()) {
+      delete nextErrors[key]
+      changed = true
+    }
+  }
+  if (!changed) return
+  formErrors.value = nextErrors
+  const nextFlags = new Set(stepErrorFlags.value)
+  for (let i = 0; i < 4; i++) {
+    const hasStepError = (STEP_FIELDS[i] || []).some((f) => Boolean(nextErrors[f]))
+    if (!hasStepError) {
+      nextFlags.delete(i)
+    }
+  }
+  stepErrorFlags.value = nextFlags
+}
+
+const { reset: resetLinkedFields } = useLinkedFields(
+  form,
+  ['name', 'imageName', 'deployDeployment'] as const,
+  {
+    suspended: () => pageLoading.value,
+    onSync: (syncedKeys) => clearSyncedFieldErrors(syncedKeys)
+  }
+)
 
 function takeSnapshot() {
   initialSnapshot.value = JSON.stringify(form.value)
@@ -495,6 +526,7 @@ onMounted(async () => {
   } catch {
     if (isEditing.value) notFound.value = true
   } finally {
+    resetLinkedFields()
     pageLoading.value = false
     takeSnapshot()
   }
