@@ -813,6 +813,7 @@ components:
         jobId: { type: integer, format: int64, nullable: true }
         kind: { type: string, enum: [pipeline, job] }
         status: { $ref: '#/components/schemas/RunStatus' }
+        gitBranch: { type: string, nullable: true, description: Git branch or tag used for checkout }
         tag: { type: string, nullable: true, description: Short git sha, known after checkout }
         image: { type: string, nullable: true }
         failureReason: { type: string, nullable: true, description: 'e.g. step failed, or "interrupted"' }

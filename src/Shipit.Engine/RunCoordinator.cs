@@ -29,25 +29,26 @@ public sealed class RunCoordinator(
     private readonly Channel<long> _queue = Channel.CreateUnbounded<long>();
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _inFlight = new();
 
-    public async Task<Run> TriggerAsync(long pipelineId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null)
+    public async Task<Run> TriggerAsync(long pipelineId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null, string? gitBranch = null)
     {
         SkipStepsValidator.ValidateOrThrow(skipSteps, isJob: false);
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        if (!await db.Pipelines.AnyAsync(p => p.Id == pipelineId, cancellationToken).ConfigureAwait(false))
-        {
-            throw new PipelineNotFoundException(pipelineId);
-        }
+        var pipeline = await db.Pipelines.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == pipelineId, cancellationToken).ConfigureAwait(false)
+            ?? throw new PipelineNotFoundException(pipelineId);
 
         if (await HasActiveRunAsync(db, pipelineId, cancellationToken).ConfigureAwait(false))
         {
             throw new RunConflictException(pipelineId);
         }
 
+        var effectiveBranch = string.IsNullOrWhiteSpace(gitBranch) ? pipeline.GitBranch : gitBranch.Trim();
         var run = new Run
         {
             PipelineId = pipelineId,
             Status = RunStatus.Queued,
+            GitBranch = effectiveBranch,
             CreatedAt = time.GetUtcNow().UtcDateTime,
             Steps = PipelineStepOrder.Select(n => new RunStep
             {
@@ -77,15 +78,14 @@ public sealed class RunCoordinator(
         return run;
     }
 
-    public async Task<Run> TriggerJobAsync(long jobId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null)
+    public async Task<Run> TriggerJobAsync(long jobId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null, string? gitBranch = null)
     {
         SkipStepsValidator.ValidateOrThrow(skipSteps, isJob: true);
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
-        if (!await db.Jobs.AnyAsync(j => j.Id == jobId, cancellationToken).ConfigureAwait(false))
-        {
-            throw new JobNotFoundException(jobId);
-        }
+        var job = await db.Jobs.AsNoTracking()
+            .FirstOrDefaultAsync(j => j.Id == jobId, cancellationToken).ConfigureAwait(false)
+            ?? throw new JobNotFoundException(jobId);
 
         if (await HasActiveJobRunAsync(db, jobId, cancellationToken).ConfigureAwait(false))
         {
@@ -98,10 +98,12 @@ public sealed class RunCoordinator(
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
         var skipRunJob = skipSteps?.Contains(StepName.RunJob) == true;
+        var effectiveBranch = string.IsNullOrWhiteSpace(gitBranch) ? job.GitBranch : gitBranch.Trim();
         var run = new Run
         {
             JobId = jobId,
             Status = RunStatus.Queued,
+            GitBranch = effectiveBranch,
             CreatedAt = time.GetUtcNow().UtcDateTime,
             Steps = JobStepOrder.Select(n => new RunStep
             {

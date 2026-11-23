@@ -11,7 +11,7 @@ namespace Shipit.Ssh;
 public static class RemoteCommandBuilder
 {
     private static readonly Regex BranchRegex =
-        new(@"^[A-Za-z0-9._/-]+$", RegexOptions.Compiled);
+        new(@"^[A-Za-z0-9._/+-]+$", RegexOptions.Compiled);
 
     private static readonly Regex RegistryHostRegex =
         new(@"^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*(:[0-9]{1,5})?$", RegexOptions.Compiled);
@@ -95,7 +95,7 @@ public static class RemoteCommandBuilder
             "export SHIPIT_GIT_TOKEN",
             "export GIT_ASKPASS=\"$ASKPASS\"",
             "export GIT_TERMINAL_PROMPT=0",
-            $"git clone --depth 1 --branch {Quote(branch)} -- {Quote(repoUrl)} {Quote(workDir)}",
+            $"git clone --depth 1 --branch {Quote(branch)} -- {Quote(repoUrl)} {Quote(workDir)} || (rm -rf {Quote(workDir)} && git init {Quote(workDir)} && git -C {Quote(workDir)} remote add origin -- {Quote(repoUrl)} && git -C {Quote(workDir)} fetch --depth 1 origin -- {Quote(branch)} && git -C {Quote(workDir)} checkout FETCH_HEAD)",
             "STATUS=$?",
             "rm -f \"$ASKPASS\"",
             "unset SHIPIT_GIT_TOKEN",
@@ -257,11 +257,12 @@ public static class RemoteCommandBuilder
         }
     }
 
-    private static void ValidateBranch(string branch)
+    public static void ValidateBranch(string branch)
     {
         if (string.IsNullOrWhiteSpace(branch) ||
             !BranchRegex.IsMatch(branch) ||
             branch.StartsWith("-") ||
+            branch.StartsWith("+") ||
             branch.Contains(".."))
         {
             throw new ArgumentException($"Invalid branch name: '{branch}'", nameof(branch));

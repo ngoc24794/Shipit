@@ -18,14 +18,14 @@ public interface IRunCoordinator
     /// </summary>
     /// <exception cref="PipelineNotFoundException">No such pipeline.</exception>
     /// <exception cref="RunConflictException">The pipeline already has an active run.</exception>
-    Task<Run> TriggerAsync(long pipelineId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null);
+    Task<Run> TriggerAsync(long pipelineId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null, string? gitBranch = null);
 
     /// <summary>
     /// Creates a queued run for a Job (with its pending or pre-skipped steps and tasks) and schedules it.
     /// </summary>
     /// <exception cref="JobNotFoundException">No such job.</exception>
     /// <exception cref="JobRunConflictException">The job already has an active run.</exception>
-    Task<Run> TriggerJobAsync(long jobId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null);
+    Task<Run> TriggerJobAsync(long jobId, CancellationToken cancellationToken = default, IReadOnlySet<StepName>? skipSteps = null, string? gitBranch = null);
 
     /// <summary>
     /// Cancels a queued or currently executing run.

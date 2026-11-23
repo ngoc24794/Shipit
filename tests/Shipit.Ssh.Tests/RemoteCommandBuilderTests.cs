@@ -60,14 +60,32 @@ public class RemoteCommandBuilderTests
         Assert.DoesNotContain(token, cmd.CommandText);
         Assert.Equal(token, cmd.StdinSecret);
 
-        // Must contain git clone with oauth2 and askpass setup
+        // Must contain git clone with oauth2 and askpass setup and tag/ref fetch fallback
         Assert.Contains("git clone --depth 1 --branch 'feature/my-branch' -- 'https://github.com/org/repo.git' '/tmp/shipit/run-1'", cmd.CommandText);
+        Assert.Contains("git -C '/tmp/shipit/run-1' fetch --depth 1 origin -- 'feature/my-branch'", cmd.CommandText);
+        Assert.Contains("git -C '/tmp/shipit/run-1' checkout FETCH_HEAD", cmd.CommandText);
         Assert.Contains("GIT_ASKPASS", cmd.CommandText);
         Assert.Contains("GIT_TERMINAL_PROMPT=0", cmd.CommandText);
         Assert.Contains("chmod 700", cmd.CommandText);
         Assert.Contains("oauth2", cmd.CommandText);
         Assert.Contains("rm -f \"$ASKPASS\"", cmd.CommandText);
         Assert.Contains("unset SHIPIT_GIT_TOKEN", cmd.CommandText);
+    }
+
+    [Theory]
+    [InlineData("v1.2.3")]
+    [InlineData("refs/tags/v1.2.3")]
+    [InlineData("v1.0.0+build.1")]
+    public void Clone_ValidTagOrRef_BuildsCloneAndFetchFallback(string refName)
+    {
+        var cmd = RemoteCommandBuilder.Clone(
+            "https://github.com/org/repo.git",
+            refName,
+            "/tmp/shipit/run-9",
+            "token");
+
+        Assert.Contains($"--branch '{refName}'", cmd.CommandText);
+        Assert.Contains($"fetch --depth 1 origin -- '{refName}'", cmd.CommandText);
     }
 
     [Theory]

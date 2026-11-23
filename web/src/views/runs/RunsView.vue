@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Play, RotateCw, PlayCircle, Search, Check, ChevronDown } from 'lucide-vue-next'
+import { Play, RotateCw, PlayCircle, Search, Check, ChevronDown, GitBranch } from 'lucide-vue-next'
 import AppTable from '../../components/AppTable.vue'
 
 defineOptions({ name: 'RunsView' })
 import AppButton from '../../components/AppButton.vue'
 import AppDialog from '../../components/AppDialog.vue'
+import AppInput from '../../components/AppInput.vue'
 import RunStepsSelector from '../../components/RunStepsSelector.vue'
 import type { StepName } from '../../api/types'
 import AppField from '../../components/AppField.vue'
@@ -300,6 +301,22 @@ onBeforeUnmount(() => {
 })
 
 const triggerSkipSteps = ref<StepName[]>([])
+const triggerGitBranch = ref('')
+
+const selectedTriggerDefaultBranch = computed(() => {
+  if (!triggerTargetId.value) return ''
+  if (triggerKind.value === 'job') {
+    return runsStore.jobs.find((j) => j.id === triggerTargetId.value)?.gitBranch ?? ''
+  }
+  return runsStore.pipelines.find((p) => p.id === triggerTargetId.value)?.gitBranch ?? ''
+})
+
+watch(
+  () => [triggerKind.value, triggerTargetId.value] as const,
+  () => {
+    triggerGitBranch.value = selectedTriggerDefaultBranch.value
+  }
+)
 
 function openTriggerDialog() {
   triggerError.value = null
@@ -319,6 +336,7 @@ function openTriggerDialog() {
     triggerKind.value = 'pipeline'
     triggerTargetId.value = runsStore.pipelines[0]?.id ?? null
   }
+  triggerGitBranch.value = selectedTriggerDefaultBranch.value
   showTriggerDialog.value = true
 }
 
@@ -336,7 +354,12 @@ async function handleTriggerRun() {
   triggerError.value = null
 
   try {
-    const opts = triggerSkipSteps.value.length > 0 ? { skipSteps: triggerSkipSteps.value } : undefined
+    const branch = triggerGitBranch.value.trim()
+    const hasBranchOverride = Boolean(branch && branch !== selectedTriggerDefaultBranch.value)
+    const rawOpts: { skipSteps?: StepName[]; gitBranch?: string } = {}
+    if (triggerSkipSteps.value.length > 0) rawOpts.skipSteps = triggerSkipSteps.value
+    if (hasBranchOverride) rawOpts.gitBranch = branch
+    const opts = Object.keys(rawOpts).length > 0 ? rawOpts : undefined
     const newRun =
       triggerKind.value === 'job'
         ? await (opts ? runsStore.runJob(targetId, opts) : runsStore.runJob(targetId))
@@ -761,6 +784,30 @@ registerMany([
                   </ul>
                 </div>
               </div>
+            </template>
+          </AppField>
+
+          <AppField
+            label="Nhánh / Tag Git"
+            :help="
+              selectedTriggerDefaultBranch
+                ? `Mặc định: ${selectedTriggerDefaultBranch}. Có thể nhập tên nhánh hoặc git tag.`
+                : 'Có thể nhập tên nhánh hoặc git tag.'
+            "
+          >
+            <template #default="{ id, ariaDescribedby }">
+              <AppInput
+                :id="id"
+                v-model="triggerGitBranch"
+                :aria-describedby="ariaDescribedby"
+                :disabled="isTriggering"
+                :placeholder="selectedTriggerDefaultBranch || 'main'"
+                data-testid="runs-trigger-branch"
+              >
+                <template #prefix>
+                  <GitBranch class="w-3.5 h-3.5 text-fg-dim" aria-hidden="true" />
+                </template>
+              </AppInput>
             </template>
           </AppField>
 

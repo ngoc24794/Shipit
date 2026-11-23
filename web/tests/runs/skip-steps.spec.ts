@@ -127,6 +127,35 @@ describe('Run Skip Steps (S2)', () => {
       expect(wrapper.emitted('confirm')).toEqual([[['runjob']]])
       wrapper.unmount()
     })
+
+    it('pre-fills defaultBranch and emits edited branch or tag on confirm', async () => {
+      const wrapper = mount(RunDialog, {
+        props: {
+          modelValue: false,
+          kind: 'pipeline',
+          targetName: 'avina-api',
+          defaultBranch: 'dev'
+        },
+        attachTo: document.body
+      })
+      await wrapper.setProps({ modelValue: true })
+      await nextTick()
+
+      const input = document.body.querySelector('[data-testid="run-dialog-branch"] input') as HTMLInputElement
+      expect(input).toBeTruthy()
+      expect(input.value).toBe('dev')
+
+      input.value = 'v1.2.0'
+      input.dispatchEvent(new Event('input'))
+      await nextTick()
+
+      const confirmBtn = document.body.querySelector('[data-testid="run-dialog-confirm"]') as HTMLButtonElement
+      confirmBtn.click()
+      await nextTick()
+
+      expect(wrapper.emitted('confirm')).toEqual([[[], 'v1.2.0']])
+      wrapper.unmount()
+    })
   })
 
   describe('HttpShipitApi request body', () => {
@@ -172,6 +201,24 @@ describe('Run Skip Steps (S2)', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ skipSteps: ['push', 'runjob'] })
+        })
+      )
+
+      await api.triggerRun(5, { gitBranch: 'v1.0.0' })
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/pipelines/5/runs',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ gitBranch: 'v1.0.0' })
+        })
+      )
+
+      await api.triggerJobRun(7, { skipSteps: ['runjob'], gitBranch: 'release/2.0' })
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/jobs/7/runs',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ skipSteps: ['runjob'], gitBranch: 'release/2.0' })
         })
       )
     })

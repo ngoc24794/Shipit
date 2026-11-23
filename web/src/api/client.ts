@@ -320,10 +320,17 @@ export class HttpShipitApi implements ShipitApi {
   }
 
   async triggerRun(pipelineId: number, options?: TriggerRunOptions): Promise<Run> {
-    const skipSteps = options?.skipSteps
+    const payload: Record<string, unknown> = {}
+    if (options?.skipSteps && options.skipSteps.length > 0) {
+      payload.skipSteps = options.skipSteps
+    }
+    const gitBranch = options?.gitBranch?.trim()
+    if (gitBranch) {
+      payload.gitBranch = gitBranch
+    }
     const init: RequestInit = { method: 'POST' }
-    if (skipSteps && skipSteps.length > 0) {
-      init.body = JSON.stringify({ skipSteps })
+    if (Object.keys(payload).length > 0) {
+      init.body = JSON.stringify(payload)
     }
     return this.request<Run>(`/api/pipelines/${pipelineId}/runs`, init)
   }
@@ -481,10 +488,17 @@ export class HttpShipitApi implements ShipitApi {
   }
 
   async triggerJobRun(id: number, options?: TriggerRunOptions): Promise<Run> {
-    const skipSteps = options?.skipSteps
+    const payload: Record<string, unknown> = {}
+    if (options?.skipSteps && options.skipSteps.length > 0) {
+      payload.skipSteps = options.skipSteps
+    }
+    const gitBranch = options?.gitBranch?.trim()
+    if (gitBranch) {
+      payload.gitBranch = gitBranch
+    }
     const init: RequestInit = { method: 'POST' }
-    if (skipSteps && skipSteps.length > 0) {
-      init.body = JSON.stringify({ skipSteps })
+    if (Object.keys(payload).length > 0) {
+      init.body = JSON.stringify(payload)
     }
     return this.request<Run>(`/api/jobs/${id}/runs`, init)
   }

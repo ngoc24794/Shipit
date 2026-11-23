@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import {
   Workflow,
   Plus,
+  Copy,
   Pencil,
   Trash2,
   Play,
@@ -118,6 +119,10 @@ function navigateToEdit(pipeline: Pipeline) {
   router.push(`/pipelines/${pipeline.id}/edit`)
 }
 
+function navigateToDuplicate(pipeline: Pipeline) {
+  router.push(`/pipelines/new?duplicateFrom=${pipeline.id}`)
+}
+
 function promptDelete(pipeline: Pipeline) {
   deletingPipeline.value = pipeline
   isConfirmOpen.value = true
@@ -154,13 +159,17 @@ function handleTriggerRun(pipeline: Pipeline) {
   isRunDialogOpen.value = true
 }
 
-async function confirmTriggerRun(skipSteps: StepName[]) {
+async function confirmTriggerRun(skipSteps: StepName[], gitBranch?: string) {
   if (!runningPipeline.value) return
   runDialogLoading.value = true
   runDialogError.value = null
   try {
-    const opts = skipSteps.length > 0 ? { skipSteps } : undefined
-    const run = opts
+    const branch = gitBranch?.trim()
+    const hasBranchOverride = Boolean(branch && branch !== runningPipeline.value.gitBranch)
+    const opts: { skipSteps?: StepName[]; gitBranch?: string } = {}
+    if (skipSteps.length > 0) opts.skipSteps = skipSteps
+    if (hasBranchOverride) opts.gitBranch = branch
+    const run = Object.keys(opts).length > 0
       ? await store.triggerRun(runningPipeline.value.id, opts)
       : await store.triggerRun(runningPipeline.value.id)
     isRunDialogOpen.value = false
@@ -315,7 +324,7 @@ onActivated(() => {
                 class="!px-3 w-[172px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="py-3 !px-3 w-[260px] text-right whitespace-nowrap">Thao tác</th>
+              <th scope="col" class="py-3 !px-3 w-[350px] text-right whitespace-nowrap">Thao tác</th>
             </tr>
           </template>
 
@@ -379,6 +388,17 @@ onActivated(() => {
                   variant="ghost"
                   size="sm"
                   class="whitespace-nowrap shrink-0"
+                  aria-label="Nhân bản pipeline"
+                  title="Nhân bản pipeline"
+                  @click="navigateToDuplicate(pipeline)"
+                >
+                  <Copy class="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Nhân bản</span>
+                </AppButton>
+                <AppButton
+                  variant="ghost"
+                  size="sm"
+                  class="whitespace-nowrap shrink-0"
                   aria-label="Sửa pipeline"
                   @click="navigateToEdit(pipeline)"
                 >
@@ -429,6 +449,7 @@ onActivated(() => {
       v-model="isRunDialogOpen"
       kind="pipeline"
       :target-name="runningPipeline?.name ?? ''"
+      :default-branch="runningPipeline?.gitBranch ?? ''"
       :loading="runDialogLoading"
       :error="runDialogError"
       @confirm="confirmTriggerRun"

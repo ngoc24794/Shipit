@@ -389,6 +389,9 @@ namespace Shipit.Data.Migrations
                     b.Property<DateTime?>("FinishedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("GitBranch")
+                        .HasColumnType("text");
+
                     b.Property<string>("Image")
                         .HasColumnType("text");
 

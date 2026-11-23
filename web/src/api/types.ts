@@ -72,6 +72,7 @@ export type StepStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped
 
 export interface TriggerRunOptions {
   skipSteps?: StepName[]
+  gitBranch?: string
 }
 
 export interface Run {
@@ -80,6 +81,7 @@ export interface Run {
   jobId?: number | null
   kind?: 'pipeline' | 'job'
   status: RunStatus
+  gitBranch?: string | null
   tag?: string | null
   image?: string | null
   failureReason?: string | null

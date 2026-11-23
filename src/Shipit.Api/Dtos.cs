@@ -67,6 +67,7 @@ public sealed record RunDto(
     long? JobId,
     string Kind,
     string Status,
+    string? GitBranch,
     string? Tag,
     string? Image,
     string? FailureReason,
@@ -76,7 +77,7 @@ public sealed record RunDto(
 
 public sealed record RunStepDto(string Name, string Status, DateTime? StartedAt, DateTime? FinishedAt);
 
-public sealed record TriggerRunRequest(IReadOnlyList<string>? SkipSteps = null);
+public sealed record TriggerRunRequest(IReadOnlyList<string>? SkipSteps = null, string? GitBranch = null);
 
 public sealed record RunDetailDto(
     long Id,
@@ -84,6 +85,7 @@ public sealed record RunDetailDto(
     long? JobId,
     string Kind,
     string Status,
+    string? GitBranch,
     string? Tag,
     string? Image,
     string? FailureReason,
@@ -267,11 +269,11 @@ internal static class Mapping
         new(c.Id, c.Name, Wire.Of(c.Kind), c.Username, !string.IsNullOrEmpty(c.ProtectedValue), Wire.Utc(c.UpdatedAt));
 
     public static RunDto ToDto(this Run r) => new(
-        r.Id, r.PipelineId, r.JobId, Wire.KindOf(r), Wire.Of(r.Status), r.Tag, r.Image, r.FailureReason,
+        r.Id, r.PipelineId, r.JobId, Wire.KindOf(r), Wire.Of(r.Status), r.GitBranch, r.Tag, r.Image, r.FailureReason,
         Wire.Utc(r.CreatedAt), Wire.Utc(r.StartedAt), Wire.Utc(r.FinishedAt));
 
     public static RunDetailDto ToDetailDto(this Run r) => new(
-        r.Id, r.PipelineId, r.JobId, Wire.KindOf(r), Wire.Of(r.Status), r.Tag, r.Image, r.FailureReason,
+        r.Id, r.PipelineId, r.JobId, Wire.KindOf(r), Wire.Of(r.Status), r.GitBranch, r.Tag, r.Image, r.FailureReason,
         Wire.Utc(r.CreatedAt), Wire.Utc(r.StartedAt), Wire.Utc(r.FinishedAt),
         r.Steps.OrderBy(s => s.Name)
             .Select(s => new RunStepDto(Wire.Of(s.Name), Wire.Of(s.Status), Wire.Utc(s.StartedAt), Wire.Utc(s.FinishedAt)))

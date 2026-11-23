@@ -10,6 +10,7 @@ public class Run
     public long? JobId { get; set; }
     public Job? Job { get; set; }
     public RunStatus Status { get; set; }
+    public string? GitBranch { get; set; }
     public string? Tag { get; set; }
     public string? Image { get; set; }
     public string? FailureReason { get; set; }

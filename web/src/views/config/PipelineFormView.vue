@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Workflow,
+  Copy,
   GitBranch,
   Hammer,
   Package,
@@ -21,7 +22,7 @@ import { useConfigCredentialsStore } from '../../stores/configCredentials'
 import { useConfigDeployTargetsStore } from '../../stores/configDeployTargets'
 import { useToast } from '../../composables/useToast'
 import { useUnsavedChangesGuard } from '../../composables/useUnsavedChangesGuard'
-import type { PipelineInput } from '../../api/types'
+import type { Pipeline, PipelineInput } from '../../api/types'
 import { ApiError } from '../../api/client'
 
 const route = useRoute()
@@ -39,6 +40,22 @@ const pipelineId = computed(() => {
   return Number.isInteger(n) && n > 0 ? n : NaN
 })
 const isEditing = computed(() => route.params.id !== undefined)
+
+const duplicateFromRaw = computed(() => {
+  if (isEditing.value) return null
+  const raw = route.query.duplicateFrom
+  if (raw === undefined || raw === null || raw === '') return null
+  return Array.isArray(raw) ? raw[0] : raw
+})
+
+const duplicateFromId = computed(() => {
+  const raw = duplicateFromRaw.value
+  if (raw === null) return null
+  const n = Number(raw)
+  return Number.isInteger(n) && n > 0 ? n : NaN
+})
+
+const duplicatedFromName = ref<string | null>(null)
 
 const pageLoading = ref(false)
 const notFound = ref(false)
@@ -404,6 +421,31 @@ async function handleSave() {
   }
 }
 
+function populateFormFromPipeline(pipeline: Pipeline, nameOverride?: string) {
+  form.value = {
+    name: nameOverride ?? pipeline.name,
+    gitUrl: pipeline.gitUrl,
+    gitBranch: pipeline.gitBranch || 'main',
+    gitCredentialId: pipeline.gitCredentialId,
+    slaveId: pipeline.slaveId,
+    dockerfilePath: pipeline.dockerfilePath || 'Dockerfile',
+    buildContext: pipeline.buildContext ?? '',
+    imageName: pipeline.imageName,
+    registryHost: pipeline.registryHost,
+    deployRegistryHost: pipeline.deployRegistryHost ?? '',
+    registryCredentialId: pipeline.registryCredentialId ?? '',
+    deployNamespace: pipeline.deployNamespace,
+    deployDeployment: pipeline.deployDeployment,
+    deployContainer: pipeline.deployContainer
+  }
+}
+
+function applyCreateDefaults() {
+  form.value.gitCredentialId = gitCredentials.value[0]?.id ?? ''
+  form.value.slaveId = slaveStore.slaves[0]?.id ?? ''
+  form.value.registryCredentialId = registryCredentials.value[0]?.id ?? ''
+}
+
 onMounted(async () => {
   pageLoading.value = true
   try {
@@ -424,26 +466,31 @@ onMounted(async () => {
         notFound.value = true
         return
       }
-      form.value = {
-        name: pipeline.name,
-        gitUrl: pipeline.gitUrl,
-        gitBranch: pipeline.gitBranch || 'main',
-        gitCredentialId: pipeline.gitCredentialId,
-        slaveId: pipeline.slaveId,
-        dockerfilePath: pipeline.dockerfilePath || 'Dockerfile',
-        buildContext: pipeline.buildContext ?? '',
-        imageName: pipeline.imageName,
-        registryHost: pipeline.registryHost,
-        deployRegistryHost: pipeline.deployRegistryHost ?? '',
-        registryCredentialId: pipeline.registryCredentialId ?? '',
-        deployNamespace: pipeline.deployNamespace,
-        deployDeployment: pipeline.deployDeployment,
-        deployContainer: pipeline.deployContainer
+      populateFormFromPipeline(pipeline)
+    } else if (duplicateFromRaw.value !== null) {
+      if (duplicateFromId.value === null || Number.isNaN(duplicateFromId.value)) {
+        toast.error('ID pipeline cần nhân bản không hợp lệ')
+        applyCreateDefaults()
+      } else {
+        let source = store.pipelines.find((p) => p.id === duplicateFromId.value) ?? null
+        if (!source) {
+          try {
+            await store.fetchPipelines({ force: true })
+            source = store.pipelines.find((p) => p.id === duplicateFromId.value) ?? null
+          } catch {
+            source = null
+          }
+        }
+        if (source) {
+          duplicatedFromName.value = source.name
+          populateFormFromPipeline(source, `${source.name}-copy`)
+        } else {
+          toast.error('Không tìm thấy pipeline gốc để nhân bản')
+          applyCreateDefaults()
+        }
       }
     } else {
-      form.value.gitCredentialId = gitCredentials.value[0]?.id ?? ''
-      form.value.slaveId = slaveStore.slaves[0]?.id ?? ''
-      form.value.registryCredentialId = registryCredentials.value[0]?.id ?? ''
+      applyCreateDefaults()
     }
   } catch {
     if (isEditing.value) notFound.value = true
@@ -456,10 +503,10 @@ onMounted(async () => {
 
 <template>
   <FormWizardLayout
-    :title="isEditing ? 'Sửa pipeline' : 'Thêm pipeline mới'"
+    :title="isEditing ? 'Sửa pipeline' : duplicatedFromName ? 'Nhân bản pipeline' : 'Thêm pipeline mới'"
     back-to="/pipelines"
     breadcrumb-parent="Pipeline"
-    :breadcrumb-current="isEditing ? (form.name || 'Sửa') : 'Thêm mới'"
+    :breadcrumb-current="isEditing ? (form.name || 'Sửa') : duplicatedFromName ? 'Nhân bản' : 'Thêm mới'"
     :steps="wizardSteps"
     :current-step="currentStep"
     :can-navigate-to="canNavigateTo"
@@ -480,6 +527,19 @@ onMounted(async () => {
     </template>
 
     <form class="flex-1 min-h-0 flex flex-col" @submit.prevent="handleSave">
+      <div
+        v-if="duplicatedFromName"
+        data-testid="duplicate-banner"
+        class="mb-4 flex items-center gap-2 px-3.5 py-2.5 rounded-[6px] border border-primary/25 bg-primary/5 text-xs text-fg"
+      >
+        <Copy class="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+        <span>
+          Đang nhân bản từ pipeline
+          <strong class="font-semibold text-fg">{{ duplicatedFromName }}</strong>.
+          Thay đổi thông tin cần thiết và lưu để tạo pipeline mới.
+        </span>
+      </div>
+
       <!-- Step 1: Nguồn mã -->
       <section v-if="currentStep === 0" class="space-y-5">
         <div class="flex items-center gap-2 text-base font-semibold text-fg border-b border-border pb-3">

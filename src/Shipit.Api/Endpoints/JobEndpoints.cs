@@ -125,7 +125,7 @@ internal static partial class JobEndpoints
 
         jobs.MapPost("{id:long}/runs", async (long id, HttpRequest http, IRunCoordinator coordinator, CancellationToken ct) =>
         {
-            var (ok, skipSteps, badRequest) = await RunEndpoints.TryParseTriggerSkipStepsAsync(http, isJob: true, ct);
+            var (ok, skipSteps, gitBranch, badRequest) = await RunEndpoints.TryParseTriggerRequestAsync(http, isJob: true, ct);
             if (!ok)
             {
                 return badRequest!;
@@ -133,7 +133,7 @@ internal static partial class JobEndpoints
 
             try
             {
-                var run = await coordinator.TriggerJobAsync(id, ct, skipSteps);
+                var run = await coordinator.TriggerJobAsync(id, ct, skipSteps, gitBranch);
                 return Results.Json(run.ToDto(), statusCode: StatusCodes.Status202Accepted);
             }
             catch (JobNotFoundException)

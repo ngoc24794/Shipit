@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import {
   Boxes,
   Plus,
+  Copy,
   Pencil,
   Trash2,
   Play,
@@ -117,6 +118,10 @@ function navigateToEdit(id: number) {
   router.push(`/jobs/${id}`)
 }
 
+function navigateToDuplicate(id: number) {
+  router.push(`/jobs/new?duplicateFrom=${id}`)
+}
+
 function moveJobSelection(delta: number) {
   const len = table.items.value.length
   if (len === 0) return
@@ -146,15 +151,19 @@ function handleTriggerRun(job: Job) {
   isRunDialogOpen.value = true
 }
 
-async function confirmTriggerRun(skipSteps: StepName[]) {
+async function confirmTriggerRun(skipSteps: StepName[], gitBranch?: string) {
   if (!runningJob.value) return
   const job = runningJob.value
   triggeringJobId.value = job.id
   runDialogLoading.value = true
   runDialogError.value = null
   try {
-    const opts = skipSteps.length > 0 ? { skipSteps } : undefined
-    const run = opts
+    const branch = gitBranch?.trim()
+    const hasBranchOverride = Boolean(branch && branch !== job.gitBranch)
+    const opts: { skipSteps?: StepName[]; gitBranch?: string } = {}
+    if (skipSteps.length > 0) opts.skipSteps = skipSteps
+    if (hasBranchOverride) opts.gitBranch = branch
+    const run = Object.keys(opts).length > 0
       ? await store.triggerJobRun(job.id, opts)
       : await store.triggerJobRun(job.id)
     isRunDialogOpen.value = false
@@ -313,7 +322,7 @@ async function handleDelete() {
                 class="w-[172px]"
                 @sort="table.toggleSort"
               />
-              <th scope="col" class="w-[258px] text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
+              <th scope="col" class="w-[350px] text-right py-3 px-4 text-xs font-semibold text-muted-fg whitespace-nowrap">
                 Thao tác
               </th>
             </tr>
@@ -390,6 +399,18 @@ async function handleDelete() {
                   variant="ghost"
                   size="sm"
                   class="whitespace-nowrap shrink-0"
+                  aria-label="Nhân bản Job"
+                  title="Nhân bản cấu hình Job"
+                  @click="navigateToDuplicate(job.id)"
+                >
+                  <Copy class="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Nhân bản</span>
+                </AppButton>
+
+                <AppButton
+                  variant="ghost"
+                  size="sm"
+                  class="whitespace-nowrap shrink-0"
                   aria-label="Sửa Job"
                   title="Chỉnh sửa cấu hình Job"
                   @click="navigateToEdit(job.id)"
@@ -442,6 +463,7 @@ async function handleDelete() {
       v-model="isRunDialogOpen"
       kind="job"
       :target-name="runningJob?.name ?? ''"
+      :default-branch="runningJob?.gitBranch ?? ''"
       :loading="runDialogLoading"
       :error="runDialogError"
       @confirm="confirmTriggerRun"

@@ -10,7 +10,14 @@ export async function runJob(id: number, options?: TriggerRunOptions): Promise<R
     return options ? (api as any).triggerJobRun(id, options) : (api as any).triggerJobRun(id)
   }
 
-  const skipSteps = options?.skipSteps
+  const payload: Record<string, unknown> = {}
+  if (options?.skipSteps && options.skipSteps.length > 0) {
+    payload.skipSteps = options.skipSteps
+  }
+  const gitBranch = options?.gitBranch?.trim()
+  if (gitBranch) {
+    payload.gitBranch = gitBranch
+  }
   const init: RequestInit = {
     method: 'POST',
     headers: {
@@ -19,8 +26,8 @@ export async function runJob(id: number, options?: TriggerRunOptions): Promise<R
     },
     credentials: 'same-origin'
   }
-  if (skipSteps && skipSteps.length > 0) {
-    init.body = JSON.stringify({ skipSteps })
+  if (Object.keys(payload).length > 0) {
+    init.body = JSON.stringify(payload)
   }
 
   const res = await fetch(`/api/jobs/${id}/runs`, init)

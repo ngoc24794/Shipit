@@ -1075,12 +1075,14 @@ export class MockShipitApi implements ShipitApi {
       throw new ApiError(409, 'Pipeline này đang có một lượt chạy chưa hoàn tất')
     }
 
+    const gitBranch = options?.gitBranch?.trim() || pipeline.gitBranch
     const newRun: RunDetail = {
       id: Date.now(),
       kind: 'pipeline',
       pipelineId,
       jobId: null,
       status: 'queued',
+      gitBranch,
       tag: null,
       image: null,
       failureReason: null,
@@ -1730,12 +1732,14 @@ export class MockShipitApi implements ShipitApi {
             }
           ]
 
+    const gitBranch = options?.gitBranch?.trim() || job.gitBranch
     const newRun: RunDetail = {
       id: nextId,
       pipelineId: null,
       jobId: id,
       kind: 'job',
       status: 'queued',
+      gitBranch,
       tag: null,
       image: null,
       failureReason: null,

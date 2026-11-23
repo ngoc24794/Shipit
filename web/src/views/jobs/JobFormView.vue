@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Boxes,
+  Copy,
   Plus,
   CheckCircle2,
   FileCode,
@@ -24,7 +25,7 @@ import { useJobsAllowStore } from '../../stores/jobsAllow'
 import { useConfigSlavesStore } from '../../stores/configSlaves'
 import { useConfigCredentialsStore } from '../../stores/configCredentials'
 import { useToast } from '../../composables/useToast'
-import type { JobInput, JobTaskInput, JobPreviewTask } from '../../api/types'
+import type { Job, JobInput, JobTaskInput, JobPreviewTask } from '../../api/types'
 import { ApiError } from '../../api/client'
 
 const route = useRoute()
@@ -41,6 +42,22 @@ const jobId = computed(() => {
   return p ? Number(p) : null
 })
 const isEditing = computed(() => jobId.value !== null && !isNaN(jobId.value))
+
+const duplicateFromRaw = computed(() => {
+  if (isEditing.value) return null
+  const raw = route.query.duplicateFrom
+  if (raw === undefined || raw === null || raw === '') return null
+  return Array.isArray(raw) ? raw[0] : raw
+})
+
+const duplicateFromId = computed(() => {
+  const raw = duplicateFromRaw.value
+  if (raw === null) return null
+  const n = Number(raw)
+  return Number.isInteger(n) && n > 0 ? n : NaN
+})
+
+const duplicatedFromName = ref<string | null>(null)
 
 const pageLoading = ref(true)
 const saveLoading = ref(false)
@@ -200,6 +217,64 @@ const currentSecretOptions = computed(() => {
   return allowStore.secretsFor(form.value.namespace)
 })
 
+function buildDuplicateJobName(sourceName: string): string {
+  const suffix = '-copy'
+  const maxLen = 40
+  const trimmed = sourceName.trim().toLowerCase()
+  if (trimmed.length + suffix.length <= maxLen) {
+    return `${trimmed}${suffix}`
+  }
+  const base = trimmed.slice(0, maxLen - suffix.length).replace(/[-.]+$/, '')
+  return base ? `${base}${suffix}` : 'job-copy'
+}
+
+function populateFormFromJob(source: Job, nameOverride?: string) {
+  form.value = {
+    name: nameOverride ?? source.name,
+    gitUrl: source.gitUrl,
+    gitBranch: source.gitBranch || 'main',
+    gitCredentialId: source.gitCredentialId,
+    slaveId: source.slaveId,
+    dockerfilePath: source.dockerfilePath || 'Dockerfile',
+    buildContext: source.buildContext || '',
+    imageName: source.imageName,
+    registryHost: source.registryHost,
+    deployRegistryHost: source.deployRegistryHost || '',
+    registryCredentialId: source.registryCredentialId ?? '',
+    namespace: source.namespace,
+    containerName: source.containerName,
+    serviceAccount: source.serviceAccount || '',
+    imagePullSecrets: [...(source.imagePullSecrets || [])],
+    tasks: (source.tasks || []).map((t) => ({
+      label: t.label,
+      args: [...(t.args || [])],
+      envFromConfigMaps: [...(t.envFromConfigMaps || [])],
+      envFromSecrets: [...(t.envFromSecrets || [])],
+      env: (t.env || []).map((e) => ({
+        name: e.name ?? null,
+        value: e.value ?? null,
+        secretName: e.secretName ?? null,
+        secretKey: e.secretKey ?? null
+      })),
+      timeoutSeconds: t.timeoutSeconds,
+      backoffLimit: t.backoffLimit,
+      ttlSeconds: t.ttlSeconds
+    }))
+  }
+}
+
+function applyCreateDefaults() {
+  if (allowStore.namespaces.length > 0 && !form.value.namespace) {
+    form.value.namespace = allowStore.namespaces[0]
+  }
+  if (gitCredentialOptions.value.length > 0 && !form.value.gitCredentialId) {
+    form.value.gitCredentialId = gitCredentialOptions.value[0].value
+  }
+  if (slaveOptions.value.length > 0 && !form.value.slaveId) {
+    form.value.slaveId = slaveOptions.value[0].value
+  }
+}
+
 onMounted(async () => {
   try {
     await Promise.all([
@@ -210,43 +285,30 @@ onMounted(async () => {
 
     if (isEditing.value && jobId.value) {
       const existing = await jobsStore.getJob(jobId.value)
-      form.value = {
-        name: existing.name,
-        gitUrl: existing.gitUrl,
-        gitBranch: existing.gitBranch || 'main',
-        gitCredentialId: existing.gitCredentialId,
-        slaveId: existing.slaveId,
-        dockerfilePath: existing.dockerfilePath || 'Dockerfile',
-        buildContext: existing.buildContext || '',
-        imageName: existing.imageName,
-        registryHost: existing.registryHost,
-        deployRegistryHost: existing.deployRegistryHost || '',
-        registryCredentialId: existing.registryCredentialId ?? '',
-        namespace: existing.namespace,
-        containerName: existing.containerName,
-        serviceAccount: existing.serviceAccount || '',
-        imagePullSecrets: [...existing.imagePullSecrets],
-        tasks: existing.tasks.map((t) => ({
-          label: t.label,
-          args: [...t.args],
-          envFromConfigMaps: [...t.envFromConfigMaps],
-          envFromSecrets: [...t.envFromSecrets],
-          env: t.env.map((e) => ({ ...e })),
-          timeoutSeconds: t.timeoutSeconds,
-          backoffLimit: t.backoffLimit,
-          ttlSeconds: t.ttlSeconds
-        }))
+      populateFormFromJob(existing)
+    } else if (duplicateFromRaw.value !== null) {
+      if (duplicateFromId.value === null || Number.isNaN(duplicateFromId.value)) {
+        toast.error('ID Job cần nhân bản không hợp lệ')
+        applyCreateDefaults()
+      } else {
+        let source = jobsStore.jobs.find((j) => j.id === duplicateFromId.value) ?? null
+        if (!source) {
+          try {
+            source = await jobsStore.getJob(duplicateFromId.value)
+          } catch {
+            source = null
+          }
+        }
+        if (source) {
+          duplicatedFromName.value = source.name
+          populateFormFromJob(source, buildDuplicateJobName(source.name))
+        } else {
+          toast.error('Không tìm thấy Job gốc để nhân bản')
+          applyCreateDefaults()
+        }
       }
     } else {
-      if (allowStore.namespaces.length > 0 && !form.value.namespace) {
-        form.value.namespace = allowStore.namespaces[0]
-      }
-      if (gitCredentialOptions.value.length > 0 && !form.value.gitCredentialId) {
-        form.value.gitCredentialId = gitCredentialOptions.value[0].value
-      }
-      if (slaveOptions.value.length > 0 && !form.value.slaveId) {
-        form.value.slaveId = slaveOptions.value[0].value
-      }
+      applyCreateDefaults()
     }
   } catch (err: any) {
     toast.error(err.message || 'Lỗi khi tải dữ liệu khởi tạo')
@@ -674,10 +736,10 @@ const allowlistedSecretsSummary = computed(() => {
 
 <template>
   <FormWizardLayout
-    :title="isEditing ? `Cấu hình Job: ${form.name}` : 'Tạo Job mới'"
+    :title="isEditing ? `Cấu hình Job: ${form.name}` : duplicatedFromName ? 'Nhân bản Job' : 'Tạo Job mới'"
     back-to="/jobs"
     breadcrumb-parent="Job"
-    :breadcrumb-current="isEditing ? (form.name || 'Sửa') : 'Tạo mới'"
+    :breadcrumb-current="isEditing ? (form.name || 'Sửa') : duplicatedFromName ? 'Nhân bản' : 'Tạo mới'"
     :steps="wizardSteps"
     :current-step="currentStep"
     :can-navigate-to="canNavigateTo"
@@ -695,6 +757,19 @@ const allowlistedSecretsSummary = computed(() => {
     </template>
 
     <form class="flex-1 min-h-0 flex flex-col" @submit.prevent="handleSave">
+      <div
+        v-if="duplicatedFromName"
+        data-testid="duplicate-banner"
+        class="mb-4 flex items-center gap-2 px-3.5 py-2.5 rounded-[6px] border border-primary/25 bg-primary/5 text-xs text-fg"
+      >
+        <Copy class="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+        <span>
+          Đang nhân bản từ Job
+          <strong class="font-semibold text-fg">{{ duplicatedFromName }}</strong>.
+          Thay đổi thông tin cần thiết và lưu để tạo Job mới.
+        </span>
+      </div>
+
       <!-- Step 1: Nguồn mã -->
       <section v-if="currentStep === 0" class="space-y-5">
         <div class="border-b border-border pb-3">

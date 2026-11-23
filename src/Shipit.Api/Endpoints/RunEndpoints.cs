@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Shipit.Data;
 using Shipit.Data.Entities;
 using Shipit.Engine;
+using Shipit.Ssh;
 
 namespace Shipit.Api;
 
@@ -13,7 +14,7 @@ internal static class RunEndpoints
     private static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(15);
     private const int PageSize = 500;
 
-    internal static async Task<(bool Ok, IReadOnlySet<StepName>? SkipSteps, IResult? ErrorResult)> TryParseTriggerSkipStepsAsync(
+    internal static async Task<(bool Ok, IReadOnlySet<StepName>? SkipSteps, string? GitBranch, IResult? ErrorResult)> TryParseTriggerRequestAsync(
         HttpRequest http,
         bool isJob,
         CancellationToken ct)
@@ -31,7 +32,7 @@ internal static class RunEndpoints
                 }
                 catch (JsonException)
                 {
-                    return (false, null, Problems.BadRequest("Invalid request body", "Request body must be valid JSON."));
+                    return (false, null, null, Problems.BadRequest("Invalid request body", "Request body must be valid JSON."));
                 }
             }
         }
@@ -39,17 +40,32 @@ internal static class RunEndpoints
         if (!SkipStepsValidator.TryParse(body?.SkipSteps, isJob, out var parsed, out var error))
         {
             var fieldErrors = new Dictionary<string, string[]> { ["skipSteps"] = [error!] };
-            return (false, null, Problems.BadRequest("Invalid skipSteps", error!, fieldErrors));
+            return (false, null, null, Problems.BadRequest("Invalid skipSteps", error!, fieldErrors));
         }
 
-        return (true, parsed, null);
+        string? gitBranch = null;
+        if (!string.IsNullOrWhiteSpace(body?.GitBranch))
+        {
+            gitBranch = body.GitBranch.Trim();
+            try
+            {
+                RemoteCommandBuilder.ValidateBranch(gitBranch);
+            }
+            catch (ArgumentException ex)
+            {
+                var fieldErrors = new Dictionary<string, string[]> { ["gitBranch"] = [ex.Message] };
+                return (false, null, null, Problems.BadRequest("Invalid gitBranch", ex.Message, fieldErrors));
+            }
+        }
+
+        return (true, parsed, gitBranch, null);
     }
 
     public static void MapRuns(this IEndpointRouteBuilder app)
     {
         app.MapPost("/api/pipelines/{id:long}/runs", async (long id, HttpRequest http, IRunCoordinator coordinator, CancellationToken ct) =>
         {
-            var (ok, skipSteps, badRequest) = await TryParseTriggerSkipStepsAsync(http, isJob: false, ct);
+            var (ok, skipSteps, gitBranch, badRequest) = await TryParseTriggerRequestAsync(http, isJob: false, ct);
             if (!ok)
             {
                 return badRequest!;
@@ -57,7 +73,7 @@ internal static class RunEndpoints
 
             try
             {
-                var run = await coordinator.TriggerAsync(id, ct, skipSteps);
+                var run = await coordinator.TriggerAsync(id, ct, skipSteps, gitBranch);
                 return Results.Json(run.ToDto(), statusCode: StatusCodes.Status202Accepted);
             }
             catch (PipelineNotFoundException)

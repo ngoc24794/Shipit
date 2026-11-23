@@ -101,9 +101,18 @@ const isRunActive = computed(() => {
   return run.value?.status === 'queued' || run.value?.status === 'running'
 })
 
+const defaultBranchForRerun = computed(() => {
+  if (run.value?.gitBranch) return run.value.gitBranch
+  if (isJobRun.value && run.value?.jobId) {
+    return runsStore.jobs.find((j) => j.id === run.value?.jobId)?.gitBranch ?? ''
+  }
+  return pipeline.value?.gitBranch ?? ''
+})
+
 const metadataItems = computed<KeyValueItem[]>(() => {
   if (!run.value) return []
   return [
+    { key: 'branch', label: 'Nhánh / Tag', value: run.value.gitBranch || defaultBranchForRerun.value || 'Mặc định', copyable: Boolean(run.value.gitBranch) },
     { key: 'tag', label: 'Tag SHA', value: run.value.tag || 'Chưa có', copyable: Boolean(run.value.tag) },
     { key: 'image', label: 'Image', value: run.value.image || 'Chưa tạo', copyable: Boolean(run.value.image) },
     { key: 'started', label: 'Bắt đầu', value: formatDateTime(run.value.startedAt) },
@@ -298,13 +307,21 @@ function handleRerun() {
   showRerunDialog.value = true
 }
 
-async function confirmRerun(skipSteps: StepName[]) {
+async function confirmRerun(skipSteps: StepName[], gitBranch?: string) {
   if (!run.value) return
   isTriggering.value = true
   rerunError.value = null
 
   try {
-    const opts = skipSteps.length > 0 ? { skipSteps } : undefined
+    const branch = gitBranch?.trim()
+    const targetDefaultBranch = isJobRun.value && run.value.jobId
+      ? runsStore.jobs.find((j) => j.id === run.value?.jobId)?.gitBranch
+      : pipeline.value?.gitBranch
+    const hasBranchOverride = Boolean(branch && branch !== targetDefaultBranch)
+    const rawOpts: { skipSteps?: StepName[]; gitBranch?: string } = {}
+    if (skipSteps.length > 0) rawOpts.skipSteps = skipSteps
+    if (hasBranchOverride) rawOpts.gitBranch = branch
+    const opts = Object.keys(rawOpts).length > 0 ? rawOpts : undefined
     let newRun: any
     if (isJobRun.value && run.value.jobId) {
       newRun = opts
@@ -687,6 +704,7 @@ onBeforeUnmount(() => {
       v-model="showRerunDialog"
       :kind="isJobRun ? 'job' : 'pipeline'"
       :target-name="displayName"
+      :default-branch="defaultBranchForRerun"
       :loading="isTriggering"
       :error="rerunError"
       @confirm="confirmRerun"
