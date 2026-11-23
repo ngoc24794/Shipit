@@ -36,6 +36,21 @@ Cấp quyền hạn chế cho ServiceAccount `shipit` thao tác trên 6 Deployme
 kubectl apply -f deploy/k8s/prod/11-rbac-avina-workspace.yaml
 ```
 
+### Bước 3.5: Tạo Secret migration (`shipit-migration-secrets`) và chạy Job migration
+Ứng dụng Shipit chạy với `SHIPIT_AUTO_MIGRATE=false` và kết nối DB bằng tài khoản ít quyền (không phải table owner). Do đó, trước khi triển khai mới hoặc nâng cấp Shipit, cần chạy Kubernetes Job `shipit-migrate` (`--migrate`) sử dụng tài khoản DB có quyền DDL/owner:
+
+1. Tạo Secret `shipit-migration-secrets` trong namespace `cicd` chứa key `SHIPIT_MIGRATION_DB_URL` (chuỗi kết nối PostgreSQL với quyền owner/migration, truyền qua stdin để không lưu lịch sử shell):
+   ```bash
+   kubectl -n cicd create secret generic shipit-migration-secrets \
+     --from-literal=SHIPIT_MIGRATION_DB_URL='<migration-db-url>'
+   ```
+2. Chạy Job migration với tag image tương ứng (xoá Job cũ nếu đang nâng cấp):
+   ```bash
+   kubectl -n cicd delete job shipit-migrate --ignore-not-found
+   sed 's/REPLACE_TAG/v1.0.0/g' deploy/k8s/prod/15-migrate-job.yaml | kubectl apply -f -
+   kubectl -n cicd wait --for=condition=complete job/shipit-migrate --timeout=120s
+   ```
+
 ### Bước 4: Triển khai Deployment Shipit
 Thay thế chuỗi giữ chỗ `REPLACE_TAG` bằng tag image thực tế (ví dụ: `v1.0.0`):
 

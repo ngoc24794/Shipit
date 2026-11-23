@@ -32,6 +32,8 @@ spec:
             - secretRef:
                 name: shipit-secrets
           env:
+            - name: SHIPIT_AUTO_MIGRATE
+              value: "false"
             - name: SHIPIT_DEPLOY_ALLOWLIST
               value: '{"avina-workspace":["avina-catalog","avina-content-preview","avina-gateway","avina-learning","avina-sysadmin","avina-users"]}'
           livenessProbe:

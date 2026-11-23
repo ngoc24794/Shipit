@@ -207,33 +207,110 @@ public static class ShipitHost
                 .Build());
     }
 
-    /// <summary>Applies database migrations (Postgres) or creates the schema (dev SQLite), retrying while the DB starts up.</summary>
-    public static async Task PrepareDatabaseAsync(this WebApplication app)
+    /// <summary>Applies database migrations (when opted in) or verifies readiness (Postgres), or creates the schema (dev SQLite), retrying while the DB starts up.</summary>
+    public static Task PrepareDatabaseAsync(this WebApplication app)
     {
         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Shipit.Startup");
+        return PrepareDatabaseAsync(app.Services, logger);
+    }
+
+    internal static async Task PrepareDatabaseAsync(
+        IServiceProvider services,
+        ILogger logger,
+        TimeSpan? retryDelay = null,
+        CancellationToken ct = default)
+    {
+        var delay = retryDelay ?? TimeSpan.FromSeconds(3);
+        const int maxAttempts = 5;
+
         for (var attempt = 1; ; attempt++)
         {
             try
             {
-                using var scope = app.Services.CreateScope();
+                using var scope = services.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ShipitDbContext>();
+                var options = scope.ServiceProvider.GetRequiredService<ShipitOptions>();
+
                 if (db.Database.IsNpgsql())
                 {
-                    await db.Database.MigrateAsync();
+                    if (options.AutoMigrate)
+                    {
+                        logger.LogInformation("Applying EF Core migrations on startup (SHIPIT_AUTO_MIGRATE=true).");
+                        await db.Database.MigrateAsync(ct);
+                    }
+                    else
+                    {
+                        logger.LogInformation("Skipping EF Core migrations on startup (SHIPIT_AUTO_MIGRATE=false). Verifying database connectivity.");
+                        if (!await db.Database.CanConnectAsync(ct))
+                        {
+                            throw new InvalidOperationException("PostgreSQL database is not reachable.");
+                        }
+                    }
                 }
                 else
                 {
-                    await db.Database.EnsureCreatedAsync();
+                    await db.Database.EnsureCreatedAsync(ct);
                 }
 
                 await SeedDeployTargetsAsync(scope.ServiceProvider, logger);
                 await SeedJobAllowListAsync(scope.ServiceProvider, logger);
                 return;
             }
-            catch (Exception ex) when (attempt < 5)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                logger.LogWarning("Database not ready (attempt {Attempt}/5): {Type}. Retrying in 3s.", attempt, ex.GetType().Name);
-                await Task.Delay(TimeSpan.FromSeconds(3));
+                throw;
+            }
+            catch (Exception ex)
+            {
+                var (sqlState, detail) = MigrationRunner.DescribeDatabaseException(ex);
+                var nonTransient = MigrationRunner.IsNonTransientPostgresError(ex);
+
+                if (nonTransient || attempt >= maxAttempts)
+                {
+                    if (sqlState is not null)
+                    {
+                        logger.LogError(
+                            "Database startup failed ({Type}, SqlState={SqlState}): {Detail}",
+                            ex.GetType().Name,
+                            sqlState,
+                            detail);
+                    }
+                    else
+                    {
+                        logger.LogError(
+                            "Database startup failed ({Type}): {Detail}",
+                            ex.GetType().Name,
+                            detail);
+                    }
+                    throw;
+                }
+
+                if (sqlState is not null)
+                {
+                    logger.LogWarning(
+                        "Database not ready (attempt {Attempt}/{MaxAttempts}): {Type} (SqlState={SqlState}): {Detail}. Retrying in {DelaySeconds}s.",
+                        attempt,
+                        maxAttempts,
+                        ex.GetType().Name,
+                        sqlState,
+                        detail,
+                        delay.TotalSeconds);
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Database not ready (attempt {Attempt}/{MaxAttempts}): {Type}: {Detail}. Retrying in {DelaySeconds}s.",
+                        attempt,
+                        maxAttempts,
+                        ex.GetType().Name,
+                        detail,
+                        delay.TotalSeconds);
+                }
+
+                if (delay > TimeSpan.Zero)
+                {
+                    await Task.Delay(delay, ct);
+                }
             }
         }
     }

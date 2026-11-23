@@ -1,5 +1,11 @@
 using Shipit.Api;
 
+if (args.Contains("--migrate", StringComparer.Ordinal))
+{
+    Environment.ExitCode = await MigrationRunner.RunAsync(args);
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.AddShipit();
 

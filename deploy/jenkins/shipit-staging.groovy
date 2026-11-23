@@ -25,9 +25,9 @@
  *   - Optional (only when RUN_TESTS=true): node/npm and dotnet
  *
  * Note on database migrations:
- *   - Shipit applies EF Core migrations automatically on startup via
- *     ShipitHost.PrepareDatabaseAsync() in src/Shipit.Api/ShipitHost.cs,
- *     so no separate DB migration stage is required.
+ *   - Shipit sets SHIPIT_AUTO_MIGRATE=false in deploy/k8s/base/20-deployment.yaml.
+ *   - EF Core migrations run via the standalone K8s Job deploy/k8s/base/15-migrate-job.yaml
+ *     (--migrate) using secret shipit-migration-secrets (SHIPIT_MIGRATION_DB_URL).
  */
 
 pipeline {
@@ -196,6 +196,20 @@ pipeline {
                             echo "ERROR: Required secret $CI_SECRET_NAME not found in namespace $CI_NAMESPACE." >&2
                             echo "Create it out of band with scripts/create-secrets.ps1 before deploying." >&2
                             exit 1
+                        fi
+
+                        if kubectl -n "$CI_NAMESPACE" get secret shipit-migration-secrets -o name >/dev/null 2>&1; then
+                            if [ -f "${GIT_REPOSITORY}/deploy/k8s/base/15-migrate-job.yaml" ]; then
+                                kubectl -n "$CI_NAMESPACE" delete job shipit-migrate --ignore-not-found
+                                sed -E "s#(image:[[:space:]]*${CI_DOCKER_REGISTRY}/${CI_IMAGE_NAME}):.*#\\1:${CI_APP_VERSION}#" \
+                                    "${GIT_REPOSITORY}/deploy/k8s/base/15-migrate-job.yaml" \
+                                    | kubectl apply -f -
+                                kubectl -n "$CI_NAMESPACE" wait --for=condition=complete job/shipit-migrate --timeout=120s
+                            else
+                                echo "Skipping migration job: ${GIT_REPOSITORY}/deploy/k8s/base/15-migrate-job.yaml not present in workspace (IMAGE_TAG redeploy)."
+                            fi
+                        else
+                            echo "WARNING: Secret shipit-migration-secrets not found in $CI_NAMESPACE; skipping standalone migration job."
                         fi
 
                         if [ "$APPLY_BASE_MANIFESTS" = "true" ]; then

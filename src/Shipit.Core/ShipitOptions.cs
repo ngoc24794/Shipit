@@ -15,6 +15,9 @@ public sealed record JobAllowListEntry(string Namespace, string Kind, string Nam
 public sealed class ShipitOptions
 {
     public const string DatabaseUrlVar = "AVINA_STAGING_SHIPIT_DB_URL";
+    public const string MigrationDatabaseUrlVar = "SHIPIT_MIGRATION_DB_URL";
+    public const string AutoMigrateVar = "SHIPIT_AUTO_MIGRATE";
+    public const string AutoMigrateKey = "Shipit:AutoMigrate";
     public const string MasterKeyVar = "SHIPIT_MASTER_KEY";
     public const string AdminUserVar = "SHIPIT_ADMIN_USER";
     public const string AdminPasswordVar = "SHIPIT_ADMIN_PASSWORD";
@@ -24,6 +27,8 @@ public sealed class ShipitOptions
     public const string UseFakesKey = "Shipit:UseFakes";
 
     public string? DatabaseUrl { get; init; }
+    public string? MigrationDatabaseUrl { get; init; }
+    public bool AutoMigrate { get; init; }
     public string? MasterKey { get; init; }
     public string AdminUser { get; init; } = "admin";
     public string? AdminPassword { get; init; }
@@ -35,10 +40,14 @@ public sealed class ShipitOptions
     public static ShipitOptions FromLookup(Func<string, string?> get)
     {
         var useFakes = bool.TryParse(get(UseFakesKey), out var fakes) && fakes;
+        var autoMigrate = bool.TryParse(Blank(get(AutoMigrateVar)) ?? Blank(get(AutoMigrateKey)), out var migrate) && migrate;
         var user = get(AdminUserVar);
+        var databaseUrl = Blank(get(DatabaseUrlVar));
         return new ShipitOptions
         {
-            DatabaseUrl = Blank(get(DatabaseUrlVar)),
+            DatabaseUrl = databaseUrl,
+            MigrationDatabaseUrl = Blank(get(MigrationDatabaseUrlVar)) ?? databaseUrl,
+            AutoMigrate = autoMigrate,
             MasterKey = Blank(get(MasterKeyVar)),
             AdminUser = string.IsNullOrWhiteSpace(user) ? "admin" : user,
             AdminPassword = Blank(get(AdminPasswordVar)),
