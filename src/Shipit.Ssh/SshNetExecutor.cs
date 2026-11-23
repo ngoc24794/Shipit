@@ -1,4 +1,5 @@
 using System.Text;
+using Renci.SshNet.Common;
 using Shipit.Core;
 using Shipit.Ssh.Internal;
 
@@ -37,29 +38,56 @@ public class SshNetExecutor : ISshExecutor
         using var timeoutCts = new CancellationTokenSource(timeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-        ISshConnection connection;
-        try
+        var maxAttempts = Math.Max(1, 1 + _options.TransientTimeoutRetries);
+        for (var attempt = 1; ; attempt++)
         {
-            connection = await _connectionFactory.ConnectAsync(target, linkedCts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-        {
-            await output.WriteAsync("timed out", LogStream.System, CancellationToken.None).ConfigureAwait(false);
-            return 124;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"SSH connection failed: {Sanitize(ex.Message, target)}", ex);
-        }
+            ISshConnection connection;
+            try
+            {
+                connection = await _connectionFactory.ConnectAsync(target, linkedCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                await output.WriteAsync("timed out", LogStream.System, CancellationToken.None).ConfigureAwait(false);
+                return 124;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"SSH connection failed: {Sanitize(ex.Message, target)}", ex);
+            }
 
-        await using (connection.ConfigureAwait(false))
-        {
-            return await ExecuteOnConnectionAsync(connection, command, output, timeoutCts, cancellationToken, linkedCts.Token)
-                .ConfigureAwait(false);
+            try
+            {
+                await using (connection.ConfigureAwait(false))
+                {
+                    return await ExecuteOnConnectionAsync(connection, command, output, timeoutCts, cancellationToken, linkedCts.Token)
+                        .ConfigureAwait(false);
+                }
+            }
+            catch (SshOperationTimeoutException ex) when (attempt < maxAttempts && !linkedCts.Token.IsCancellationRequested)
+            {
+                await output.WriteAsync(
+                    $"SSH session operation timed out ({Sanitize(ex.Message, target)}); retrying ({attempt}/{maxAttempts - 1})...",
+                    LogStream.System,
+                    CancellationToken.None).ConfigureAwait(false);
+
+                if (_options.RetryDelay > TimeSpan.Zero)
+                {
+                    try
+                    {
+                        await Task.Delay(_options.RetryDelay, linkedCts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                    {
+                        await output.WriteAsync("timed out", LogStream.System, CancellationToken.None).ConfigureAwait(false);
+                        return 124;
+                    }
+                }
+            }
         }
     }
 

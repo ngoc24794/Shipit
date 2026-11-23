@@ -1,3 +1,4 @@
+using Renci.SshNet.Common;
 using Shipit.Core;
 using Shipit.Ssh.Tests.TestDoubles;
 
@@ -302,5 +303,129 @@ public class SshNetExecutorTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             factory.ConnectAsync(invalidTarget, CancellationToken.None));
         Assert.Contains("Invalid private key format", ex.Message);
+    }
+
+    [Fact]
+    public void SshExecutorOptions_HasExpectedDefaults()
+    {
+        var options = new SshExecutorOptions();
+
+        Assert.Equal(TimeSpan.FromSeconds(30), options.ConnectTimeout);
+        Assert.Equal(TimeSpan.FromMinutes(2), options.OperationTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(30), options.KeepAliveInterval);
+        Assert.Equal(1, options.TransientTimeoutRetries);
+        Assert.Equal(TimeSpan.FromSeconds(2), options.RetryDelay);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenTransientSshOperationTimeoutOccurs_RetriesOnFreshConnectionAndSucceeds()
+    {
+        var factory = new MockSshConnectionFactory();
+        var options = new SshExecutorOptions { TransientTimeoutRetries = 1, RetryDelay = TimeSpan.Zero };
+        var executor = new SshNetExecutor(factory, options);
+        var sink = new TestLogSink();
+
+        var connections = new List<MockSshConnection>();
+        factory.ConnectHandler = (target, ct) =>
+        {
+            var conn = new MockSshConnection();
+            var attempt = connections.Count + 1;
+            connections.Add(conn);
+            conn.CommandHandler = cmd => new MockSshCommandRunner(cmd, stdout: attempt == 2 ? "pushed\n" : "")
+            {
+                CustomExecute = _ => attempt == 1
+                    ? Task.FromException<int>(new SshOperationTimeoutException("Session operation has timed out"))
+                    : Task.FromResult(0)
+            };
+            return Task.FromResult<Internal.ISshConnection>(conn);
+        };
+
+        var exitCode = await executor.ExecuteAsync(_defaultTarget, new RemoteCommand("docker push img"), sink);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(2, factory.ConnectCallCount);
+        Assert.All(connections, c => Assert.True(c.IsDisposed));
+        Assert.Equal(["pushed"], sink.StdoutLines);
+        Assert.Contains(sink.SystemLines, l => l.Contains("retrying (1/1)"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenSshOperationTimeoutPersistsBeyondRetries_ThrowsSshOperationTimeoutException()
+    {
+        var factory = new MockSshConnectionFactory();
+        var options = new SshExecutorOptions { TransientTimeoutRetries = 1, RetryDelay = TimeSpan.Zero };
+        var executor = new SshNetExecutor(factory, options);
+        var sink = new TestLogSink();
+
+        factory.ConnectHandler = (target, ct) =>
+        {
+            var conn = new MockSshConnection();
+            conn.CommandHandler = cmd => new MockSshCommandRunner(cmd)
+            {
+                CustomExecute = _ => Task.FromException<int>(new SshOperationTimeoutException("Session operation has timed out"))
+            };
+            return Task.FromResult<Internal.ISshConnection>(conn);
+        };
+
+        var ex = await Assert.ThrowsAsync<SshOperationTimeoutException>(() =>
+            executor.ExecuteAsync(_defaultTarget, new RemoteCommand("docker push img"), sink));
+
+        Assert.Equal("Session operation has timed out", ex.Message);
+        Assert.Equal(2, factory.ConnectCallCount);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenCallerCancelsBeforeTimeoutException_DoesNotRetry()
+    {
+        var factory = new MockSshConnectionFactory();
+        var options = new SshExecutorOptions { TransientTimeoutRetries = 2, RetryDelay = TimeSpan.Zero };
+        var executor = new SshNetExecutor(factory, options);
+        var sink = new TestLogSink();
+        using var cts = new CancellationTokenSource();
+
+        factory.ConnectHandler = (target, ct) =>
+        {
+            var conn = new MockSshConnection();
+            conn.CommandHandler = cmd => new MockSshCommandRunner(cmd)
+            {
+                CustomExecute = _ =>
+                {
+                    cts.Cancel();
+                    return Task.FromException<int>(new SshOperationTimeoutException("Session operation has timed out"));
+                }
+            };
+            return Task.FromResult<Internal.ISshConnection>(conn);
+        };
+
+        await Assert.ThrowsAsync<SshOperationTimeoutException>(() =>
+            executor.ExecuteAsync(_defaultTarget, new RemoteCommand("docker push img"), sink, cts.Token));
+
+        Assert.Equal(1, factory.ConnectCallCount);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenCommandTimeoutExpiresDuringRetryDelay_Returns124AndLogsTimedOut()
+    {
+        var factory = new MockSshConnectionFactory();
+        var options = new SshExecutorOptions { TransientTimeoutRetries = 1, RetryDelay = TimeSpan.FromSeconds(5) };
+        var executor = new SshNetExecutor(factory, options);
+        var sink = new TestLogSink();
+
+        factory.ConnectHandler = (target, ct) =>
+        {
+            var conn = new MockSshConnection();
+            conn.CommandHandler = cmd => new MockSshCommandRunner(cmd)
+            {
+                CustomExecute = _ => Task.FromException<int>(new SshOperationTimeoutException("Session operation has timed out"))
+            };
+            return Task.FromResult<Internal.ISshConnection>(conn);
+        };
+
+        var command = new RemoteCommand("docker push img", Timeout: TimeSpan.FromMilliseconds(50));
+        var exitCode = await executor.ExecuteAsync(_defaultTarget, command, sink);
+
+        Assert.Equal(124, exitCode);
+        Assert.Equal(1, factory.ConnectCallCount);
+        Assert.Contains(sink.SystemLines, l => l == "timed out");
     }
 }

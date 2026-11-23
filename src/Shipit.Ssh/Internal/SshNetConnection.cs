@@ -42,10 +42,13 @@ public sealed class SshNetConnectionFactory : ISshConnectionFactory
         var authMethod = new PrivateKeyAuthenticationMethod(target.User, keyFile);
         var connectionInfo = new ConnectionInfo(target.Host, target.Port, target.User, authMethod)
         {
-            Timeout = _options.ConnectTimeout,
+            Timeout = _options.OperationTimeout,
         };
 
-        var client = new SshClient(connectionInfo);
+        var client = new SshClient(connectionInfo)
+        {
+            KeepAliveInterval = _options.KeepAliveInterval,
+        };
         client.HostKeyReceived += (sender, e) =>
         {
             if (_options.HostKeyValidator != null)
@@ -60,9 +63,17 @@ public sealed class SshNetConnectionFactory : ISshConnectionFactory
             }
         };
 
+        using var connectTimeoutCts = new CancellationTokenSource(_options.ConnectTimeout);
+        using var linkedConnectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connectTimeoutCts.Token);
         try
         {
-            await client.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            await client.ConnectAsync(linkedConnectCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (connectTimeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            client.Dispose();
+            keyFile.Dispose();
+            throw new TimeoutException($"SSH connection timed out after {_options.ConnectTimeout.TotalSeconds:0.#}s.");
         }
         catch
         {
