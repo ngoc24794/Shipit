@@ -184,12 +184,19 @@ async function handleAdd() {
 
   actionLoading.value = true
   try {
-    await store.createEntry({
+    const { rbacWarning } = await store.createEntry({
       namespace: form.value.namespace.trim(),
       kind: form.value.kind,
       name: form.value.name.trim()
     })
-    toast.success('Đã thêm mục vào allowlist thành công')
+    if (rbacWarning) {
+      toast.warn(
+        `Đã thêm mục vào allowlist, nhưng đồng bộ RBAC Kubernetes thất bại: ${rbacWarning}`,
+        8000
+      )
+    } else {
+      toast.success('Đã thêm mục vào allowlist thành công')
+    }
     form.value = { namespace: form.value.namespace.trim(), kind: 'configmap', name: '' }
     formErrors.value = {}
   } catch (err: any) {
@@ -210,10 +217,18 @@ function openDeleteConfirm(entry: JobAllowEntry) {
 
 async function handleDelete() {
   if (!deletingEntry.value) return
+  const entry = deletingEntry.value
   deleteLoading.value = true
   try {
-    await store.deleteEntry(deletingEntry.value.id)
-    toast.success(`Đã xoá mục "${deletingEntry.value.name}" khỏi allowlist`)
+    const { rbacWarning } = await store.deleteEntry(entry.id)
+    if (rbacWarning) {
+      toast.warn(
+        `Đã xoá mục "${entry.name}" khỏi allowlist, nhưng đồng bộ RBAC Kubernetes thất bại: ${rbacWarning}`,
+        8000
+      )
+    } else {
+      toast.success(`Đã xoá mục "${entry.name}" khỏi allowlist`)
+    }
     isConfirmOpen.value = false
     deletingEntry.value = null
   } catch (err: any) {

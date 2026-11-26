@@ -44,6 +44,26 @@ public interface IK8sDeployer
     Task<DeployResult> SetImageAsync(DeployRequest request, ILogSink log, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Result of reconciling Kubernetes RBAC resources for a single namespace.</summary>
+public sealed record RbacSyncResult(bool Succeeded, string? ErrorMessage = null);
+
+/// <summary>Result of reconciling Kubernetes RBAC resources for a named namespace in a batch sync.</summary>
+public sealed record RbacNamespaceSyncResult(string Namespace, bool Succeeded, string? ErrorMessage = null);
+
+/// <summary>Reconciles per-namespace Kubernetes RBAC (Role and RoleBinding) for Shipit allowlist targets.</summary>
+public interface IK8sRbacSync
+{
+    /// <summary>
+    /// Ensures the managed Role and RoleBinding in <paramref name="targetNamespace"/> match
+    /// <paramref name="allowedDeployments"/> and <paramref name="allowJobs"/>, or deletes them when both are empty/false.
+    /// </summary>
+    Task<RbacSyncResult> SyncNamespaceAsync(
+        string targetNamespace,
+        IReadOnlyCollection<string> allowedDeployments,
+        bool allowJobs,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>Encrypts and decrypts secrets stored in the database.</summary>
 public interface ISecretProtector
 {

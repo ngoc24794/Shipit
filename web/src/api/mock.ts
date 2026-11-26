@@ -30,7 +30,8 @@ import type {
   SearchGroup,
   SearchItem,
   SearchResponse,
-  TriggerRunOptions
+  TriggerRunOptions,
+  RbacSyncResponse
 } from './types'
 import { ApiError } from './client'
 import { validateSkipSteps } from '../utils/runSteps'
@@ -997,6 +998,10 @@ export class MockShipitApi implements ShipitApi {
     })
   }
 
+  consumeLastRbacWarning(): string | null {
+    return null
+  }
+
   async createDeployTarget(input: DeployTargetInput): Promise<DeployTarget> {
     await delay()
     this.checkAuth()
@@ -1873,6 +1878,31 @@ export class MockShipitApi implements ShipitApi {
     }
 
     this.jobAllowEntries = this.jobAllowEntries.filter((e) => e.id !== id)
+  }
+
+  async syncRbac(): Promise<RbacSyncResponse> {
+    await delay()
+    this.checkAuth()
+    const nsSet = new Set<string>()
+    for (const target of this.deployTargets) {
+      if (target.namespace) nsSet.add(target.namespace)
+    }
+    for (const entry of this.jobAllowEntries) {
+      if (entry.kind === 'namespace' && entry.namespace) {
+        nsSet.add(entry.namespace)
+      }
+    }
+    const results = Array.from(nsSet)
+      .sort()
+      .map((namespace) => ({
+        namespace,
+        succeeded: true,
+        error: null
+      }))
+    return {
+      results,
+      allSucceeded: true
+    }
   }
 
   async search(q: string, limit: number = 5, signal?: AbortSignal): Promise<SearchResponse> {

@@ -429,6 +429,10 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            X-Shipit-Rbac-Warning:
+              description: Present when automatic Kubernetes RBAC reconciliation failed for the target namespace (the DB change was still saved).
+              schema: { type: string }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DeployTarget' }
@@ -442,7 +446,12 @@ paths:
       tags: [deploy-targets]
       summary: Delete an allowed deployment target
       responses:
-        '204': { description: Deleted }
+        '204':
+          description: Deleted
+          headers:
+            X-Shipit-Rbac-Warning:
+              description: Present when automatic Kubernetes RBAC reconciliation failed for the target namespace (the DB change was still saved).
+              schema: { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { description: Deploy target not found }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -587,6 +596,10 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            X-Shipit-Rbac-Warning:
+              description: Present when automatic Kubernetes RBAC reconciliation failed for a namespace entry (the DB change was still saved).
+              schema: { type: string }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/JobAllowEntry' }
@@ -600,10 +613,26 @@ paths:
       tags: [job-allow-entries]
       summary: Delete an allowed job entry
       responses:
-        '204': { description: Deleted }
+        '204':
+          description: Deleted
+          headers:
+            X-Shipit-Rbac-Warning:
+              description: Present when automatic Kubernetes RBAC reconciliation failed for a namespace entry (the DB change was still saved).
+              schema: { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { description: Job allow entry not found }
         '409': { $ref: '#/components/responses/Conflict' }
+  /api/rbac/sync:
+    post:
+      tags: [rbac]
+      summary: Reconcile Kubernetes RBAC (Role and RoleBinding) across all allowlist namespaces
+      responses:
+        '200':
+          description: Per-namespace RBAC reconciliation results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RbacSyncResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /api/search:
     get:
       tags: [search]
@@ -1065,5 +1094,20 @@ components:
         groups:
           type: array
           items: { $ref: '#/components/schemas/SearchGroup' }
+    RbacNamespaceSyncResult:
+      type: object
+      required: [namespace, succeeded]
+      properties:
+        namespace: { type: string }
+        succeeded: { type: boolean }
+        error: { type: string, nullable: true }
+    RbacSyncResponse:
+      type: object
+      required: [results, allSucceeded]
+      properties:
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/RbacNamespaceSyncResult' }
+        allSucceeded: { type: boolean }
 security:
   - sessionCookie: []

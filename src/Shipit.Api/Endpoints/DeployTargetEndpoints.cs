@@ -26,7 +26,7 @@ internal static partial class DeployTargetEndpoints
             return Results.Ok(targets.Select(t => t.ToDto()));
         });
 
-        group.MapPost("", async (DeployTargetInput input, ShipitDbContext db, CancellationToken ct) =>
+        group.MapPost("", async (DeployTargetInput input, ShipitDbContext db, RbacSyncService rbacSync, HttpResponse response, CancellationToken ct) =>
         {
             var errors = new FieldErrors();
             var ns = (input.Namespace ?? string.Empty).Trim();
@@ -62,10 +62,12 @@ internal static partial class DeployTargetEndpoints
             db.DeployTargets.Add(target);
             await db.SaveChangesAsync(ct);
 
+            await rbacSync.SyncNamespaceAndWarnAsync(ns, response, ct);
+
             return Results.Created($"/api/deploy-targets/{target.Id}", target.ToDto());
         });
 
-        group.MapDelete("{id:long}", async (long id, ShipitDbContext db, CancellationToken ct) =>
+        group.MapDelete("{id:long}", async (long id, ShipitDbContext db, RbacSyncService rbacSync, HttpResponse response, CancellationToken ct) =>
         {
             var target = await db.DeployTargets.FirstOrDefaultAsync(t => t.Id == id, ct);
             if (target is null)
@@ -89,6 +91,9 @@ internal static partial class DeployTargetEndpoints
 
             db.DeployTargets.Remove(target);
             await db.SaveChangesAsync(ct);
+
+            await rbacSync.SyncNamespaceAndWarnAsync(target.Namespace, response, ct);
+
             return Results.NoContent();
         });
     }

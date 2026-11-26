@@ -27,6 +27,10 @@ public sealed record DeployTargetDto(long Id, string Namespace, string Deploymen
 
 public sealed record DeployTargetInput(string? Namespace, string? Deployment);
 
+public sealed record RbacNamespaceSyncResultDto(string Namespace, bool Succeeded, string? Error);
+
+public sealed record RbacSyncResponseDto(IReadOnlyList<RbacNamespaceSyncResultDto> Results, bool AllSucceeded);
+
 public sealed record PipelineDto(
     long Id,
     string Name,

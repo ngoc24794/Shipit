@@ -121,11 +121,18 @@ async function handleAdd() {
 
   actionLoading.value = true
   try {
-    await store.createDeployTarget({
+    const { rbacWarning } = await store.createDeployTarget({
       namespace: form.value.namespace.trim(),
       deployment: form.value.deployment.trim()
     })
-    toast.success('Đã thêm deployment vào danh sách được phép')
+    if (rbacWarning) {
+      toast.warn(
+        `Đã thêm deployment vào danh sách, nhưng đồng bộ RBAC Kubernetes thất bại: ${rbacWarning}`,
+        8000
+      )
+    } else {
+      toast.success('Đã thêm deployment vào danh sách được phép')
+    }
     form.value = { namespace: '', deployment: '' }
     formErrors.value = {}
   } catch (err: any) {
@@ -147,10 +154,18 @@ function openDeleteConfirm(target: DeployTarget) {
 async function handleConfirmDelete() {
   if (!deletingTarget.value) return
 
+  const target = deletingTarget.value
   deleteLoading.value = true
   try {
-    await store.deleteDeployTarget(deletingTarget.value.id)
-    toast.success(`Đã xoá deployment ${deletingTarget.value.namespace}/${deletingTarget.value.deployment}`)
+    const { rbacWarning } = await store.deleteDeployTarget(target.id)
+    if (rbacWarning) {
+      toast.warn(
+        `Đã xoá deployment ${target.namespace}/${target.deployment} khỏi danh sách, nhưng đồng bộ RBAC Kubernetes thất bại: ${rbacWarning}`,
+        8000
+      )
+    } else {
+      toast.success(`Đã xoá deployment ${target.namespace}/${target.deployment}`)
+    }
     isConfirmOpen.value = false
     deletingTarget.value = null
   } catch (err: any) {

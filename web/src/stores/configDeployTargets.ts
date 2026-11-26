@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { DeployTarget, DeployTargetInput } from '../api/types'
+import type { DeployTarget, DeployTargetInput, RbacMutationResult } from '../api/types'
 import { ApiError } from '../api/client'
 import { getApi } from '../api'
 import { createSwrChannel, type SwrOptions } from '../utils/swr'
@@ -36,15 +36,16 @@ export const useConfigDeployTargetsStore = defineStore('configDeployTargets', ()
     return result ?? deployTargets.value
   }
 
-  async function createDeployTarget(input: DeployTargetInput): Promise<DeployTarget> {
+  async function createDeployTarget(input: DeployTargetInput): Promise<RbacMutationResult<DeployTarget>> {
     const api = getApi()
     loading.value = true
     error.value = null
     try {
       const created = await api.createDeployTarget(input)
+      const rbacWarning = api.consumeLastRbacWarning?.() ?? null
       targetsSwr.invalidate()
       await fetchDeployTargets({ force: true, silent: true })
-      return created
+      return { data: created, rbacWarning }
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 409) {
         error.value = 'Deployment này đã tồn tại trong danh sách.'
@@ -57,14 +58,16 @@ export const useConfigDeployTargetsStore = defineStore('configDeployTargets', ()
     }
   }
 
-  async function deleteDeployTarget(id: number): Promise<void> {
+  async function deleteDeployTarget(id: number): Promise<RbacMutationResult<void>> {
     const api = getApi()
     loading.value = true
     error.value = null
     try {
       await api.deleteDeployTarget(id)
+      const rbacWarning = api.consumeLastRbacWarning?.() ?? null
       targetsSwr.invalidate()
       await fetchDeployTargets({ force: true, silent: true })
+      return { data: undefined, rbacWarning }
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 409) {
         error.value = err.problem?.detail || 'Không thể xoá deployment đang được sử dụng bởi pipeline'

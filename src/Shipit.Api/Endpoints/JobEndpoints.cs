@@ -176,7 +176,7 @@ internal static partial class JobEndpoints
             return Results.Ok(entries.Select(e => e.ToDto()));
         });
 
-        allow.MapPost("", async (JobAllowEntryInput input, ShipitDbContext db, CancellationToken ct) =>
+        allow.MapPost("", async (JobAllowEntryInput input, ShipitDbContext db, RbacSyncService rbacSync, HttpResponse response, CancellationToken ct) =>
         {
             var errors = new FieldErrors();
             var ns = (input.Namespace ?? string.Empty).Trim();
@@ -232,10 +232,16 @@ internal static partial class JobEndpoints
             };
             db.JobAllowEntries.Add(entry);
             await db.SaveChangesAsync(ct);
+
+            if (kind == JobAllowKind.Namespace)
+            {
+                await rbacSync.SyncNamespaceAndWarnAsync(ns, response, ct);
+            }
+
             return Results.Created($"/api/job-allow-entries/{entry.Id}", entry.ToDto());
         });
 
-        allow.MapDelete("{id:long}", async (long id, ShipitDbContext db, CancellationToken ct) =>
+        allow.MapDelete("{id:long}", async (long id, ShipitDbContext db, RbacSyncService rbacSync, HttpResponse response, CancellationToken ct) =>
         {
             var entry = await db.JobAllowEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
             if (entry is null)
@@ -286,6 +292,12 @@ internal static partial class JobEndpoints
 
             db.JobAllowEntries.Remove(entry);
             await db.SaveChangesAsync(ct);
+
+            if (entry.Kind == JobAllowKind.Namespace)
+            {
+                await rbacSync.SyncNamespaceAndWarnAsync(entry.Namespace, response, ct);
+            }
+
             return Results.NoContent();
         });
     }

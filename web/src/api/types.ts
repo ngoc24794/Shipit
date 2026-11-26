@@ -312,3 +312,19 @@ export interface SearchResponse {
   query: string
   groups: SearchGroup[]
 }
+
+export interface RbacNamespaceSyncResult {
+  namespace: string
+  succeeded: boolean
+  error: string | null
+}
+
+export interface RbacSyncResponse {
+  results: RbacNamespaceSyncResult[]
+  allSucceeded: boolean
+}
+
+export interface RbacMutationResult<T = void> {
+  data: T
+  rbacWarning: string | null
+}

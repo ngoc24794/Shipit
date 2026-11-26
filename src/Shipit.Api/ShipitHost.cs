@@ -145,6 +145,11 @@ public static class ShipitHost
                 ? new FakeK8sJobRunner(allowList)
                 : KubernetesJobRunner.CreateInCluster(allowList);
         });
+        services.AddSingleton<IK8sRbacSync>(sp =>
+            sp.GetRequiredService<ShipitOptions>().UseFakes
+                ? new FakeK8sRbacSync()
+                : KubernetesRbacSync.CreateInCluster());
+        services.AddSingleton<RbacSyncService>();
 
         services.AddShipitEngine();
 
@@ -254,6 +259,21 @@ public static class ShipitHost
 
                 await SeedDeployTargetsAsync(scope.ServiceProvider, logger);
                 await SeedJobAllowListAsync(scope.ServiceProvider, logger);
+
+                try
+                {
+                    var rbacSync = scope.ServiceProvider.GetRequiredService<RbacSyncService>();
+                    await rbacSync.SyncAllAsync(ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Best-effort startup Kubernetes RBAC sync failed; continuing startup.");
+                }
+
                 return;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -331,6 +351,7 @@ public static class ShipitHost
         app.MapRuns();
         app.MapDeployTargets();
         app.MapJobs();
+        app.MapRbac();
         app.MapSearch();
 
         // Unknown API paths must be a plain 404, never the SPA shell.

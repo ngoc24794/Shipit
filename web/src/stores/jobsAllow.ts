@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { JobAllowEntry, JobAllowEntryInput } from '../api/types'
+import type { JobAllowEntry, JobAllowEntryInput, RbacMutationResult } from '../api/types'
 import { ApiError } from '../api/client'
 import { getApi } from '../api'
 import { createSwrChannel, type SwrOptions } from '../utils/swr'
@@ -69,15 +69,16 @@ export const useJobsAllowStore = defineStore('jobsAllow', () => {
     return result ?? entries.value
   }
 
-  async function createEntry(input: JobAllowEntryInput): Promise<JobAllowEntry> {
+  async function createEntry(input: JobAllowEntryInput): Promise<RbacMutationResult<JobAllowEntry>> {
     const api = getApi()
     loading.value = true
     error.value = null
     try {
       const created = await api.createJobAllowEntry(input)
+      const rbacWarning = api.consumeLastRbacWarning?.() ?? null
       entriesSwr.invalidate()
       await fetchEntries({ force: true, silent: true })
-      return created
+      return { data: created, rbacWarning }
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 409) {
         error.value = 'Mục này đã tồn tại trong allowlist.'
@@ -90,14 +91,16 @@ export const useJobsAllowStore = defineStore('jobsAllow', () => {
     }
   }
 
-  async function deleteEntry(id: number): Promise<void> {
+  async function deleteEntry(id: number): Promise<RbacMutationResult<void>> {
     const api = getApi()
     loading.value = true
     error.value = null
     try {
       await api.deleteJobAllowEntry(id)
+      const rbacWarning = api.consumeLastRbacWarning?.() ?? null
       entriesSwr.invalidate()
       await fetchEntries({ force: true, silent: true })
+      return { data: undefined, rbacWarning }
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 409) {
         error.value = err.problem?.detail || 'Không thể xoá mục allowlist đang được Job sử dụng'

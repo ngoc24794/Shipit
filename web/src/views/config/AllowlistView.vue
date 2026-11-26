@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ShieldCheck, ListChecks, Rocket } from 'lucide-vue-next'
+import { ShieldCheck, ListChecks, Rocket, RefreshCw } from 'lucide-vue-next'
+import AppButton from '../../components/AppButton.vue'
+import { useApi } from '../../api'
+import { useToast } from '../../composables/useToast'
 import DeployTargetsView from './DeployTargetsView.vue'
 import JobAllowListView from '../jobs/JobAllowListView.vue'
 
@@ -11,7 +14,10 @@ type AllowlistTab = 'deployment' | 'job'
 
 const route = useRoute()
 const router = useRouter()
+const api = useApi()
+const toast = useToast()
 
+const syncLoading = ref(false)
 const rememberedTab = ref<AllowlistTab>(route.query.tab === 'job' ? 'job' : 'deployment')
 
 watch(
@@ -49,19 +55,61 @@ function selectTab(tab: AllowlistTab) {
     query: { ...route.query, tab }
   })
 }
+
+async function handleSyncRbac() {
+  if (syncLoading.value) return
+  syncLoading.value = true
+  try {
+    const res = await api.syncRbac()
+    if (res.allSucceeded) {
+      if (res.results.length === 0) {
+        toast.success('Không có namespace nào cần đồng bộ RBAC')
+      } else {
+        toast.success(`Đã đồng bộ RBAC cho ${res.results.length} namespace`)
+      }
+    } else {
+      const failed = res.results.filter((r) => !r.succeeded)
+      const detail = failed
+        .map((r) => `${r.namespace}: ${r.error || 'Lỗi không xác định'}`)
+        .join('; ')
+      toast.warn(
+        `Đồng bộ RBAC hoàn tất với ${failed.length}/${res.results.length} namespace lỗi: ${detail}`,
+        8000
+      )
+    }
+  } catch (err: any) {
+    toast.error(err?.problem?.detail || err?.message || 'Đồng bộ RBAC thất bại')
+  } finally {
+    syncLoading.value = false
+  }
+}
 </script>
 
 <template>
   <div class="flex-1 min-h-0 flex flex-col gap-5">
       <!-- Page Header -->
-      <div class="shrink-0">
-        <h1 class="text-2xl font-bold tracking-tight text-fg flex items-center gap-2.5">
-          <ShieldCheck class="w-6 h-6 text-primary" aria-hidden="true" />
-          <span>Allowlist</span>
-        </h1>
-        <p class="text-sm text-muted-fg mt-1">
-          Danh sách Deployment được phép cập nhật và tài nguyên Kubernetes Job được phép dùng.
-        </p>
+      <div class="shrink-0 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight text-fg flex items-center gap-2.5">
+            <ShieldCheck class="w-6 h-6 text-primary" aria-hidden="true" />
+            <span>Allowlist</span>
+          </h1>
+          <p class="text-sm text-muted-fg mt-1">
+            Danh sách Deployment được phép cập nhật và tài nguyên Kubernetes Job được phép dùng.
+          </p>
+        </div>
+
+        <AppButton
+          variant="secondary"
+          size="md"
+          :loading="syncLoading"
+          :disabled="syncLoading"
+          aria-label="Đồng bộ RBAC"
+          @click="handleSyncRbac"
+        >
+          <RefreshCw v-if="!syncLoading" class="w-4 h-4" aria-hidden="true" />
+          <span>Đồng bộ RBAC</span>
+        </AppButton>
       </div>
 
       <!-- Tabs -->

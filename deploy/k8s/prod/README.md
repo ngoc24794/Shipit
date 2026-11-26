@@ -26,12 +26,13 @@ Secret được tạo thông qua script `scripts/create-secrets-prod.ps1` (giá 
    > Script sẽ sinh `SHIPIT_MASTER_KEY` (AES-256), mật khẩu quản trị và lưu vào `.secrets/shipit-admin-prod.txt`. Script từ chối ghi đè nếu secret đã tồn tại để tránh làm mất dữ liệu mã hoá.
 
 ### Bước 2: Áp dụng RBAC cho ServiceAccount trong namespace `cicd`
+Manifest này tạo ServiceAccount `shipit` trong namespace `cicd` cùng `ClusterRole` và `ClusterRoleBinding` (`shipit-rbac-manager`) để Shipit tự động đồng bộ `Role` và `RoleBinding` (`shipit-deployer`) theo danh sách allowlist trong `/settings/allowlist` (và khi khởi động):
 ```bash
 kubectl apply -f deploy/k8s/prod/10-rbac-cicd.yaml
 ```
 
-### Bước 3: Áp dụng RBAC trong namespace `avina-workspace`
-Cấp quyền hạn chế cho ServiceAccount `shipit` thao tác trên 6 Deployment được phép:
+### Bước 3: Áp dụng RBAC trong namespace `avina-workspace` (tuỳ chọn / bootstrap)
+Shipit tự động tạo và cập nhật `Role` / `RoleBinding` (`shipit-deployer`) cho từng namespace dựa trên cấu hình allowlist (kể cả khi thêm namespace mới hoặc deployment mới). Bạn chỉ cần áp dụng file bootstrap này nếu muốn cấp quyền tĩnh trước khi Shipit khởi động:
 ```bash
 kubectl apply -f deploy/k8s/prod/11-rbac-avina-workspace.yaml
 ```

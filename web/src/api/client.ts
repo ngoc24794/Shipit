@@ -26,7 +26,9 @@ import type {
   GetRunsParams,
   PagedResult,
   SearchResponse,
-  TriggerRunOptions
+  TriggerRunOptions,
+  RbacSyncResponse,
+  RbacMutationResult
 } from './types'
 
 export class ApiError extends Error {
@@ -109,6 +111,10 @@ export interface ShipitApi {
   createJobAllowEntry(input: JobAllowEntryInput): Promise<JobAllowEntry>
   deleteJobAllowEntry(id: number): Promise<void>
 
+  // RBAC
+  syncRbac(): Promise<RbacSyncResponse>
+  consumeLastRbacWarning?(): string | null
+
   // Runs
   triggerRun(pipelineId: number, options?: TriggerRunOptions): Promise<Run>
   cancelRun(id: number): Promise<Run>
@@ -130,6 +136,7 @@ export interface ShipitApi {
 
 export class HttpShipitApi implements ShipitApi {
   private baseUrl: string
+  private lastRbacWarning: string | null = null
 
   constructor(baseUrl: string = '') {
     this.baseUrl = baseUrl
@@ -139,6 +146,7 @@ export class HttpShipitApi implements ShipitApi {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<{ data: T; response: Response }> {
+    this.lastRbacWarning = null
     const url = `${this.baseUrl}${endpoint}`
     const headers: Record<string, string> = {
       Accept: 'application/json',
@@ -171,6 +179,8 @@ export class HttpShipitApi implements ShipitApi {
       throw new ApiError(res.status, message, problem)
     }
 
+    this.lastRbacWarning = this.extractRbacWarning(res)
+
     if (res.status === 204 || res.headers.get('content-length') === '0') {
       return { data: undefined as unknown as T, response: res }
     }
@@ -189,6 +199,11 @@ export class HttpShipitApi implements ShipitApi {
   ): Promise<T> {
     const { data } = await this.requestWithResponse<T>(endpoint, options)
     return data
+  }
+
+  private extractRbacWarning(response: Response): string | null {
+    const raw = response.headers?.get('X-Shipit-Rbac-Warning')
+    return raw && raw.trim() !== '' ? raw.trim() : null
   }
 
   async login(req: LoginRequest): Promise<void> {
@@ -304,6 +319,12 @@ export class HttpShipitApi implements ShipitApi {
 
   async getDeployTargets(): Promise<DeployTarget[]> {
     return this.request<DeployTarget[]>('/api/deploy-targets')
+  }
+
+  consumeLastRbacWarning(): string | null {
+    const warning = this.lastRbacWarning
+    this.lastRbacWarning = null
+    return warning
   }
 
   async createDeployTarget(input: DeployTargetInput): Promise<DeployTarget> {
@@ -521,6 +542,12 @@ export class HttpShipitApi implements ShipitApi {
   async deleteJobAllowEntry(id: number): Promise<void> {
     await this.request<void>(`/api/job-allow-entries/${id}`, {
       method: 'DELETE'
+    })
+  }
+
+  async syncRbac(): Promise<RbacSyncResponse> {
+    return this.request<RbacSyncResponse>('/api/rbac/sync', {
+      method: 'POST'
     })
   }
 
